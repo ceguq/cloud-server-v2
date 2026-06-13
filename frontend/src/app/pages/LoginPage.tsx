@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Cloud } from "lucide-react";
+import { Cloud, Eye, EyeOff } from "lucide-react";
 import { authService } from "../../services/authService";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
@@ -10,6 +10,7 @@ type LoginPageProps = {
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [email, setEmail] = useState("admin@nimbusdrive.local");
   const [password, setPassword] = useState("admin123456");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -68,13 +69,24 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <label className="mb-2 block text-sm text-slate-400">
               Password
             </label>
-            <input
-              type="password"
-              className="w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-4 py-3 text-sm outline-none focus:border-blue-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                className="w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-4 py-3 pr-12 text-sm outline-none focus:border-blue-500"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                title={showPassword ? "Sembunyikan password" : "Lihat password"}
+                className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-[#1a2540] hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+                onClick={() => setShowPassword((current) => !current)}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           {error && (

@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Cloud,
   HardDrive,
+  ShieldCheck,
 } from "lucide-react";
+
 import storageService, {
   type StorageInfo,
 } from "../../services/storageService";
@@ -53,7 +55,35 @@ export function Sidebar({
   onNavigate,
   storageRefreshKey,
 }: SidebarProps) {
+  const storedUser = (() => {
+    try {
+      const raw = localStorage.getItem("nimbus_user");
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  })();
+
+  const role = storedUser?.role;
+  const isAdmin = role === "admin";
+
+  const visibleNavItems = isAdmin
+    ? [
+        ...navItems.slice(0, navItems.findIndex((i) => i.id === "settings")),
+        {
+          id: "admin-users",
+          label: "Admin Users",
+          icon: ShieldCheck,
+          path: "/admin/users",
+        },
+        ...navItems.slice(navItems.findIndex((i) => i.id === "settings")),
+      ]
+    : navItems;
+
+
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageError, setStorageError] = useState<string>("");
 
@@ -118,8 +148,9 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <div className="space-y-0.5">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
+
             const isActive = item.path
               ? window.location.pathname === item.path
               : window.location.pathname === "/" && activePage === item.id;
@@ -177,7 +208,10 @@ export function Sidebar({
             </span>
           </div>
           {storageLoading ? (
-            <div className="flex items-center gap-2 text-xs" style={{ color: "#64748b" }}>
+            <div
+              className="flex items-center gap-2 text-xs"
+              style={{ color: "#64748b" }}
+            >
               <LoadingSpinner size={12} />
               Loading storage...
             </div>

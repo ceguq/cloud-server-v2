@@ -7,9 +7,11 @@ use App\Http\Controllers\ShareController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 
 
 use Illuminate\Support\Facades\Route;
+
 
 
 Route::get('/ping', function () {
@@ -26,7 +28,12 @@ Route::get('/share/{token}/download', [ShareController::class, 'download']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    Route::middleware('admin')->get('/admin/users', [AdminUserController::class, 'index']);
+
+
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 

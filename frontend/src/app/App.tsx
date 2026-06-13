@@ -18,6 +18,7 @@ import LoginPage from "./pages/LoginPage";
 import { PublicSharePage } from "./pages/PublicSharePage";
 import ActivityLogPage from "../pages/ActivityLogPage";
 import { authService } from "../services/authService";
+import { AdminUsers } from "./pages/AdminUsers";
 
 const pages: Record<string, React.ComponentType<any>> = {
   dashboard: Dashboard,
@@ -29,6 +30,7 @@ const pages: Record<string, React.ComponentType<any>> = {
   trash: Trash,
   "server-monitor": ServerMonitor,
   settings: Settings,
+  "admin-users": AdminUsers,
 };
 
 const routePages: Record<string, React.ComponentType> = {
@@ -52,6 +54,7 @@ const pathToActivePage: Record<string, string> = {
   "/trash": "trash",
   "/server-monitor": "server-monitor",
   "/settings": "settings",
+  "/admin/users": "admin-users",
 };
 
 export default function App() {
@@ -80,7 +83,8 @@ export default function App() {
 
   // Sync activePage with pathname when pathname changes
   useEffect(() => {
-    const mappedPage = pathToActivePage[pathname] || routeActivePages[pathname] || "dashboard";
+    const mappedPage =
+      pathToActivePage[pathname] || routeActivePages[pathname] || "dashboard";
     setActivePage(mappedPage);
   }, [pathname]);
 
@@ -121,11 +125,19 @@ export default function App() {
       localStorage.removeItem("nimbus_token");
       localStorage.removeItem("nimbus_user");
       setToken(null);
+
+      window.history.pushState({}, "", "/");
+      setPathname("/");
+      setActivePage("dashboard");
     }
   }
 
   function handleLoginSuccess() {
     setToken(localStorage.getItem("nimbus_token"));
+
+    window.history.pushState({}, "", "/");
+    setPathname("/");
+    setActivePage("dashboard");
   }
 
   if (!token) {
@@ -149,7 +161,6 @@ export default function App() {
           onNavigate={handleNavigate}
           storageRefreshKey={storageRefreshKey}
         />
-
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center border-b border-[#1a2540] bg-[#0b1121]">
@@ -182,9 +193,6 @@ export default function App() {
           ) : (
             <PageComponent />
           )}
-
-
-
 
           <UploadTray />
         </div>
