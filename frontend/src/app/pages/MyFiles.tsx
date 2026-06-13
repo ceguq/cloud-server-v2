@@ -9,7 +9,7 @@ function formatTime(seconds?: number | null): string {
 }
 
 type AudioPreviewPlayerProps = {
-  src: string | null;
+  src: string | undefined;
   onError: (message: string) => void;
 };
 
@@ -411,7 +411,7 @@ export function MyFiles({
   const [previewFile, setPreviewFile] = useState<FileModel | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewFileName, setPreviewFileName] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
   const [previewContentType, setPreviewContentType] = useState("");
   const [previewImageScale, setPreviewImageScale] = useState(1);
   const [previewModalMode, setPreviewModalMode] = useState<
@@ -476,11 +476,19 @@ export function MyFiles({
     failCount: number;
   } | null>(null);
 
-  const loadFiles = async (folderId: string | null) => {
+  const loadFiles = async (folderId: string | null, search?: string | null) => {
     try {
       setLoadingFiles(true);
       setFileError("");
-      const res = await fileService.getFiles(folderId);
+
+      const keyword = search?.trim() ?? "";
+
+      // If keyword exists, backend search disregards folderId.
+      // If keyword empty, keep old behavior.
+      const res = keyword
+        ? await fileService.getFiles(null, keyword)
+        : await fileService.getFiles(folderId);
+
       setFiles(res ?? []);
     } catch (e: any) {
       console.error(e);
@@ -493,17 +501,27 @@ export function MyFiles({
     }
   };
 
+
   const [folders, setFolders] = useState<FolderModel[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderModel[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [folderError, setFolderError] = useState<string>("");
 
-  const loadFolders = async (parentId: string | null) => {
+  const loadFolders = async (
+    parentId: string | null,
+    search?: string | null,
+  ) => {
     try {
       setLoadingFolders(true);
       setFolderError("");
-      const res = await folderService.getFolders(parentId);
+
+      const keyword = search?.trim() ?? "";
+
+      const res = keyword
+        ? await folderService.getFolders(null, keyword)
+        : await folderService.getFolders(parentId);
+
       setFolders(res ?? []);
     } catch (e: any) {
       console.error(e);
@@ -694,7 +712,7 @@ export function MyFiles({
     setPreviewImageScale(1);
     setPreviewMiniOffset({ x: 0, y: 0 });
     previewMiniDragRef.current = null;
-      setPreviewUrl(null);
+      setPreviewUrl(undefined);
       setPreviewFileName("");
       setPreviewContentType("");
       setPreviewFile(null);
@@ -798,7 +816,7 @@ export function MyFiles({
 
           setPreviewFileName(file.original_name);
           setPreviewContentType(contentType);
-          setPreviewUrl(null);
+          setPreviewUrl(undefined);
           setPreviewModalMode("normal");
           setPreviewImageScale(1);
           setPreviewMiniOffset({ x: 0, y: 0 });
@@ -810,7 +828,7 @@ export function MyFiles({
           setPreviewIsTextTooLarge(false);
           setPreviewFileName(file.original_name);
           setPreviewContentType(contentType);
-          setPreviewUrl(null);
+          setPreviewUrl(undefined);
           setPreviewModalMode("normal");
           setPreviewImageScale(1);
           setPreviewMiniOffset({ x: 0, y: 0 });
@@ -1086,17 +1104,28 @@ export function MyFiles({
 
   // Stabil refresh function untuk fetch both folders dan files
   const refreshCurrentFolder = useCallback(async () => {
-    await Promise.all([
-      loadFolders(currentFolderId),
-      loadFiles(currentFolderId),
-    ]);
-  }, [currentFolderId]);
+    const keyword = searchQuery.trim();
+    const keywordOrNull = keyword || null;
 
-  // Main effect: fetch saat mount, folder berubah, atau filesRefreshKey berubah
+    await Promise.all([
+      loadFolders(currentFolderId, keywordOrNull),
+      loadFiles(currentFolderId, keywordOrNull),
+    ]);
+  }, [currentFolderId, searchQuery]);
+
+
+  // Main effect: fetch saat mount, folder berubah, filesRefreshKey berubah, atau search berubah
   useEffect(() => {
     refreshCurrentFolder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFolderId, filesRefreshKey]);
+  }, [currentFolderId, filesRefreshKey, searchQuery]);
+
+  // Clear selection agar bulk action tidak nyasar saat keyword search berubah
+  useEffect(() => {
+    clearSelection();
+    clearFolderSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   // Click-outside handler untuk menu aksi file
   useEffect(() => {
@@ -2304,7 +2333,7 @@ export function MyFiles({
                   </div>
                 ) : previewContentType.startsWith("audio/") ? (
                   <AudioPreviewPlayer
-                    src={previewUrl}
+                    src={previewUrl ?? undefined}
                     onError={() => {
                       setFileError("Gagal memuat preview audio.");
                     }}

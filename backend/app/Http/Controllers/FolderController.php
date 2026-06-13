@@ -22,19 +22,37 @@ class FolderController extends Controller
             $parentId = null;
         }
 
-        $folders = Folder::query()
-            ->when($parentId === null, function ($q) {
-                $q->whereNull('parent_id');
-            }, function ($q) use ($parentId) {
-                $q->where('parent_id', $parentId);
-            })
-            ->orderBy('name')
-            ->get();
+        $search = $request->query('search');
+        $q = $request->query('q');
+
+        $keyword = trim((string) ($search !== null && $search !== '' ? $search : ($q ?? '')));
+
+        $foldersQuery = Folder::query();
+
+        // If searching: global search by active folders name (exclude soft deleted)
+        if ($keyword !== '') {
+            $foldersQuery
+                ->whereNull('deleted_at')
+                ->where('name', 'like', '%' . $keyword . '%')
+                ->orderBy('name');
+        } else {
+            // Legacy behavior: filter by parent_id (root vs children)
+            $foldersQuery
+                ->when($parentId === null, function ($q) {
+                    $q->whereNull('parent_id');
+                }, function ($q) use ($parentId) {
+                    $q->where('parent_id', $parentId);
+                })
+                ->orderBy('name');
+        }
+
+        $folders = $foldersQuery->get();
 
         return response()->json([
             'data' => $folders,
         ]);
     }
+
 
     public function store(Request $request, ActivityLogService $activityLogService): JsonResponse
     {

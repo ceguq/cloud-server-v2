@@ -23,6 +23,34 @@ class FileController extends Controller
             $folderId = null;
         }
 
+        $keyword = $request->query('search');
+        if ($keyword === null || $keyword === '') {
+            $keyword = $request->query('q');
+        }
+        $keyword = $keyword !== null ? trim((string) $keyword) : '';
+
+        // Search mode: keyword is applied globally across all active files of the user.
+        if ($keyword !== '') {
+            $filesQuery = File::query()
+                ->where('user_id', $user->id)
+                ->where('original_name', 'LIKE', '%' . $keyword . '%')
+                ->where(function ($q) {
+                    // Keep root files (folder_id is null) and exclude files inside trashed folders.
+                    $q->whereNull('folder_id')
+                        ->orWhereHas('folder', function ($fq) {
+                            $fq->whereNull('deleted_at');
+                        });
+                })
+                ->orderBy('created_at', 'desc');
+
+            $files = $filesQuery->get();
+
+            return response()->json([
+                'data' => $files,
+            ]);
+        }
+
+        // Default behavior (no search): keep existing folder_id logic.
         $query = File::query()->where('user_id', $user->id);
 
         if ($folderId === null) {
@@ -37,13 +65,13 @@ class FileController extends Controller
             $query->where('folder_id', $folderId);
         }
 
-
         $files = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'data' => $files,
         ]);
     }
+
 
     public function upload(Request $request, ActivityLogService $activityLogService): JsonResponse
     {

@@ -25,15 +25,28 @@ function unwrapData<T>(response: any): T {
   return response as T;
 }
 
-export async function getFolders(parentId?: string | null) {
+export async function getFolders(
+  parentId?: string | null,
+  search?: string | null,
+) {
   const params: Record<string, any> = {};
-  if (parentId !== undefined) {
-    params.parent_id = parentId;
+
+  const keyword = search?.trim() ?? "";
+
+  // If searching: send search only (global search)
+  if (keyword) {
+    params.search = keyword;
+  } else {
+    // Legacy behavior: send parent_id if provided
+    if (parentId !== undefined) {
+      params.parent_id = parentId;
+    }
   }
 
   const res = await api.get("/folders", { params });
   return unwrapData<Folder[]>(res.data);
 }
+
 
 export async function createFolder(name: string, parentId?: string | null) {
   const payload: Record<string, any> = { name };

@@ -29,14 +29,24 @@ function buildFileUrlForDownload(id: string) {
   return `/files/${id}/download`;
 }
 
-export async function getFiles(folderId?: string | null) {
+export async function getFiles(
+  folderId?: string | null,
+  search?: string | null,
+) {
   const params: Record<string, any> = {};
 
-  if (folderId !== undefined && folderId !== null) {
-    params.folder_id = folderId;
+  const trimmedSearch =
+    search !== undefined && search !== null ? search.trim() : "";
+
+  if (trimmedSearch !== "") {
+    params.search = trimmedSearch;
+  } else {
+    // behavior lama
+    if (folderId !== undefined && folderId !== null) {
+      params.folder_id = folderId;
+    }
   }
 
-  // Jika folderId null/undefined: GET /files (tanpa folder_id)
   const res = await api.get("/files", { params });
   return unwrapData<FileModel[]>(res.data);
 }
