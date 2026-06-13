@@ -143,6 +143,22 @@ export function MyFiles({
 
   const clearSelection = () => setSelectedFileIds(new Set());
 
+  // Multi-select folders (UI-only for now)
+  const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const clearFolderSelection = () => setSelectedFolderIds(new Set());
+
+  const toggleFolderSelection = (folderId: string) => {
+    setSelectedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
   // Files state
 
   const [files, setFiles] = useState<FileModel[]>([]);
@@ -180,6 +196,17 @@ export function MyFiles({
     okCount: number;
     failCount: number;
   } | null>(null);
+
+  // Multi-select folders (bulk delete)
+  const [isBulkFolderDeleteModalOpen, setIsBulkFolderDeleteModalOpen] =
+    useState(false);
+  const [bulkFolderDeleteIds, setBulkFolderDeleteIds] = useState<string[]>([]);
+  const [bulkFolderDeleteLoading, setBulkFolderDeleteLoading] = useState(false);
+  const [bulkFolderDeleteResult, setBulkFolderDeleteResult] = useState<{
+    okCount: number;
+    failCount: number;
+  } | null>(null);
+
   const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
   const [bulkDownloadResult, setBulkDownloadResult] = useState<{
     okCount: number;
@@ -236,6 +263,7 @@ export function MyFiles({
 
     // Selection harus dibersihkan saat folder berubah
     clearSelection();
+    clearFolderSelection();
 
     await loadFolders(folder.id);
   };
@@ -243,6 +271,11 @@ export function MyFiles({
   const handleBackToRoot = async () => {
     setCurrentFolderId(null);
     setBreadcrumbs([]);
+
+    // Selection harus dibersihkan saat folder berubah
+    clearSelection();
+    clearFolderSelection();
+
     await loadFolders(null);
   };
 
@@ -256,6 +289,7 @@ export function MyFiles({
 
     // Selection harus dibersihkan saat folder berubah
     clearSelection();
+    clearFolderSelection();
 
     await loadFolders(id);
   };
@@ -469,6 +503,56 @@ export function MyFiles({
     setIsBulkDeleteModalOpen(false);
     setBulkDeleteFileIds([]);
     setBulkDeleteResult(null);
+  };
+
+  const openBulkFolderDeleteModal = () => {
+    const ids = Array.from(selectedFolderIds);
+    if (ids.length === 0) return;
+
+    setBulkFolderDeleteIds(ids);
+    setBulkFolderDeleteResult(null);
+    setIsBulkFolderDeleteModalOpen(true);
+  };
+
+  const closeBulkFolderDeleteModal = () => {
+    if (bulkFolderDeleteLoading) return;
+
+    setIsBulkFolderDeleteModalOpen(false);
+    setBulkFolderDeleteIds([]);
+    setBulkFolderDeleteResult(null);
+  };
+
+  const handleConfirmBulkFolderDelete = async () => {
+    if (bulkFolderDeleteLoading || bulkFolderDeleteIds.length === 0) return;
+
+    setBulkFolderDeleteLoading(true);
+    setBulkFolderDeleteResult(null);
+
+    let okCount = 0;
+    let failCount = 0;
+
+    for (const id of bulkFolderDeleteIds) {
+      try {
+        await folderService.deleteFolder(id);
+        okCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    await Promise.all([
+      loadFolders(currentFolderId ?? null),
+      loadFiles(currentFolderId ?? null),
+    ]);
+
+    if (okCount > 0) {
+      onStorageChanged?.();
+    }
+
+    clearFolderSelection();
+
+    setBulkFolderDeleteResult({ okCount, failCount });
+    setBulkFolderDeleteLoading(false);
   };
 
   const handleConfirmBulkDelete = async () => {
@@ -1179,12 +1263,109 @@ export function MyFiles({
           </div>
         )}
 
-        <h3
-          className="text-xs font-semibold mb-3 uppercase tracking-wider"
-          style={{ color: "#334155" }}
-        >
-          Folders
-        </h3>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: "#334155" }}
+          >
+            Folders
+          </h3>
+
+          {(() => {
+            const visibleFolderIds = sortedFolders.map((f) => f.id);
+            const selectedVisibleCount = visibleFolderIds.reduce(
+              (acc, id) => acc + (selectedFolderIds.has(id) ? 1 : 0),
+              0,
+            );
+            const allVisibleChecked =
+              visibleFolderIds.length > 0 &&
+              selectedVisibleCount === visibleFolderIds.length;
+            const someVisibleChecked =
+              selectedVisibleCount > 0 &&
+              selectedVisibleCount < visibleFolderIds.length;
+
+            return (
+              <>
+                {visibleFolderIds.length > 0 && (
+                  <div
+                    className="flex items-center gap-2"
+                    style={{ color: "#94a3b8" }}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label="Pilih semua folder yang tampil"
+                      checked={allVisibleChecked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someVisibleChecked;
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        if (checked) {
+                          setSelectedFolderIds((prev) => {
+                            const next = new Set(prev);
+                            for (const id of visibleFolderIds) next.add(id);
+                            return next;
+                          });
+                        } else {
+                          setSelectedFolderIds((prev) => {
+                            const next = new Set(prev);
+                            for (const id of visibleFolderIds) next.delete(id);
+                            return next;
+                          });
+                        }
+                      }}
+                      style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                    />
+                    <div className="text-xs" style={{ color: "#e2e8f0" }}>
+                      Pilih semua (tampil)
+                    </div>
+                  </div>
+                )}
+
+                {selectedFolderIds.size > 0 && (
+                  <div
+                    className="flex items-center gap-2"
+                    style={{ color: "#94a3b8" }}
+                  >
+                    <div className="text-xs" style={{ color: "#e2e8f0" }}>
+                      {selectedFolderIds.size} folder dipilih
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={openBulkFolderDeleteModal}
+                      disabled={bulkFolderDeleteLoading}
+                      className="px-3 py-1 rounded-lg text-[11px] font-semibold"
+                      style={{
+                        background: "#f87171",
+                        border: "1px solid rgba(248,113,113,0.4)",
+                        color: "#0b1121",
+                        opacity: bulkFolderDeleteLoading ? 0.75 : 1,
+                      }}
+                      aria-label="Pindahkan folder ke Trash"
+                    >
+                      {bulkFolderDeleteLoading ? "Memproses..." : "Delete"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => clearFolderSelection()}
+                      className="px-2 py-1 rounded-lg text-[11px] font-medium"
+                      style={{
+                        background: "#0d1829",
+                        border: "1px solid #1a2540",
+                        color: "#94a3b8",
+                      }}
+                    >
+                      Batalkan pilihan
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
 
         {loadingFolders && (
           <div
@@ -1215,6 +1396,23 @@ export function MyFiles({
               style={{ background: "#0f1729", border: "1px solid #1a2540" }}
             >
               <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    aria-label={`Pilih folder ${folder.name}`}
+                    checked={selectedFolderIds.has(folder.id)}
+                    onChange={() => toggleFolderSelection(folder.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      accentColor: "#3b82f6",
+                    }}
+                  />
+                </div>
+
                 <div
                   className="w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{ background: "#3b82f618" }}
@@ -1642,6 +1840,147 @@ export function MyFiles({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Folder Modal */}
+      {isBulkFolderDeleteModalOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-delete-folders-title"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+          >
+            <div className="mb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2
+                    id="bulk-delete-folders-title"
+                    className="text-sm font-semibold"
+                    style={{ color: "#e2e8f0" }}
+                  >
+                    Pindahkan folder ke Trash?
+                  </h2>
+                  <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                    {bulkFolderDeleteIds.length} folder terpilih akan
+                    dipindahkan ke Trash. Isi folder juga ikut masuk Trash.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeBulkFolderDeleteModal}
+                  disabled={bulkFolderDeleteLoading}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                    opacity: bulkFolderDeleteLoading ? 0.6 : 1,
+                  }}
+                  aria-label="Tutup modal bulk delete folder"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {bulkFolderDeleteLoading && (
+              <div
+                className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs flex items-center gap-2"
+                style={{ color: "#67e8f9" }}
+                role="status"
+              >
+                <LoadingSpinner size={12} /> Memindahkan...
+              </div>
+            )}
+
+            {bulkFolderDeleteResult ? (
+              <>
+                <div
+                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  role="status"
+                >
+                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                    Hasil proses
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
+                      style={{ color: "#34d399" }}
+                    >
+                      <div className="text-lg font-semibold">
+                        {bulkFolderDeleteResult.okCount}
+                      </div>
+                      <div className="text-[11px]">berhasil</div>
+                    </div>
+                    <div
+                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
+                      style={{ color: "#f87171" }}
+                    >
+                      <div className="text-lg font-semibold">
+                        {bulkFolderDeleteResult.failCount}
+                      </div>
+                      <div className="text-[11px]">gagal</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeBulkFolderDeleteModal}
+                    className="rounded-xl px-3 py-2 text-xs font-medium"
+                    style={{
+                      background: "#0d1829",
+                      border: "1px solid #1a2540",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeBulkFolderDeleteModal}
+                  disabled={bulkFolderDeleteLoading}
+                  className="rounded-xl px-3 py-2 text-xs font-medium"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                    opacity: bulkFolderDeleteLoading ? 0.6 : 1,
+                  }}
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmBulkFolderDelete()}
+                  disabled={bulkFolderDeleteLoading}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold"
+                  style={{
+                    background: "#f87171",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    color: "#0b1121",
+                    opacity: bulkFolderDeleteLoading ? 0.75 : 1,
+                  }}
+                >
+                  {bulkFolderDeleteLoading
+                    ? "Memindahkan..."
+                    : "Pindahkan ke Trash"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
