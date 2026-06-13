@@ -98,6 +98,55 @@ export async function cancelUpload(id: string) {
   return unwrapData<any>(res.data);
 }
 
+export function canPreviewFile(file: FileModel): boolean {
+  const mime = (file.mime_type ?? "").toLowerCase();
+
+  return (
+    mime.startsWith("image/") ||
+    mime === "application/pdf" ||
+    mime.startsWith("video/") ||
+    mime.startsWith("audio/") ||
+    // text/code preview (internal)
+    mime.startsWith("text/") ||
+    mime === "application/json" ||
+    mime === "application/xml" ||
+    mime === "text/xml" ||
+    mime === "application/javascript" ||
+    mime === "application/x-javascript" ||
+    mime === "text/css" ||
+    mime === "text/html" ||
+    mime === "text/markdown" ||
+    mime === "text/csv" ||
+    mime === "application/typescript"
+  );
+}
+
+export type FilePreviewBlobResult = {
+  blob: Blob;
+  contentType: string;
+};
+
+export async function getFilePreviewBlob(
+  id: string,
+): Promise<FilePreviewBlobResult> {
+  const res = await api.get(`/files/${id}/preview`, {
+    responseType: "blob",
+  });
+
+  const rawContentType = res.headers?.["content-type"];
+  const contentType =
+    typeof rawContentType === "string"
+      ? rawContentType
+      : "application/octet-stream";
+
+  const blob =
+    res.data instanceof Blob
+      ? res.data
+      : new Blob([res.data], { type: contentType });
+
+  return { blob, contentType };
+}
+
 const fileService = {
   getFiles,
   uploadFile,
@@ -105,6 +154,8 @@ const fileService = {
   deleteFile,
   downloadFile,
   cancelUpload,
+  canPreviewFile,
+  getFilePreviewBlob,
 };
 
 export default fileService;

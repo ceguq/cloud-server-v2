@@ -1,5 +1,242 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+function formatTime(seconds?: number | null): string {
+  const s =
+    typeof seconds === "number" && Number.isFinite(seconds) ? seconds : 0;
+  const m = Math.floor(s / 60);
+  const r = Math.floor(s % 60);
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+type AudioPreviewPlayerProps = {
+  src: string | null;
+  onError: (message: string) => void;
+};
+
+function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  // Reset player state when src changes
+  useEffect(() => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+
+    const el = audioRef.current;
+    if (!el) return;
+
+    el.pause();
+    el.currentTime = 0;
+  }, [src]);
+
+  const togglePlayPause = async () => {
+    const el = audioRef.current;
+    if (!el) return;
+
+    try {
+      if (el.paused) {
+        const p = el.play();
+        if (p && typeof (p as Promise<void>).then === "function") {
+          await p;
+        }
+        setIsPlaying(true);
+      } else {
+        el.pause();
+        setIsPlaying(false);
+      }
+    } catch {
+      onError("Gagal memuat preview audio.");
+      setIsPlaying(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        borderRadius: "1rem",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.10)",
+        padding: 16,
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <audio
+          ref={audioRef}
+          src={src ?? undefined}
+          preload="metadata"
+          className="hidden"
+          onLoadedMetadata={() => {
+            const el = audioRef.current;
+            if (!el) return;
+            setDuration(Number.isFinite(el.duration) ? el.duration : 0);
+          }}
+          onTimeUpdate={() => {
+            const el = audioRef.current;
+            if (!el) return;
+            setCurrentTime(el.currentTime || 0);
+          }}
+          onEnded={() => {
+            const el = audioRef.current;
+            if (el) {
+              el.currentTime = 0;
+            }
+            setIsPlaying(false);
+            setCurrentTime(0);
+          }}
+          onError={() => {
+            onError("Gagal memuat preview audio.");
+            setIsPlaying(false);
+          }}
+        />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Play button + decorative equalizer */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 14,
+              paddingTop: 2,
+              paddingBottom: 2,
+            }}
+          >
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 14,
+                background: "rgba(59,130,246,0.14)",
+                border: "1px solid rgba(59,130,246,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#60a5fa",
+                flex: "0 0 auto",
+                fontSize: 18,
+              }}
+              aria-hidden="true"
+            >
+              ♪
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void togglePlayPause()}
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 999,
+                border: "1px solid rgba(59,130,246,0.35)",
+                background:
+                  "linear-gradient(135deg, rgba(59,130,246,0.35), rgba(34,211,238,0.15))",
+                color: "#e2e8f0",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
+              }}
+            >
+              {isPlaying ? "❚❚" : "▶"}
+            </button>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 4,
+                height: 24,
+                width: 120,
+                opacity: isPlaying ? 1 : 0.6,
+              }}
+            >
+              {Array.from({ length: 10 }).map((_, idx) => {
+                const base = 6 + (idx % 5) * 3;
+                const h = isPlaying ? base + (idx % 3) * 2 : base;
+                const animate = isPlaying ? "pulse" : "none";
+                const delay = `${idx * 60}ms`;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      width: 6,
+                      height: h,
+                      borderRadius: 999,
+                      background: "rgba(96,165,250,0.75)",
+                      animation: isPlaying
+                        ? "bb-audio-eq 1.05s infinite ease-in-out"
+                        : undefined,
+                      animationDelay: isPlaying ? delay : undefined,
+                      transition: "height 160ms ease",
+                    }}
+                    aria-hidden="true"
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Seek + time */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                color: "#94a3b8",
+                fontSize: 12,
+                width: 44,
+                textAlign: "left",
+              }}
+            >
+              {formatTime(currentTime)}
+            </div>
+
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={Math.min(currentTime, duration || 0)}
+              onChange={(e) => {
+                const el = audioRef.current;
+                if (!el) return;
+                const v = Number(e.target.value);
+                el.currentTime = Number.isFinite(v) ? v : 0;
+                setCurrentTime(el.currentTime || 0);
+              }}
+              style={{ width: "100%" }}
+              aria-label="Seek audio"
+            />
+
+            <div
+              style={{
+                color: "#94a3b8",
+                fontSize: 12,
+                width: 44,
+                textAlign: "right",
+              }}
+            >
+              {formatTime(duration)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes bb-audio-eq {
+          0% { transform: scaleY(0.75); opacity: 0.75; }
+          50% { transform: scaleY(1.25); opacity: 1; }
+          100% { transform: scaleY(0.85); opacity: 0.8; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 import {
   Folder,
   MoreHorizontal,
@@ -170,7 +407,33 @@ export function MyFiles({
   const [isFileRenameModalOpen, setIsFileRenameModalOpen] = useState(false);
   const [fileRenameName, setFileRenameName] = useState("");
   const [fileActionLoading, setFileActionLoading] = useState(false);
+  const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<FileModel | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewFileName, setPreviewFileName] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewContentType, setPreviewContentType] = useState("");
+  const [previewImageScale, setPreviewImageScale] = useState(1);
+  const [previewModalMode, setPreviewModalMode] = useState<
+    "normal" | "maximized" | "minimized"
+  >("normal");
+
+  // Text preview modal state
+  const [previewText, setPreviewText] = useState<string>("");
+  const [previewTextLoading, setPreviewTextLoading] = useState(false);
+  const [previewTextError, setPreviewTextError] = useState<string>("");
+  const [previewIsTextTooLarge, setPreviewIsTextTooLarge] = useState(false);
+
+  const [previewMiniOffset, setPreviewMiniOffset] = useState({ x: 0, y: 0 });
   const [fileModalError, setFileModalError] = useState("");
+
+  const previewMiniDragRef = useRef<{
+
+    startClientX: number;
+    startClientY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+  } | null>(null);
 
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -417,6 +680,201 @@ export function MyFiles({
       );
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const closePreviewModal = () => {
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+    }
+
+    setPreviewModalOpen(false);
+    setPreviewFile(null);
+    setPreviewModalMode("normal");
+    setPreviewImageScale(1);
+    setPreviewMiniOffset({ x: 0, y: 0 });
+    previewMiniDragRef.current = null;
+      setPreviewUrl(null);
+      setPreviewFileName("");
+      setPreviewContentType("");
+      setPreviewFile(null);
+
+      // text preview cleanup
+    setPreviewText("");
+    setPreviewTextLoading(false);
+    setPreviewTextError("");
+    setPreviewIsTextTooLarge(false);
+  };
+
+  const handlePreviewMiniPointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (previewModalMode !== "minimized") return;
+
+    event.preventDefault();
+
+    previewMiniDragRef.current = {
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: previewMiniOffset.x,
+      startOffsetY: previewMiniOffset.y,
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const dragState = previewMiniDragRef.current;
+      if (!dragState) return;
+
+      const deltaX = moveEvent.clientX - dragState.startClientX;
+      const deltaY = moveEvent.clientY - dragState.startClientY;
+
+      setPreviewMiniOffset({
+        x: dragState.startOffsetX + deltaX,
+        y: dragState.startOffsetY + deltaY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      previewMiniDragRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  const handleDownloadFile = async (file: FileModel | null) => {
+    if (!file) return;
+    try {
+      await fileService.downloadFile(file.id, file.original_name);
+    } catch {
+      setFileError("Gagal mendownload file.");
+    }
+  };
+
+  const handlePreviewFile = async (file: FileModel) => {
+    if (!fileService.canPreviewFile(file)) {
+      setFileError("Preview tidak tersedia untuk tipe file ini.");
+      return;
+    }
+
+    try {
+      setPreviewFile(file);
+      setPreviewingFileId(file.id);
+      setFileError("");
+
+      const { blob, contentType } = await fileService.getFilePreviewBlob(
+        file.id,
+      );
+
+      const normalizedContentType = (contentType ?? "").toLowerCase();
+
+      // Text preview (no object URL)
+      const isTextType =
+        normalizedContentType.startsWith("text/") ||
+        normalizedContentType === "application/json" ||
+        normalizedContentType === "application/xml" ||
+        normalizedContentType === "application/javascript" ||
+        normalizedContentType === "application/x-javascript" ||
+        normalizedContentType === "application/typescript";
+
+      if (isTextType) {
+        try {
+          setPreviewTextLoading(true);
+          setPreviewTextError("");
+          setPreviewIsTextTooLarge(false);
+          setFileError("");
+
+          if (blob.size > 1_000_000) {
+            setPreviewIsTextTooLarge(true);
+            setPreviewTextError(
+              "Preview text terlalu besar. Silakan download file untuk melihat isinya.",
+            );
+            setPreviewText("");
+          } else {
+            const text = await blob.text();
+            setPreviewText(text);
+          }
+
+          setPreviewFileName(file.original_name);
+          setPreviewContentType(contentType);
+          setPreviewUrl(null);
+          setPreviewModalMode("normal");
+          setPreviewImageScale(1);
+          setPreviewMiniOffset({ x: 0, y: 0 });
+          setPreviewModalOpen(true);
+          return;
+        } catch {
+          setPreviewTextError("Gagal memuat preview text.");
+          setPreviewText("");
+          setPreviewIsTextTooLarge(false);
+          setPreviewFileName(file.original_name);
+          setPreviewContentType(contentType);
+          setPreviewUrl(null);
+          setPreviewModalMode("normal");
+          setPreviewImageScale(1);
+          setPreviewMiniOffset({ x: 0, y: 0 });
+          setPreviewModalOpen(true);
+          return;
+        } finally {
+          setPreviewTextLoading(false);
+        }
+      }
+
+      const url = window.URL.createObjectURL(blob);
+
+      if (
+        normalizedContentType.startsWith("image/") ||
+        normalizedContentType === "application/pdf" ||
+        normalizedContentType.startsWith("video/") ||
+        normalizedContentType.startsWith("audio/")
+      ) {
+        setPreviewModalMode("normal");
+        setPreviewImageScale(1);
+        setPreviewMiniOffset({ x: 0, y: 0 });
+
+        if (previewUrl) {
+          window.URL.revokeObjectURL(previewUrl);
+        }
+
+        setPreviewUrl(url);
+        setPreviewContentType(contentType);
+        setPreviewFileName(file.original_name);
+        setPreviewModalOpen(true);
+        return;
+      }
+
+      const opened = window.open(url, "_blank");
+
+      if (!opened) {
+        window.URL.revokeObjectURL(url);
+        setFileError(
+          "Preview diblokir browser. Izinkan pop-up untuk membuka preview.",
+        );
+        return;
+      }
+
+      try {
+        opened.opener = null;
+      } catch {
+        // ignore
+      }
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
+    } catch (err) {
+      const responseMessage = (err as any)?.response?.data?.message;
+      const errorMessage =
+        typeof responseMessage === "string"
+          ? responseMessage
+          : err instanceof Error
+            ? err.message
+            : "Gagal membuka preview file.";
+
+      setFileError(errorMessage);
+    } finally {
+      setPreviewingFileId(null);
     }
   };
 
@@ -1599,6 +2057,318 @@ export function MyFiles({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {previewModalOpen && (
+        <div
+          className={
+            previewModalMode === "minimized"
+              ? "fixed inset-0 z-[150] pointer-events-none"
+              : "fixed inset-0 z-[150] flex items-center justify-center bg-black/70 px-4"
+          }
+          onMouseDown={
+            previewModalMode === "minimized" ? undefined : closePreviewModal
+          }
+        >
+          <div
+            className={`pointer-events-auto flex flex-col rounded-2xl border border-[#1a2540] bg-[#0f1729] p-4 ${
+              previewModalMode === "maximized"
+                ? "h-[96vh] w-[96vw] max-w-none"
+                : previewModalMode === "minimized"
+                  ? "fixed bottom-4 right-4 h-auto w-[360px] max-w-[90vw]"
+                  : "h-[85vh] w-[90vw] max-w-5xl"
+            }`}
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
+              transform:
+                previewModalMode === "minimized"
+                  ? `translate(${previewMiniOffset.x}px, ${previewMiniOffset.y}px)`
+                  : undefined,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <div
+                className="min-w-0"
+                onPointerDown={
+                  previewModalMode === "minimized"
+                    ? handlePreviewMiniPointerDown
+                    : undefined
+                }
+                style={
+                  previewModalMode === "minimized"
+                    ? { cursor: "grab", touchAction: "none" }
+                    : undefined
+                }
+              >
+                <h2
+                  className="text-sm font-semibold"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  Preview
+                </h2>
+                <p
+                  className="truncate text-xs mt-1"
+                  style={{ color: "#64748b" }}
+                >
+                  {previewFileName}
+                </p>
+              </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewModalMode((mode) =>
+                      mode === "minimized" ? "normal" : "minimized",
+                    )
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                  }}
+                  aria-label="Minimize preview"
+                  title="Minimize preview"
+                >
+                  —
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewModalMode((mode) =>
+                      mode === "maximized" ? "normal" : "maximized",
+                    )
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                  }}
+                  aria-label="Toggle full page preview"
+                  title="Full page preview"
+                >
+                  □
+                </button>
+
+                {(() => {
+                  if (!previewFile) return null;
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDownloadFile(previewFile);
+                      }}
+                      className="px-3 h-8 flex items-center justify-center rounded-lg text-xs"
+                      style={{
+                        background: "#0d1829",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        color: "#e2e8f0",
+                      }}
+                      aria-label="Download preview file"
+                      title="Download"
+                    >
+                      Download
+                    </button>
+                  );
+                })()}
+
+                {previewContentType.startsWith("image/") && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewImageScale((v) =>
+                          Math.max(0.5, Number((v - 0.25).toFixed(2))),
+                        )
+                      }
+                      className="h-8 rounded-lg px-3 text-xs"
+                      style={{
+                        background: "#0d1829",
+                        border: "1px solid #1a2540",
+                        color: "#94a3b8",
+                      }}
+                      aria-label="Zoom out image"
+                      title="Zoom out"
+                    >
+                      -
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImageScale(1)}
+                      className="h-8 rounded-lg px-3 text-xs"
+                      style={{
+                        background: "#0d1829",
+                        border: "1px solid #1a2540",
+                        color: "#94a3b8",
+                      }}
+                      aria-label="Reset image zoom"
+                      title="Reset zoom"
+                    >
+                      {Math.round(previewImageScale * 100)}%
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewImageScale((v) =>
+                          Math.min(3, Number((v + 0.25).toFixed(2))),
+                        )
+                      }
+                      className="h-8 rounded-lg px-3 text-xs"
+                      style={{
+                        background: "#0d1829",
+                        border: "1px solid #1a2540",
+                        color: "#94a3b8",
+                      }}
+                      aria-label="Zoom in image"
+                      title="Zoom in"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={closePreviewModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                  }}
+                  aria-label="Close preview"
+                  title="Close preview"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {previewModalMode !== "minimized" && (
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border border-[#1a2540] bg-[#080d1a]">
+                {previewContentType.startsWith("image/") ? (
+                  <img
+                    src={previewUrl}
+                    alt={previewFileName}
+                    style={{
+                      transform: `scale(${previewImageScale})`,
+                      transformOrigin: "center center",
+                      maxHeight: "100%",
+                      maxWidth: "100%",
+                      objectFit: "contain",
+                    }}
+                  />
+                ) : previewContentType === "application/pdf" ? (
+                  <iframe
+                    src={previewUrl}
+                    title={previewFileName}
+                    className="h-full w-full rounded-xl"
+                  />
+                ) : previewContentType.startsWith("video/") ? (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      background: "#000",
+                      borderRadius: "0.75rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <video
+                      controls
+                      src={previewUrl ?? undefined}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        maxHeight: "100%",
+                        objectFit: "contain",
+                        background: "#000",
+                      }}
+                      preload="metadata"
+                      onError={() => {
+                        setFileError("Gagal memuat preview video.");
+                      }}
+                    />
+                  </div>
+                ) : previewContentType.startsWith("audio/") ? (
+                  <AudioPreviewPlayer
+                    src={previewUrl}
+                    onError={() => {
+                      setFileError("Gagal memuat preview audio.");
+                    }}
+                  />
+                ) : previewContentType.startsWith("text/") ||
+                  previewContentType === "application/json" ||
+                  previewContentType === "application/xml" ||
+                  previewContentType === "text/xml" ||
+                  previewContentType === "application/javascript" ||
+                  previewContentType === "application/x-javascript" ||
+                  previewContentType === "application/typescript" ||
+                  previewContentType === "text/css" ||
+                  previewContentType === "text/html" ||
+                  previewContentType === "text/markdown" ||
+                  previewContentType === "text/csv" ? (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    {previewTextError ? (
+                      <div className="text-xs" style={{ color: "#f87171" }}>
+                        {previewTextError}
+                      </div>
+                    ) : previewIsTextTooLarge ? (
+                      <div className="text-xs" style={{ color: "#94a3b8" }}>
+                        Preview text terlalu besar. Silakan download file untuk
+                        melihat isinya.
+                      </div>
+                    ) : previewTextLoading ? (
+                      <div className="text-xs" style={{ color: "#94a3b8" }}>
+                        Loading preview text...
+                      </div>
+                    ) : (
+                      <pre
+                        style={{
+                          margin: 0,
+                          padding: 16,
+                          color: "#cbd5e1",
+                          background: "transparent",
+                          fontFamily:
+                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                          whiteSpace: "pre",
+                          overflow: "auto",
+                          tabSize: 2,
+                        }}
+                      >
+                        {previewText}
+                      </pre>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                    Preview tipe file ini belum tersedia di modal.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2904,7 +3674,7 @@ export function MyFiles({
                   </span>
 
                   <div className="relative">
-                    <div ref={fileMenuWrapRef}>
+                    <div ref={menuOpen === i ? fileMenuWrapRef : null}>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2929,6 +3699,27 @@ export function MyFiles({
                             border: "1px solid #1a2540",
                           }}
                         >
+                          {fileService.canPreviewFile(file) && (
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                              style={{ color: "#94a3b8" }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpen(null);
+                                void handlePreviewFile(file);
+                              }}
+                              disabled={previewingFileId === file.id}
+                              aria-label={`Preview ${file.original_name}`}
+                              title={`Preview ${file.original_name}`}
+                            >
+                              <Eye size={12} />{" "}
+                              {previewingFileId === file.id
+                                ? "Opening..."
+                                : "Preview"}
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"

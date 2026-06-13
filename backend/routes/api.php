@@ -40,8 +40,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/files/upload', [FileController::class, 'upload']);
     Route::get('/files/recent', [FileController::class, 'recent']);
 
+    Route::get('/files/{file}/preview', [FileController::class, 'preview']);
     Route::get('/files/{file}/download', [FileController::class, 'download']);
     Route::patch('/files/{file}', [FileController::class, 'update']);
+
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
     Route::post('/files/{file}/cancel-upload', [FileController::class, 'cancelUpload']);
 

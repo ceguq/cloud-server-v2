@@ -213,6 +213,57 @@ class FileController extends Controller
         return $binaryResponse;
     }
 
+    public function preview(Request $request, File $file): JsonResponse|
+    \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $user = $request->user();
+
+        if ($file->user_id !== $user->id) {
+            return response()->json(['message' => 'File tidak ditemukan'], 404);
+        }
+
+        $disk = Storage::disk('local');
+
+        if (!$disk->exists($file->path)) {
+            return response()->json(['message' => 'File tidak ditemukan'], 404);
+        }
+
+        $absolutePath = $disk->path($file->path);
+
+        $mimeType = $file->mime_type ?: 'application/octet-stream';
+
+        // Allow: image/*, application/pdf, video/*, audio/*, text/*
+        $isAllowed = false;
+        $mimeType = strtolower(trim($mimeType));
+
+        if (str_starts_with($mimeType, 'image/')) {
+            $isAllowed = true;
+        } elseif ($mimeType === 'application/pdf') {
+            $isAllowed = true;
+        } elseif (str_starts_with($mimeType, 'video/')) {
+            $isAllowed = true;
+        } elseif (str_starts_with($mimeType, 'audio/')) {
+            $isAllowed = true;
+        } elseif (str_starts_with($mimeType, 'text/')) {
+            $isAllowed = true;
+        }
+
+        if (!$isAllowed) {
+            return response()->json(['message' => 'Preview tidak tersedia untuk tipe file ini'], 415);
+        }
+
+        $fileName = $file->original_name;
+
+        // Inline response (not download)
+        $response = response()->file($absolutePath, [
+            'Content-Type' => $mimeType,
+        ]);
+
+        $response->headers->set('Content-Disposition', 'inline; filename="' . $fileName . '"');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+
+        return $response;
+    }
 
 
     public function update(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse
