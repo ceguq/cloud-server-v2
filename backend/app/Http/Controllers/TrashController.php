@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\File;
 use App\Models\Folder;
+use App\Services\ActivityLogService;
+
 use Illuminate\Http\JsonResponse;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+
 
 class TrashController extends Controller
 {
@@ -24,9 +28,10 @@ class TrashController extends Controller
         ]);
     }
 
-    public function restoreFile(Request $request, string $id): JsonResponse
+    public function restoreFile(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
         $user = $request->user();
+
 
         $file = File::onlyTrashed()
             ->where('user_id', $user->id)
@@ -44,23 +49,52 @@ class TrashController extends Controller
             $folderIsTrashed = $parentFolder && $parentFolder->trashed();
         }
 
+        $originalName = $file->original_name;
+        $previousFolderId = $file->folder_id;
+        $mimeType = $file->mime_type;
+        $size = $file->size;
+
         // Jika folder induk masih soft deleted, kembalikan file ke root
         if ($folderIsTrashed) {
             $file->folder_id = null;
             $file->save();
         }
 
+        $restoredFolderId = $file->folder_id;
+
         $file->restore();
 
+        // Activity Log only after restore succeeds
+        try {
+            $activityLogService->log(
+                action: 'file.restore',
+                description: 'File berhasil direstore: ' . $file->original_name,
+                subject: $file,
+                user: $user,
+                request: $request,
+                metadata: [
+                    'original_name' => $originalName,
+                    'previous_folder_id' => $previousFolderId,
+                    'restored_folder_id' => $restoredFolderId,
+                    'mime_type' => $mimeType,
+                    'size' => (int) $size,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
+
         return response()->json([
+
             'message' => 'File berhasil direstore',
             'data' => $file,
         ]);
     }
 
 
-    public function forceDeleteFile(Request $request, string $id): JsonResponse
+    public function forceDeleteFile(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
+
         $user = $request->user();
 
         $file = File::onlyTrashed()
@@ -72,6 +106,12 @@ class TrashController extends Controller
             return response()->json(['message' => 'File tidak ditemukan.'], 404);
         }
 
+        $fileId = $file->id;
+        $originalName = $file->original_name;
+        $folderId = $file->folder_id;
+        $mimeType = $file->mime_type;
+        $size = $file->size;
+
         // Hapus file fisik dari storage jika ada
         if (!empty($file->path)) {
             Storage::disk('local')->delete($file->path);
@@ -79,9 +119,30 @@ class TrashController extends Controller
 
         $file->forceDelete();
 
+        // Activity Log only after forceDelete succeeds
+        try {
+            $activityLogService->log(
+                action: 'file.force_delete',
+                description: 'File dihapus permanen: ' . $originalName,
+                subject: $file,
+                user: $request->user(),
+                request: $request,
+                metadata: [
+                    'file_id' => $fileId,
+                    'original_name' => $originalName,
+                    'folder_id' => $folderId,
+                    'mime_type' => $mimeType,
+                    'size' => (int) $size,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
+
         return response()->json([
             'message' => 'File berhasil dihapus permanen',
         ]);
+
     }
 
     public function folders(Request $request): JsonResponse
@@ -97,37 +158,83 @@ class TrashController extends Controller
         ]);
     }
 
-    public function restoreFolder(Request $request, string $id): JsonResponse
+    public function restoreFolder(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
         $folder = Folder::onlyTrashed()->where('id', $id)->first();
+
 
         if (!$folder) {
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);
         }
 
+        $oldName = $folder->name;
+        $oldParentId = $folder->parent_id;
+
         $this->restoreFolderRecursive($folder);
+
+        // Activity Log only after recursive restore succeeds
+        try {
+            $activityLogService->log(
+                action: 'folder.restore',
+                description: 'Folder berhasil direstore: ' . $folder->name,
+                subject: $folder,
+                user: $request->user(),
+                request: $request,
+                metadata: [
+                    'name' => $oldName,
+                    'parent_id' => $oldParentId,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
 
         // include nested state
         return response()->json([
             'message' => 'Folder berhasil direstore',
             'data' => $folder,
         ]);
+
     }
 
 
-    public function forceDeleteFolder(Request $request, string $id): JsonResponse
+    public function forceDeleteFolder(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
+
         $folder = Folder::onlyTrashed()->where('id', $id)->first();
 
         if (!$folder) {
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);
         }
 
+        $folderId = $folder->id;
+        $folderName = $folder->name;
+        $parentId = $folder->parent_id;
+
         $this->forceDeleteFolderRecursive($folder);
+
+        // Activity Log only after recursive force delete succeeds
+        try {
+            $activityLogService->log(
+                action: 'folder.force_delete',
+                description: 'Folder dihapus permanen: ' . $folderName,
+                subject: $folder,
+                user: $request->user(),
+                request: $request,
+                metadata: [
+                    'folder_id' => $folderId,
+                    'name' => $folderName,
+                    'parent_id' => $parentId,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
 
         return response()->json([
             'message' => 'Folder berhasil dihapus permanen',
         ]);
+
     }
 
     private function restoreFolderRecursive(Folder $folder): void

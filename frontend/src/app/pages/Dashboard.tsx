@@ -7,7 +7,6 @@ import {
   TrendingUp,
   TrendingDown,
   MoreHorizontal,
-  // Folder, Image (not used for recent files UI anymore)
   Film,
   Archive,
   Music,
@@ -40,6 +39,8 @@ import storageService, {
 import recentFileService, {
   type RecentFile,
 } from "../../services/recentFileService";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { FileTypeIcon } from "../components/FileTypeIcon";
 
 type RecentFileUI = RecentFile & {
   display_date: string;
@@ -173,7 +174,6 @@ export function Dashboard() {
   // existing UI keeps fileMenu actions as placeholders
   // (won't affect recent files rendering)
 
-
   const [recentFiles, setRecentFiles] = useState<RecentFileUI[]>([]);
   const [recentFilesLoading, setRecentFilesLoading] = useState(false);
   const [recentFilesError, setRecentFilesError] = useState(false);
@@ -227,7 +227,7 @@ export function Dashboard() {
 
   return (
     <div
-      className="flex-1 overflow-y-auto p-6"
+      className="flex-1 overflow-y-auto p-6 nimbus-scrollbar"
       style={{ background: "#080d1a" }}
     >
       {/* Welcome */}
@@ -276,6 +276,8 @@ export function Dashboard() {
               : card.kind === "files"
                 ? "total files"
                 : card.sub;
+          const showStorageLoading =
+            loading && (card.kind === "storage" || card.kind === "files");
           return (
             <div
               key={card.label}
@@ -310,7 +312,7 @@ export function Dashboard() {
                 </span>
               </div>
               <div className="text-2xl font-bold" style={{ color: "#e2e8f0" }}>
-                {storageValue ?? card.value}
+                {showStorageLoading ? <LoadingSpinner size={20} /> : storageValue ?? card.value}
               </div>
               <div className="text-xs mt-0.5" style={{ color: "#475569" }}>
                 {card.label}
@@ -367,7 +369,8 @@ export function Dashboard() {
             </div>
 
             {recentFilesLoading ? (
-              <div className="px-4 py-3 text-xs" style={{ color: "#94a3b8" }}>
+              <div className="flex items-center gap-2 px-4 py-3 text-xs" style={{ color: "#94a3b8" }}>
+                <LoadingSpinner size={12} />
                 Loading recent files...
               </div>
             ) : recentFilesError ? (
@@ -389,12 +392,12 @@ export function Dashboard() {
                   }}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-7 h-7 rounded-md flex items-center justify-center"
-                      style={{ background: "rgba(59,130,246,0.08)" }}
-                    >
-                      <FileText size={14} style={{ color: "#3b82f6" }} />
-                    </div>
+                    <FileTypeIcon
+                      originalName={file.original_name}
+                      mimeType={file.mime_type}
+                      className="w-7 h-7"
+                      size={14}
+                    />
                     <span className="text-sm" style={{ color: "#cbd5e1" }}>
                       {file.original_name}
                     </span>
@@ -556,7 +559,11 @@ export function Dashboard() {
               >
                 Recent Activity
               </span>
-              <button className="text-xs" style={{ color: "#3b82f6" }} title="See all">
+              <button
+                className="text-xs"
+                style={{ color: "#3b82f6" }}
+                title="See all"
+              >
                 See All
               </button>
             </div>

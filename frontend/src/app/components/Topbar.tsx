@@ -12,6 +12,7 @@ const pageTitles: Record<string, string> = {
   uploads: "Uploads",
   devices: "Devices",
   activity: "Activity",
+  "activity-log": "Activity Log",
   trash: "Trash",
   "server-monitor": "Server Monitor",
   settings: "Settings",

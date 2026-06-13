@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Folder,
-  FileText,
-  Image,
-  Film,
-  Music,
-  Archive,
-  FileCode,
   MoreHorizontal,
   Upload,
   FolderPlus,
@@ -30,6 +24,10 @@ import folderService, {
   type Folder as FolderModel,
 } from "../../services/folderService";
 import fileService, { type FileModel } from "../../services/fileService";
+import { useUploadManager } from "../upload/UploadManagerContext";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { FileTypeIcon } from "../components/FileTypeIcon";
+
 import {
   getPublicShareUrl,
   createShareLink,
@@ -97,13 +95,26 @@ function fileTypeFilterLabel(
   }
 }
 
-export function MyFiles() {
+export function MyFiles({
+  filesRefreshKey,
+  onStorageChanged,
+}: {
+  filesRefreshKey?: number;
+  onStorageChanged?: () => void;
+}) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+
+  // filesRefreshKey changes should only refresh currentFolderId list
+  // without changing active folder or causing request loops.
+
   const [openFolderActionId, setOpenFolderActionId] = useState<string | null>(
     null,
   );
   const [openFileActionId, setOpenFileActionId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
+
+  // click-outside untuk menu aksi file (tombol titik tiga)
+  const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -125,8 +136,12 @@ export function MyFiles() {
     "name",
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  // TODO: bulk selection akan dibuat di step lain
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Multi-select files (bulk actions)
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const clearSelection = () => setSelectedFileIds(new Set());
 
   // Files state
 
@@ -158,6 +173,18 @@ export function MyFiles() {
     useState<FileModel | null>(null);
   const [deleteFileLoading, setDeleteFileLoading] = useState(false);
   const [deleteFileError, setDeleteFileError] = useState("");
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [bulkDeleteFileIds, setBulkDeleteFileIds] = useState<string[]>([]);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkDeleteResult, setBulkDeleteResult] = useState<{
+    okCount: number;
+    failCount: number;
+  } | null>(null);
+  const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
+  const [bulkDownloadResult, setBulkDownloadResult] = useState<{
+    okCount: number;
+    failCount: number;
+  } | null>(null);
 
   const loadFiles = async (folderId: string | null) => {
     try {
@@ -199,11 +226,6 @@ export function MyFiles() {
     }
   };
 
-  useEffect(() => {
-    loadFolders(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleOpenFolder = async (folder: FolderModel) => {
     setCurrentFolderId(folder.id);
     setBreadcrumbs((prev) => {
@@ -211,6 +233,10 @@ export function MyFiles() {
       if (idx >= 0) return prev.slice(0, idx + 1);
       return [...prev, folder];
     });
+
+    // Selection harus dibersihkan saat folder berubah
+    clearSelection();
+
     await loadFolders(folder.id);
   };
 
@@ -227,6 +253,10 @@ export function MyFiles() {
     const slice = breadcrumbs.slice(0, next + 1);
     setBreadcrumbs(slice);
     setCurrentFolderId(id);
+
+    // Selection harus dibersihkan saat folder berubah
+    clearSelection();
+
     await loadFolders(id);
   };
 
@@ -424,16 +454,134 @@ export function MyFiles() {
     }
   };
 
-  useEffect(() => {
-    loadFiles(currentFolderId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const openBulkDeleteModal = () => {
+    const ids = Array.from(selectedFileIds);
+    if (ids.length === 0) return;
+
+    setBulkDeleteFileIds(ids);
+    setBulkDeleteResult(null);
+    setIsBulkDeleteModalOpen(true);
+  };
+
+  const closeBulkDeleteModal = () => {
+    if (bulkDeleteLoading) return;
+
+    setIsBulkDeleteModalOpen(false);
+    setBulkDeleteFileIds([]);
+    setBulkDeleteResult(null);
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (bulkDeleteLoading || bulkDeleteFileIds.length === 0) return;
+
+    setBulkDeleteLoading(true);
+    setBulkDeleteResult(null);
+
+    let okCount = 0;
+    let failCount = 0;
+
+    for (const id of bulkDeleteFileIds) {
+      try {
+        await fileService.deleteFile(id);
+        okCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    // refresh daftar file
+    await loadFiles(currentFolderId);
+
+    // refresh Storage Used hanya jika minimal satu delete berhasil
+    if (okCount > 0) {
+      onStorageChanged?.();
+    }
+
+    // kosongkan selection setelah selesai
+    clearSelection();
+
+    setBulkDeleteResult({ okCount, failCount });
+    setBulkDeleteLoading(false);
+  };
+
+  const closeBulkDownloadResult = () => {
+    if (bulkDownloadLoading) return;
+
+    setBulkDownloadResult(null);
+  };
+
+  const handleBulkDownload = async () => {
+    if (bulkDownloadLoading) return;
+
+    const ids = Array.from(selectedFileIds);
+    if (ids.length === 0) return;
+
+    setBulkDownloadLoading(true);
+    setBulkDownloadResult(null);
+
+    let okCount = 0;
+    let failCount = 0;
+
+    for (const id of ids) {
+      const file = files.find((f) => f.id === id);
+      try {
+        if (file) {
+          await fileService.downloadFile(file.id, file.original_name);
+          okCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    setBulkDownloadResult({ okCount, failCount });
+    setBulkDownloadLoading(false);
+  };
+
+  const { addFiles, hasActiveUploads } = useUploadManager();
+
+  // Stabil refresh function untuk fetch both folders dan files
+  const refreshCurrentFolder = useCallback(async () => {
+    await Promise.all([
+      loadFolders(currentFolderId),
+      loadFiles(currentFolderId),
+    ]);
   }, [currentFolderId]);
 
-  const [uploadingFile, setUploadingFile] = useState(false);
+  // Main effect: fetch saat mount, folder berubah, atau filesRefreshKey berubah
+  useEffect(() => {
+    refreshCurrentFolder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFolderId, filesRefreshKey]);
+
+  // Click-outside handler untuk menu aksi file
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (menuOpen === null) return;
+      const wrap = fileMenuWrapRef.current;
+      if (!wrap) return;
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      // jika klik terjadi di luar wrapper tombol + dropdown, tutup
+      if (!wrap.contains(target)) {
+        setMenuOpen(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [menuOpen]);
+
   const uploadInputRef = useMemo(
     () => ({ current: null as HTMLInputElement | null }),
     [],
   );
+
   const [uploadError, setUploadError] = useState("");
 
   const folderList = loadingFolders ? [] : folders;
@@ -646,6 +794,7 @@ export function MyFiles() {
       style={{ background: "#080d1a" }}
     >
       {/* Breadcrumb */}
+
       {breadcrumbs.length > 0 ? (
         <div className="flex items-center gap-1.5 mb-4" aria-label="Breadcrumb">
           <button
@@ -721,44 +870,23 @@ export function MyFiles() {
           <input
             ref={uploadInputRef as any}
             type="file"
-            multiple={false}
+            multiple={true}
             style={{ display: "none" }}
-            aria-label="Upload file"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
+            aria-label="Upload files"
+            onChange={(e) => {
+              const list = e.target.files;
+              if (!list || list.length === 0) return;
+
+              const fileArray = Array.from(list);
+              const folderId = currentFolderId ?? null;
 
               setUploadError("");
-              const selectedFiles = e.target.files;
-              const f = selectedFiles?.[0];
-              if (!f) return;
 
-              try {
-                setUploadingFile(true);
-                setFileError("");
+              // Push to global queue (no local upload loop)
+              addFiles(fileArray, folderId);
 
-                await fileService.uploadFile(file, currentFolderId ?? null);
-                await loadFiles(currentFolderId);
-              } catch (err: any) {
-                const status = err?.response?.status;
-                const respMsg =
-                  err?.response?.data?.message ||
-                  err?.response?.data?.errors?.file?.[0] ||
-                  "Gagal upload file.";
-
-                const msg =
-                  status === 413 ||
-                  (typeof respMsg === "string" &&
-                    respMsg.toLowerCase().includes("terlalu besar"))
-                    ? "File terlalu besar untuk konfigurasi server/PHP. Cek upload_max_filesize dan post_max_size."
-                    : respMsg;
-                setUploadError(msg);
-                setFileError("");
-              } finally {
-                setUploadingFile(false);
-                // reset input supaya file yang sama bisa di-upload lagi
-                e.currentTarget.value = "";
-              }
+              // reset input supaya file yang sama bisa di-upload lagi
+              e.currentTarget.value = "";
             }}
           />
 
@@ -770,18 +898,32 @@ export function MyFiles() {
               input?.click();
             }}
             aria-label="Upload Files"
-            disabled={uploadingFile}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
             style={{
               background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
               color: "#fff",
-              opacity: uploadingFile ? 0.7 : 1,
+              opacity: hasActiveUploads ? 0.9 : 1,
             }}
             title="Upload Files"
           >
             <Upload size={13} />{" "}
-            {uploadingFile ? "Uploading..." : "Upload Files"}
+            {hasActiveUploads ? "Tambah ke Queue" : "Upload Files"}
           </button>
+
+          {uploadError && (
+            <div
+              className="text-xs px-3 py-2 rounded-lg border"
+              style={{
+                borderColor: "rgba(248,113,113,0.35)",
+                background: "rgba(248,113,113,0.08)",
+                color: "#f87171",
+              }}
+              role="status"
+              aria-live="polite"
+            >
+              {uploadError}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1045,7 +1187,11 @@ export function MyFiles() {
         </h3>
 
         {loadingFolders && (
-          <div className="text-xs" style={{ color: "#64748b" }}>
+          <div
+            className="flex items-center gap-2 text-xs"
+            style={{ color: "#64748b" }}
+          >
+            <LoadingSpinner size={12} />
             Loading folders...
           </div>
         )}
@@ -1654,37 +1800,683 @@ export function MyFiles() {
         </div>
       )}
 
+      {/* Bulk Delete Files Modal */}
+      {isBulkDeleteModalOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-delete-files-title"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="bulk-delete-files-title"
+                  className="text-sm font-semibold"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  Pindahkan file ke Trash?
+                </h2>
+                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                  {bulkDeleteFileIds.length} file terpilih akan dipindahkan ke
+                  Trash.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeBulkDeleteModal}
+                disabled={bulkDeleteLoading}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                  opacity: bulkDeleteLoading ? 0.55 : 1,
+                }}
+                aria-label="Tutup modal bulk delete"
+              >
+                ×
+              </button>
+            </div>
+
+            {bulkDeleteLoading && (
+              <div
+                className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs flex items-center gap-2"
+                style={{ color: "#67e8f9" }}
+                role="status"
+              >
+                <LoadingSpinner size={12} />
+                Memindahkan file ke Trash...
+              </div>
+            )}
+
+            {bulkDeleteResult ? (
+              <>
+                <div
+                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  role="status"
+                >
+                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                    Hasil proses
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
+                      style={{ color: "#34d399" }}
+                    >
+                      <div className="text-lg font-semibold">
+                        {bulkDeleteResult.okCount}
+                      </div>
+                      <div className="text-[11px]">berhasil</div>
+                    </div>
+                    <div
+                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
+                      style={{ color: "#f87171" }}
+                    >
+                      <div className="text-lg font-semibold">
+                        {bulkDeleteResult.failCount}
+                      </div>
+                      <div className="text-[11px]">gagal</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeBulkDeleteModal}
+                    className="rounded-xl px-3 py-2 text-xs font-medium"
+                    style={{
+                      background: "#0d1829",
+                      border: "1px solid #1a2540",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeBulkDeleteModal}
+                  disabled={bulkDeleteLoading}
+                  className="rounded-xl px-3 py-2 text-xs font-medium"
+                  style={{
+                    background: "#0d1829",
+                    border: "1px solid #1a2540",
+                    color: "#94a3b8",
+                    opacity: bulkDeleteLoading ? 0.6 : 1,
+                  }}
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmBulkDelete()}
+                  disabled={bulkDeleteLoading}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold"
+                  style={{
+                    background: "#f87171",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    color: "#0b1121",
+                    opacity: bulkDeleteLoading ? 0.75 : 1,
+                  }}
+                >
+                  {bulkDeleteLoading ? (
+                    <>
+                      <LoadingSpinner size={12} /> Memindahkan...
+                    </>
+                  ) : (
+                    "Pindahkan ke Trash"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Download Result Modal */}
+      {bulkDownloadResult && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-download-result-title"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="bulk-download-result-title"
+                  className="text-sm font-semibold"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  Download selesai
+                </h2>
+                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                  Jika browser memblokir multiple download otomatis, beberapa
+                  file mungkin perlu diunduh ulang.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeBulkDownloadResult}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+                aria-label="Tutup hasil bulk download"
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+              role="status"
+            >
+              <div className="text-xs" style={{ color: "#94a3b8" }}>
+                Hasil proses
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
+                  style={{ color: "#34d399" }}
+                >
+                  <div className="text-lg font-semibold">
+                    {bulkDownloadResult.okCount}
+                  </div>
+                  <div className="text-[11px]">berhasil</div>
+                </div>
+                <div
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
+                  style={{ color: "#f87171" }}
+                >
+                  <div className="text-lg font-semibold">
+                    {bulkDownloadResult.failCount}
+                  </div>
+                  <div className="text-[11px]">gagal</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={closeBulkDownloadResult}
+                className="rounded-xl px-3 py-2 text-xs font-medium"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Files */}
 
       <div>
+        {/* Bulk action bar */}
+        {selectedFileIds.size > 0 && (
+          <div
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 px-4 py-3 rounded-xl"
+            style={{
+              background: "#0f1729",
+              border: "1px solid #1a2540",
+            }}
+          >
+            <div className="text-xs" style={{ color: "#94a3b8" }}>
+              <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+                {selectedFileIds.size}
+              </span>{" "}
+              file dipilih
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg text-xs font-semibold"
+                style={{
+                  background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                  color: "#fff",
+                }}
+                aria-label="Bulk Download"
+                disabled={bulkDownloadLoading}
+                onClick={() => void handleBulkDownload()}
+              >
+                {bulkDownloadLoading ? (
+                  <>
+                    <LoadingSpinner size={12} /> Memproses...
+                  </>
+                ) : (
+                  "Download"
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg text-xs font-semibold"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+                aria-label="Bulk Share"
+                onClick={() => {
+                  void (async () => {
+                    const ids = Array.from(selectedFileIds);
+                    if (ids.length === 0) return;
+
+                    // Modal hasil Bulk Share (NimbusDrive dark)
+                    // - dibuat inline (tanpa mengubah tombol share individual)
+                    // - tidak menggunakan native alert
+                    const shareResults: Array<{
+                      fileName: string;
+                      link: string;
+                      failed: boolean;
+                      error?: string;
+                    }> = [];
+
+                    const origin = window.location.origin;
+
+                    let okCount = 0;
+                    let failCount = 0;
+
+                    // proses satu per satu, lanjut jika satu gagal
+                    for (const id of ids) {
+                      const file = files.find((f) => f.id === id);
+                      const fileName = file?.original_name ?? id;
+
+                      try {
+                        // createShareLink existing
+                        const created = await createShareLink(id);
+                        okCount++;
+
+                        // bentuk URL publik: origin + /share/{token}
+                        const token = created?.token;
+                        const link = token ? `${origin}/share/${token}` : "";
+
+                        shareResults.push({
+                          fileName,
+                          link,
+                          failed: false,
+                        });
+                      } catch (e: any) {
+                        failCount++;
+                        shareResults.push({
+                          fileName,
+                          link: "",
+                          failed: true,
+                          error:
+                            e?.response?.data?.message ||
+                            e?.message ||
+                            "Gagal membuat share link",
+                        });
+                      }
+                    }
+
+                    const modalId = `bulk-share-modal-${Date.now()}`;
+                    const overlay = document.createElement("div");
+                    overlay.id = modalId;
+                    overlay.className =
+                      "fixed inset-0 z-[120] flex items-center justify-center bg-black/60";
+
+                    // container dialog
+                    const dialog = document.createElement("div");
+                    // NOTE: dialog content is generated inline (DOM) for Bulk Share modal
+
+                    dialog.className =
+                      "w-full max-w-2xl rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6";
+                    // avoid extra ARIA role/constraints; existing UI uses role/dialog similarly
+                    dialog.setAttribute("aria-modal", "true");
+
+                    const title = document.createElement("h2");
+                    title.className = "text-sm font-semibold";
+                    title.style.color = "#e2e8f0";
+                    title.textContent = "Share Links";
+
+                    const summary = document.createElement("div");
+                    summary.className = "text-xs mt-2";
+                    summary.style.color = "#94a3b8";
+                    summary.textContent = `${okCount} berhasil, ${failCount} gagal`;
+
+                    const listWrap = document.createElement("div");
+                    listWrap.className =
+                      "mt-4 rounded-xl overflow-hidden border border-[#1a2540]";
+                    listWrap.style.background = "#0b1121";
+
+                    shareResults.forEach((r, idx) => {
+                      const row = document.createElement("div");
+                      row.className =
+                        "grid grid-cols-1 sm:grid-cols-[200px_1fr_90px] gap-3 px-4 py-3";
+                      row.style.borderBottom =
+                        idx === shareResults.length - 1
+                          ? "none"
+                          : "1px solid rgba(26,37,64,1)";
+
+                      const nameEl = document.createElement("div");
+                      nameEl.className = "text-xs";
+                      nameEl.style.color = "#cbd5e1";
+                      nameEl.textContent = r.fileName;
+
+                      const linkEl = document.createElement("div");
+                      linkEl.className = "flex flex-col gap-2";
+
+                      const input = document.createElement("input");
+                      input.type = "text";
+                      input.readOnly = true;
+                      input.value = r.failed ? "Gagal membuat link" : r.link;
+                      input.className =
+                        "w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-3 py-2 text-xs outline-none text-[#cbd5e1]";
+                      input.setAttribute(
+                        "aria-label",
+                        `Public share URL ${r.fileName}`,
+                      );
+
+                      linkEl.appendChild(input);
+
+                      const copyBtn = document.createElement("button");
+                      copyBtn.type = "button";
+                      copyBtn.className =
+                        "px-3 py-2 rounded-lg text-xs font-semibold";
+                      copyBtn.textContent = "Copy";
+                      copyBtn.setAttribute(
+                        "aria-label",
+                        `Copy share link ${r.fileName}`,
+                      );
+                      copyBtn.style.background =
+                        r.failed || !r.link
+                          ? "#334155"
+                          : "linear-gradient(135deg, #3b82f6, #22d3ee)";
+                      copyBtn.style.color = "#fff";
+                      copyBtn.style.opacity = r.failed || !r.link ? "0.7" : "1";
+                      copyBtn.disabled = r.failed || !r.link;
+
+                      const status = document.createElement("div");
+                      status.className = "text-[11px]";
+                      status.style.color = "#34d399";
+                      status.style.minHeight = "16px";
+                      status.textContent = "";
+                      status.setAttribute("role", "status");
+
+                      copyBtn.onclick = async () => {
+                        if (!r.link) {
+                          // user masih bisa menekan Ctrl+C manual dari input
+                          try {
+                            input.focus();
+                            input.select();
+                          } catch {
+                            // ignore
+                          }
+                          status.textContent =
+                            "Link sudah dipilih, tekan Ctrl+C untuk menyalin.";
+                          setTimeout(() => {
+                            status.textContent = "";
+                          }, 4000);
+                          return;
+                        }
+
+                        const safeSelectInput = () => {
+                          try {
+                            input.focus();
+                            input.select();
+                          } catch {
+                            // ignore
+                          }
+                        };
+
+                        // 1) coba clipboard API
+                        let copied = false;
+                        try {
+                          if (navigator?.clipboard?.writeText) {
+                            await navigator.clipboard.writeText(r.link);
+                            copied = true;
+                          }
+                        } catch {
+                          copied = false;
+                        }
+
+                        // 2) fallback: execCommand("copy")
+                        if (!copied) {
+                          try {
+                            const textarea = document.createElement("textarea");
+                            textarea.value = r.link;
+                            textarea.setAttribute("readonly", "true");
+                            textarea.style.position = "absolute";
+                            textarea.style.left = "-9999px";
+                            document.body.appendChild(textarea);
+
+                            textarea.select();
+                            const ok = document.execCommand("copy");
+
+                            document.body.removeChild(textarea);
+                            if (ok) copied = true;
+                          } catch {
+                            copied = false;
+                          }
+                        }
+
+                        if (copied) {
+                          status.textContent = "Tersalin";
+                        } else {
+                          // 3) kedua metode gagal: pilih input supaya user tinggal Ctrl+C
+                          safeSelectInput();
+                          status.textContent =
+                            "Link sudah dipilih, tekan Ctrl+C untuk menyalin";
+                        }
+
+                        setTimeout(() => {
+                          status.textContent = "";
+                        }, 2000);
+                      };
+
+                      row.appendChild(nameEl);
+                      row.appendChild(linkEl);
+                      const rightWrap = document.createElement("div");
+                      rightWrap.className = "flex flex-col gap-2";
+                      rightWrap.appendChild(copyBtn);
+                      rightWrap.appendChild(status);
+                      row.appendChild(rightWrap);
+
+                      listWrap.appendChild(row);
+                    });
+
+                    const closeBtn = document.createElement("button");
+                    closeBtn.type = "button";
+                    closeBtn.className =
+                      "px-3 py-2 rounded-xl text-xs font-medium";
+                    closeBtn.textContent = "Tutup";
+                    closeBtn.style.background = "#0d1829";
+                    closeBtn.style.border = "1px solid #1a2540";
+                    closeBtn.style.color = "#94a3b8";
+
+                    closeBtn.onclick = () => {
+                      overlay.remove();
+                    };
+
+                    dialog.appendChild(title);
+                    dialog.appendChild(summary);
+                    dialog.appendChild(listWrap);
+
+                    const footer = document.createElement("div");
+                    footer.className = "flex justify-end mt-5";
+                    footer.appendChild(closeBtn);
+                    dialog.appendChild(footer);
+
+                    overlay.style.background = "rgba(0,0,0,0.55)";
+                    overlay.style.padding = "24px";
+                    overlay.appendChild(dialog);
+
+                    document.body.appendChild(overlay);
+                  })();
+                }}
+              >
+                Share
+              </button>
+
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg text-xs font-semibold"
+                style={{
+                  background: "#f87171",
+                  border: "1px solid rgba(248,113,113,0.4)",
+                  color: "#0b1121",
+                }}
+                aria-label="Bulk Delete"
+                onClick={openBulkDeleteModal}
+              >
+                Delete
+              </button>
+
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg text-xs font-medium"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+                aria-label="Batalkan pilihan"
+                onClick={() => {
+                  clearSelection();
+                }}
+              >
+                Batalkan pilihan
+              </button>
+            </div>
+          </div>
+        )}
+
         <h3
           className="text-xs font-semibold mb-3 uppercase tracking-wider"
           style={{ color: "#334155" }}
         >
           Recent Files
         </h3>
+        {loadingFiles && (
+          <div
+            className="flex items-center gap-2 text-xs mb-4"
+            style={{ color: "#64748b" }}
+          >
+            <LoadingSpinner size={12} />
+            Memuat file...
+          </div>
+        )}
+        {fileError && (
+          <div className="text-xs mb-4" style={{ color: "#f87171" }}>
+            {fileError}
+          </div>
+        )}
         <div
           className="rounded-xl"
           style={{ background: "#0f1729", border: "1px solid #1a2540" }}
         >
           <div
-            className="grid px-4 py-2.5"
+            className="grid px-4 py-2.5 items-center"
             style={{
               gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
               borderBottom: "1px solid #1a2540",
             }}
           >
-            {["", "Name", "Type", "Modified", "Size", "Status", ""].map(
-              (h, i) => (
-                <span
-                  key={i}
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  {h}
-                </span>
-              ),
-            )}
+            {/* Select all */}
+            {(() => {
+              const visibleIds = typedFiles.map((f) => f.id);
+              const selectedVisibleCount = visibleIds.reduce(
+                (acc, id) => acc + (selectedFileIds.has(id) ? 1 : 0),
+                0,
+              );
+              const allChecked =
+                visibleIds.length > 0 &&
+                selectedVisibleCount === visibleIds.length;
+              const indeterminate = selectedVisibleCount > 0 && !allChecked;
+
+              return (
+                <input
+                  type="checkbox"
+                  aria-label="Pilih semua file yang tampil"
+                  checked={allChecked}
+                  ref={(el) => {
+                    if (el) el.indeterminate = indeterminate;
+                  }}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    if (checked) {
+                      setSelectedFileIds((prev) => {
+                        const next = new Set(prev);
+                        for (const id of visibleIds) next.add(id);
+                        return next;
+                      });
+                    } else {
+                      setSelectedFileIds((prev) => {
+                        const next = new Set(prev);
+                        for (const id of visibleIds) next.delete(id);
+                        return next;
+                      });
+                    }
+                  }}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    accentColor: "#3b82f6",
+                  }}
+                />
+              );
+            })()}
+
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            >
+              Name
+            </span>
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            >
+              Type
+            </span>
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            >
+              Modified
+            </span>
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            >
+              Size
+            </span>
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            >
+              Status
+            </span>
+            <span
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "#334155" }}
+            ></span>
           </div>
 
           {showEmptySearchState && (
@@ -1707,15 +2499,36 @@ export function MyFiles() {
                     background: undefined,
                   }}
                 >
-                  <div className="w-4 h-4" />
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`Pilih file ${file.original_name}`}
+                      checked={selectedFileIds.has(file.id)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelectedFileIds((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.add(file.id);
+                          else next.delete(file.id);
+                          return next;
+                        });
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        width: 14,
+                        height: 14,
+                        accentColor: "#3b82f6",
+                      }}
+                    />
+                  </div>
 
                   <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-7 h-7 rounded-md flex items-center justify-center"
-                      style={{ background: "rgba(59,130,246,0.12)" }}
-                    >
-                      <FileText size={14} style={{ color: "#60a5fa" }} />
-                    </div>
+                    <FileTypeIcon
+                      originalName={file.original_name}
+                      mimeType={file.mime_type}
+                      className="w-7 h-7"
+                      size={14}
+                    />
                     <span className="text-sm" style={{ color: "#cbd5e1" }}>
                       {file.original_name}
                     </span>
@@ -1752,118 +2565,125 @@ export function MyFiles() {
                   </span>
 
                   <div className="relative">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(menuOpen === i ? null : i);
-                      }}
-                      className="w-7 h-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#1e2d45] z-50"
-                      aria-label={`File actions for ${file.original_name}`}
-                      title="File actions"
-                    >
-                      <MoreHorizontal size={14} style={{ color: "#64748b" }} />
-                    </button>
-
-                    {menuOpen === i && (
-                      <div
-                        className="absolute right-0 top-full mt-2 w-44 rounded-lg shadow-2xl z-50 overflow-hidden"
-                        style={{
-                          background: "#0f1729",
-                          border: "1px solid #1a2540",
+                    <div ref={fileMenuWrapRef}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(menuOpen === i ? null : i);
                         }}
+                        className="w-7 h-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#1e2d45] z-50"
+                        aria-label={`File actions for ${file.original_name}`}
+                        title="File actions"
                       >
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#94a3b8" }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileService.downloadFile(
-                              file.id,
-                              file.original_name,
-                            );
-                            setMenuOpen(null);
-                          }}
-                          aria-label={`Download ${file.original_name}`}
-                          title={`Download ${file.original_name}`}
-                        >
-                          <Download size={12} /> Download
-                        </button>
+                        <MoreHorizontal
+                          size={14}
+                          style={{ color: "#64748b" }}
+                        />
+                      </button>
 
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#94a3b8" }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedFileForShare(file);
-                            setShareError("");
-                            setCopySuccess("");
-                            setActiveShareLink(null);
-                            setIsShareModalOpen(true);
-                            setMenuOpen(null);
-
-                            (async () => {
-                              try {
-                                setShareLoading(true);
-                                const created = await createShareLink(file.id);
-                                setActiveShareLink(created);
-                              } catch (err: any) {
-                                setShareError(
-                                  err?.response?.data?.message ||
-                                    err?.message ||
-                                    "Gagal membuat share link",
-                                );
-                              } finally {
-                                setShareLoading(false);
-                              }
-                            })();
+                      {menuOpen === i && (
+                        <div
+                          className="absolute right-0 top-full mt-2 w-44 rounded-lg shadow-2xl z-50 overflow-hidden"
+                          style={{
+                            background: "#0f1729",
+                            border: "1px solid #1a2540",
                           }}
-                          aria-label={`Share ${file.original_name}`}
-                          title={`Share ${file.original_name}`}
                         >
-                          <Share2 size={12} /> Share
-                        </button>
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                            style={{ color: "#94a3b8" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fileService.downloadFile(
+                                file.id,
+                                file.original_name,
+                              );
+                              setMenuOpen(null);
+                            }}
+                            aria-label={`Download ${file.original_name}`}
+                            title={`Download ${file.original_name}`}
+                          >
+                            <Download size={12} /> Download
+                          </button>
 
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#94a3b8" }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedFileForAction(file);
-                            setFileRenameName(file.original_name);
-                            setFileModalError("");
-                            setIsFileRenameModalOpen(true);
-                            setMenuOpen(null);
-                          }}
-                          aria-label={`Rename ${file.original_name}`}
-                          title={`Rename ${file.original_name}`}
-                        >
-                          <Edit3 size={12} /> Rename
-                        </button>
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                            style={{ color: "#94a3b8" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFileForShare(file);
+                              setShareError("");
+                              setCopySuccess("");
+                              setActiveShareLink(null);
+                              setIsShareModalOpen(true);
+                              setMenuOpen(null);
 
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#f87171" }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setSelectedFileForDelete(file);
-                            setDeleteFileError("");
-                            setIsFileDeleteModalOpen(true);
-                            setOpenFileActionId(null);
-                            setMenuOpen(null);
-                          }}
-                          aria-label={`Delete ${file.original_name}`}
-                          title={`Delete ${file.original_name}`}
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
-                      </div>
-                    )}
+                              (async () => {
+                                try {
+                                  setShareLoading(true);
+                                  const created = await createShareLink(
+                                    file.id,
+                                  );
+                                  setActiveShareLink(created);
+                                } catch (err: any) {
+                                  setShareError(
+                                    err?.response?.data?.message ||
+                                      err?.message ||
+                                      "Gagal membuat share link",
+                                  );
+                                } finally {
+                                  setShareLoading(false);
+                                }
+                              })();
+                            }}
+                            aria-label={`Share ${file.original_name}`}
+                            title={`Share ${file.original_name}`}
+                          >
+                            <Share2 size={12} /> Share
+                          </button>
+
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                            style={{ color: "#94a3b8" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFileForAction(file);
+                              setFileRenameName(file.original_name);
+                              setFileModalError("");
+                              setIsFileRenameModalOpen(true);
+                              setMenuOpen(null);
+                            }}
+                            aria-label={`Rename ${file.original_name}`}
+                            title={`Rename ${file.original_name}`}
+                          >
+                            <Edit3 size={12} /> Rename
+                          </button>
+
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                            style={{ color: "#f87171" }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelectedFileForDelete(file);
+                              setDeleteFileError("");
+                              setIsFileDeleteModalOpen(true);
+                              setOpenFileActionId(null);
+                              setMenuOpen(null);
+                            }}
+                            aria-label={`Delete ${file.original_name}`}
+                            title={`Delete ${file.original_name}`}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

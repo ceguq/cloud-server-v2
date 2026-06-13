@@ -6,6 +6,8 @@ use App\Http\Controllers\FolderController;
 use App\Http\Controllers\ShareController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TrashController;
+use App\Http\Controllers\ActivityLogController;
+
 
 use Illuminate\Support\Facades\Route;
 
@@ -26,7 +28,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
+    Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
     Route::get('/folders', [FolderController::class, 'index']);
+
     Route::post('/folders', [FolderController::class, 'store']);
     Route::patch('/folders/{folder}', [FolderController::class, 'update']);
     Route::delete('/folders/{folder}', [FolderController::class, 'destroy']);
@@ -38,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/files/{file}/download', [FileController::class, 'download']);
     Route::patch('/files/{file}', [FileController::class, 'update']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
+    Route::post('/files/{file}/cancel-upload', [FileController::class, 'cancelUpload']);
 
     // Authenticated share link endpoints
     Route::get('/share-links', [ShareController::class, 'index']);

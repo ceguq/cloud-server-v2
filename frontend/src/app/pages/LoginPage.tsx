@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Cloud } from "lucide-react";
 import { authService } from "../../services/authService";
+import { LoadingSpinner } from "../components/LoadingSpinner";
 
 type LoginPageProps = {
   onLoginSuccess: () => void;
@@ -85,9 +86,16 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Masuk..." : "Login"}
+            {loading ? (
+              <>
+                <LoadingSpinner size={14} color="#fff" />
+                Masuk...
+              </>
+            ) : (
+              "Login"
+            )}
           </button>
         </form>
       </div>

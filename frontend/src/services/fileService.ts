@@ -41,7 +41,12 @@ export async function getFiles(folderId?: string | null) {
   return unwrapData<FileModel[]>(res.data);
 }
 
-export async function uploadFile(file: File, folderId?: string | null) {
+export async function uploadFile(
+  file: File,
+  folderId?: string | null,
+  onUploadProgress?: (progressEvent: any) => void,
+  signal?: AbortSignal,
+) {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -53,6 +58,8 @@ export async function uploadFile(file: File, folderId?: string | null) {
     headers: {
       // Jangan set Content-Type manual untuk FormData.
     },
+    onUploadProgress,
+    signal,
   });
 
   return unwrapData<FileModel>(res.data);
@@ -86,12 +93,18 @@ export async function downloadFile(id: string, originalName: string) {
   window.URL.revokeObjectURL(url);
 }
 
+export async function cancelUpload(id: string) {
+  const res = await api.post(`/files/${id}/cancel-upload`);
+  return unwrapData<any>(res.data);
+}
+
 const fileService = {
   getFiles,
   uploadFile,
   renameFile,
   deleteFile,
   downloadFile,
+  cancelUpload,
 };
 
 export default fileService;

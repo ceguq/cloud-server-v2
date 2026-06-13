@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
+use App\Services\ActivityLogService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+
 
 class FileController extends Controller
 {
@@ -42,9 +45,10 @@ class FileController extends Controller
         ]);
     }
 
-    public function upload(Request $request): JsonResponse
+    public function upload(Request $request, ActivityLogService $activityLogService): JsonResponse
     {
         $user = $request->user();
+
 
         // Handle case when request comes but file is not readable by Laravel
         if (!$request->hasFile('file')) {
@@ -99,15 +103,81 @@ class FileController extends Controller
             'size' => $uploaded->getSize() ?? 0,
         ]);
 
+        // Activity Log only after File::create succeeds
+        $activityLogService->log(
+            action: 'file.upload',
+            description: 'Upload file berhasil: ' . $file->original_name,
+            subject: $file,
+            metadata: [
+                'original_name' => $file->original_name,
+                'size' => (int) $file->size,
+                'mime_type' => $file->mime_type,
+                'folder_id' => $file->folder_id,
+            ],
+            user: $user,
+            request: $request
+        );
+
         return response()->json([
             'message' => 'File berhasil diupload',
             'data' => $file,
         ], 201);
+
     }
 
-    public function download(Request $request, File $file): JsonResponse|
+    public function cancelUpload(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse
+    {
+        $user = $request->user();
+
+        // Ensure file belongs to the authenticated user
+        if ($file->user_id !== $user->id) {
+            return response()->json(['message' => 'File tidak ditemukan'], 404);
+        }
+
+        $originalName = $file->original_name;
+        $filePath = $file->path;
+
+        try {
+            // Delete the physical file from storage
+            $disk = Storage::disk('local');
+            if ($disk->exists($filePath)) {
+                $disk->delete($filePath);
+            }
+
+            // Delete the database record
+            $file->forceDelete();
+
+            // Log the cancellation
+            try {
+                $activityLogService->log(
+                    action: 'file.upload.cancelled',
+                    description: 'Upload dibatalkan: ' . $originalName,
+                    metadata: [
+                        'original_name' => $originalName,
+                        'file_id' => (string) $file->id,
+                    ],
+                    user: $user,
+                    request: $request
+                );
+            } catch (\Throwable $e) {
+                // Log error should not affect main operation
+            }
+
+            return response()->json([
+                'message' => 'Upload dibatalkan dan file dihapus',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Gagal membatalkan upload',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function download(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse|
     \Symfony\Component\HttpFoundation\BinaryFileResponse {
         $user = $request->user();
+
 
         if ($file->user_id !== $user->id) {
 
@@ -122,11 +192,30 @@ class FileController extends Controller
 
         $absolutePath = $disk->path($file->path);
 
-        return response()->download($absolutePath, $file->original_name);
+        $binaryResponse = response()->download($absolutePath, $file->original_name);
+
+        // Activity Log only for authenticated My Files download
+        $activityLogService->log(
+            action: 'file.download',
+            description: 'File didownload: ' . $file->original_name,
+            subject: $file,
+            user: $user,
+            request: $request,
+            metadata: [
+                'file_id' => (string) $file->id,
+                'original_name' => $file->original_name,
+                'folder_id' => $file->folder_id,
+                'mime_type' => $file->mime_type,
+                'size' => (int) $file->size,
+            ]
+        );
+
+        return $binaryResponse;
     }
 
 
-    public function update(Request $request, File $file): JsonResponse
+
+    public function update(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse
     {
         $user = $request->user();
         if ($file->user_id !== $user->id) {
@@ -137,9 +226,27 @@ class FileController extends Controller
             'original_name' => ['required', 'string', 'max:255'],
         ]);
 
+        $oldName = $file->original_name;
+        $newName = $validated['original_name'];
+
         $file->update([
-            'original_name' => $validated['original_name'],
+            'original_name' => $newName,
         ]);
+
+        if ($oldName !== $newName) {
+            $activityLogService->log(
+                action: 'file.rename',
+                description: 'Rename file: ' . $oldName . ' -> ' . $newName,
+                subject: $file,
+                user: $user,
+                request: $request,
+                metadata: [
+                    'old_name' => $oldName,
+                    'new_name' => $newName,
+                    'folder_id' => $file->folder_id,
+                ]
+            );
+        }
 
         return response()->json([
             'message' => 'File berhasil diubah',
@@ -147,7 +254,8 @@ class FileController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, File $file): JsonResponse
+
+    public function destroy(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse
     {
         $user = $request->user();
 
@@ -155,13 +263,38 @@ class FileController extends Controller
             return response()->json(['message' => 'File tidak ditemukan'], 404);
         }
 
+        $originalName = $file->original_name;
+        $folderId = $file->folder_id;
+        $mimeType = $file->mime_type;
+        $size = $file->size;
+
         // Soft delete (Trash). Do NOT delete the physical file.
         $file->delete();
+
+        // Activity Log only after soft delete succeeds
+        try {
+            $activityLogService->log(
+                action: 'file.trash',
+                description: 'File dipindahkan ke Trash: ' . $originalName,
+                subject: $file,
+                user: $user,
+                request: $request,
+                metadata: [
+                    'original_name' => $originalName,
+                    'folder_id' => $folderId,
+                    'mime_type' => $mimeType,
+                    'size' => (int) $size,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
 
         return response()->json([
             'message' => 'File dipindahkan ke Trash',
         ]);
     }
+
 
 
     public function recent(Request $request): JsonResponse

@@ -6,6 +6,7 @@ import {
   Upload,
   Monitor,
   Activity,
+  History,
   Trash2,
   Server,
   Settings,
@@ -16,25 +17,42 @@ import {
 import storageService, {
   type StorageInfo,
 } from "../../services/storageService";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "my-files", label: "My Files", icon: FolderOpen },
-  { id: "shared", label: "Shared", icon: Share2 },
-  { id: "uploads", label: "Uploads", icon: Upload },
-  { id: "devices", label: "Devices", icon: Monitor },
-  { id: "activity", label: "Activity", icon: Activity },
-  { id: "trash", label: "Trash", icon: Trash2 },
-  { id: "server-monitor", label: "Server Monitor", icon: Server },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { id: "my-files", label: "My Files", icon: FolderOpen, path: "/my-files" },
+  { id: "shared", label: "Shared", icon: Share2, path: "/shared" },
+  { id: "uploads", label: "Uploads", icon: Upload, path: "/uploads" },
+  { id: "devices", label: "Devices", icon: Monitor, path: "/devices" },
+  { id: "activity", label: "Activity", icon: Activity, path: "/activity-feed" },
+  { id: "trash", label: "Trash", icon: Trash2, path: "/trash" },
+  {
+    id: "activity-log",
+    label: "Activity Log",
+    icon: History,
+    path: "/activity",
+  },
+  {
+    id: "server-monitor",
+    label: "Server Monitor",
+    icon: Server,
+    path: "/server-monitor",
+  },
+  { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 interface SidebarProps {
   activePage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, path?: string) => void;
+  storageRefreshKey?: number;
 }
 
-export function Sidebar({ activePage, onNavigate }: SidebarProps) {
+export function Sidebar({
+  activePage,
+  onNavigate,
+  storageRefreshKey,
+}: SidebarProps) {
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageError, setStorageError] = useState<string>("");
@@ -59,7 +77,7 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [storageRefreshKey]);
 
   const usedHuman = storageInfo?.used_human ?? "";
   const limitHuman = storageInfo?.limit_human ?? "";
@@ -102,11 +120,13 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
         <div className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
+            const isActive = item.path
+              ? window.location.pathname === item.path
+              : window.location.pathname === "/" && activePage === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => onNavigate(item.id, item.path)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group text-left"
                 style={{
                   background: isActive
@@ -157,7 +177,8 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
             </span>
           </div>
           {storageLoading ? (
-            <div className="text-xs" style={{ color: "#64748b" }}>
+            <div className="flex items-center gap-2 text-xs" style={{ color: "#64748b" }}>
+              <LoadingSpinner size={12} />
               Loading storage...
             </div>
           ) : storageError ? (
@@ -167,16 +188,16 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
           ) : (
             <>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs" style={{ color: "#e2e8f0" }}>
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: "#e2e8f0" }}
+                >
                   {usedHuman || "—"} of {limitHuman || "—"}
                 </span>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: "#22d3ee" }}
-                >
-                  {usagePercent}%
-                </span>
+                {/* Persentase tidak ditampilkan */}
+                <span className="text-xs" style={{ color: "#64748b" }} />
               </div>
+
               <div
                 className="relative h-1.5 rounded-full overflow-hidden"
                 style={{ background: "#1e2d45" }}

@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
+
 use App\Models\ShareLink;
+use App\Services\ActivityLogService;
+
 use Illuminate\Http\JsonResponse;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -14,6 +18,7 @@ class ShareController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+
         $user = $request->user();
 
         $shareLinks = ShareLink::query()
@@ -27,9 +32,16 @@ class ShareController extends Controller
         ]);
     }
 
-    public function create(Request $request, File $file): JsonResponse
+    public function create(
+        Request $request,
+        File $file,
+        ActivityLogService $activityLogService
+    ): JsonResponse
     {
+
         $user = $request->user();
+
+
 
         if ($file->user_id !== $user->id) {
             return response()->json([
@@ -52,15 +64,44 @@ class ShareController extends Controller
             'download_count' => 0,
         ]);
 
+        // Activity Log: share.create (only after ShareLink created)
+        $shareLinkId = (string) $shareLink->id;
+        $fileId = (string) $file->id;
+        $originalName = $file->original_name;
+        $expiresAt = $shareLink->expires_at ? $shareLink->expires_at->toISOString() : null;
+        $isProtected = !empty($validated['password']);
+
+        $activityLogService->log(
+            action: 'share.create',
+            description: 'Share link dibuat untuk file: ' . $originalName,
+            subject: $shareLink,
+            metadata: [
+                'share_link_id' => $shareLinkId,
+                'file_id' => $fileId,
+                'original_name' => $originalName,
+                'expires_at' => $expiresAt,
+                'is_protected' => $isProtected,
+            ],
+            user: $user,
+            request: $request
+        );
+
         return response()->json([
             'message' => 'Share link berhasil dibuat',
             'data' => $shareLink,
         ], 201);
     }
 
-    public function destroy(Request $request, ShareLink $shareLink): JsonResponse
+    public function destroy(Request $request, ShareLink $shareLink, ActivityLogService $activityLogService): JsonResponse
     {
         $user = $request->user();
+
+        // Activity Log: share.delete requires safe metadata before deletion
+        $shareLinkId = (string) $shareLink->id;
+        $fileId = $shareLink->relationLoaded('file') && $shareLink->file ? (string) $shareLink->file->id : null;
+        $originalName = $shareLink->relationLoaded('file') && $shareLink->file ? $shareLink->file->original_name : null;
+        $expiresAt = $shareLink->expires_at ? $shareLink->expires_at->toISOString() : null;
+        $isProtected = !empty($shareLink->password);
 
         $shareLink->load('file');
 
@@ -72,9 +113,26 @@ class ShareController extends Controller
 
         $shareLink->delete();
 
+        // Activity Log: share.delete (after delete succeeds)
+        $activityLogService->log(
+            action: 'share.delete',
+            description: 'Share link dihapus untuk file: ' . (string) $originalName,
+            subject: $shareLink,
+            metadata: [
+                'share_link_id' => $shareLinkId,
+                'file_id' => $fileId,
+                'original_name' => $originalName,
+                'expires_at' => $expiresAt,
+                'is_protected' => $isProtected,
+            ],
+            user: $user,
+            request: $request
+        );
+
         return response()->json([
             'message' => 'Share link berhasil dihapus',
         ]);
+
     }
 
     public function show(string $token): JsonResponse
