@@ -54,15 +54,19 @@
     * Activity tidak lagi memakai ActivityLogPage admin sebagai final.
     * Activity tidak dummy/hardcoded pada tahap implementasi berikutnya.
 
-* [ ] Task 6: Ganti data dummy Activity user menjadi data real.
+* [x] Task 6: Ganti data dummy Activity user menjadi data real.
 
-  * Target file nanti:
-    * `frontend/src/app/pages/Activity.tsx`
-    * service API terkait (jika sudah ada) atau service baru untuk activity user
+  * Catatan implementasi:
+    * `frontend/src/app/pages/Activity.tsx` sudah tidak memakai dummy/static `activityLog`.
+    * Data Activity user sekarang memakai backend `getActivityLogs({ page: 1, per_page: 50 })`.
+    * UI timeline/card tetap dipertahankan.
+    * Local hide/delete tetap memakai `localStorage` key `nimbus_deleted_activity_ids`.
+    * Tidak ada perubahan untuk Activity Log admin/global (backend admin-global belum dibuat).
 
   * Tujuan:
     * Activity user menggunakan backend yang bisa difilter berdasarkan user saat ini.
     * Jika backend belum siap, catat sebagai task backend terpisah.
+
 
 * [ ] Task 7: Rapikan UI Activity user sesuai desain Figma.
 
