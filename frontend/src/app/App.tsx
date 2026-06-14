@@ -10,7 +10,8 @@ import { MyFiles } from "./pages/MyFiles";
 import { Shared } from "./pages/Shared";
 import { Uploads } from "./pages/Uploads";
 import { Devices } from "./pages/Devices";
-// import { Activity } from "./pages/Activity";
+import { Activity } from "./pages/Activity";
+
 
 import { Trash } from "./pages/Trash";
 import { ServerMonitor } from "./pages/ServerMonitor";
@@ -28,8 +29,9 @@ const pages: Record<string, React.ComponentType<any>> = {
   shared: Shared,
   uploads: Uploads,
   devices: Devices,
-  activity: ActivityLogPage,
+  activity: Activity,
   trash: Trash,
+
 
   "server-monitor": ServerMonitor,
   settings: Settings,
@@ -38,13 +40,15 @@ const pages: Record<string, React.ComponentType<any>> = {
 
 const routePages: Record<string, React.ComponentType> = {
   "/activity": ActivityLogPage,
-  "/activity-feed": ActivityLogPage,
+  "/activity-feed": Activity,
 };
+
 
 
 const routeActivePages: Record<string, string> = {
   "/activity": "activity-log",
 };
+
 
 // Pathname to activePage mapping
 const pathToActivePage: Record<string, string> = {
