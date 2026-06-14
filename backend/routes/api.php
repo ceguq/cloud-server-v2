@@ -43,8 +43,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/folders/{folder}', [FolderController::class, 'update']);
     Route::delete('/folders/{folder}', [FolderController::class, 'destroy']);
 
+    // Move folder
+    Route::patch('/folders/{folder}/move', [FolderController::class, 'move']);
+
+    // Move file
+    Route::patch('/files/{file}/move', [FileController::class, 'move']);
+
     Route::get('/files', [FileController::class, 'index']);
+
     Route::post('/files/upload', [FileController::class, 'upload']);
+
     Route::get('/files/recent', [FileController::class, 'recent']);
 
     Route::get('/files/{file}/preview', [FileController::class, 'preview']);
@@ -71,6 +79,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/trash/folders/{id}/restore', [TrashController::class, 'restoreFolder']);
     Route::delete('/trash/folders/{id}/force', [TrashController::class, 'forceDeleteFolder']);
 });
+
+
 
 
 

@@ -80,10 +80,19 @@ export async function renameFile(id: string, originalName: string) {
   return unwrapData<FileModel>(res.data);
 }
 
+export async function moveFile(fileId: string, folderId: string | null) {
+  const res = await api.patch(`/files/${fileId}/move`, {
+    folder_id: folderId,
+  });
+  return unwrapData<FileModel>(res.data);
+}
+
 export async function deleteFile(id: string) {
   const res = await api.delete(`/files/${id}`);
   return unwrapData<any>(res.data);
 }
+
+
 
 export async function downloadFile(id: string, originalName: string) {
   const res = await api.get(buildFileUrlForDownload(id), {
@@ -161,11 +170,13 @@ const fileService = {
   getFiles,
   uploadFile,
   renameFile,
+  moveFile,
   deleteFile,
   downloadFile,
   cancelUpload,
   canPreviewFile,
   getFilePreviewBlob,
 };
+
 
 export default fileService;

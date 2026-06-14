@@ -373,10 +373,21 @@ export function MyFiles({
     "name",
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [moveDragDropEnabled, setMoveDragDropEnabled] = useState(false);
+  const [dragMoveItem, setDragMoveItem] = useState<{
+    type: "file" | "folder";
+    id: string;
+    name: string;
+    fileIds?: string[];
+    folderIds?: string[];
+  } | null>(null);
+
   // Multi-select files (bulk actions)
+
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(
     new Set(),
   );
+
 
   const clearSelection = () => setSelectedFileIds(new Set());
 
@@ -446,7 +457,21 @@ export function MyFiles({
   const [shareError, setShareError] = useState("");
   const [copySuccess, setCopySuccess] = useState("");
 
+  // Move modal state
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [moveItemType, setMoveItemType] = useState<"file" | "folder" | null>(
+    null,
+  );
+  const [moveItemId, setMoveItemId] = useState<string | null>(null);
+  const [moveItemName, setMoveItemName] = useState("");
+  const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(
+    null,
+  );
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState("");
+
   const [isFileDeleteModalOpen, setIsFileDeleteModalOpen] = useState(false);
+
 
   const [selectedFileForDelete, setSelectedFileForDelete] =
     useState<FileModel | null>(null);
@@ -1100,7 +1125,222 @@ export function MyFiles({
     setBulkDownloadLoading(false);
   };
 
+  // Move modal helpers
+  const closeMoveModal = () => {
+    if (moveLoading) return;
+    setMoveModalOpen(false);
+    setMoveItemType(null);
+    setMoveItemId(null);
+    setMoveItemName("");
+    setMoveTargetFolderId(null);
+    setMoveError("");
+  };
+
+  const openMoveFileModal = (file: FileModel) => {
+    setOpenFileActionId(null);
+    setMoveItemType("file");
+    setMoveItemId(file.id);
+    setMoveItemName(file.original_name ?? "Untitled file");
+    setMoveTargetFolderId(null);
+    setMoveError("");
+    setMoveModalOpen(true);
+  };
+
+  const openMoveFolderModal = (folder: FolderModel) => {
+    setOpenFolderActionId(null);
+    setMoveItemType("folder");
+    setMoveItemId(folder.id);
+    setMoveItemName(folder.name ?? "Untitled folder");
+    setMoveTargetFolderId(null);
+    setMoveError("");
+    setMoveModalOpen(true);
+  };
+
+  const submitMove = async () => {
+    if (!moveItemId || !moveItemType || moveLoading) return;
+
+    setMoveLoading(true);
+    setMoveError("");
+
+    try {
+      if (moveItemType === "file") {
+        await fileService.moveFile(moveItemId, moveTargetFolderId);
+        setSelectedFileIds((prev) => {
+          const next = new Set(prev);
+          next.delete(moveItemId);
+          return next;
+        });
+      }
+
+      if (moveItemType === "folder") {
+        await folderService.moveFolder(moveItemId, moveTargetFolderId);
+        setSelectedFolderIds((prev) => {
+          const next = new Set(prev);
+          next.delete(moveItemId);
+          return next;
+        });
+      }
+
+      setMoveModalOpen(false);
+      setMoveItemType(null);
+      setMoveItemId(null);
+      setMoveItemName("");
+      setMoveTargetFolderId(null);
+      setMoveError("");
+
+      await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (
+          error as { response?: { data?: { message?: unknown } } }
+        ).response?.data?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data
+              .message
+          : "Gagal memindahkan item.";
+
+      setMoveError(message);
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
+  const startFileDragMove = (file: FileModel) => {
+    if (!moveDragDropEnabled) return;
+
+    const isFileSelected = selectedFileIds.has(file.id);
+    const fileIds = isFileSelected ? Array.from(selectedFileIds) : [file.id];
+    const folderIds = isFileSelected ? Array.from(selectedFolderIds) : [];
+
+    setDragMoveItem({
+      type: "file",
+      id: file.id,
+      name: file.original_name ?? "Untitled file",
+      fileIds,
+      folderIds,
+    });
+  };
+
+  const startFolderDragMove = (folder: FolderModel) => {
+    if (!moveDragDropEnabled) return;
+
+    const isFolderSelected = selectedFolderIds.has(folder.id);
+    const fileIds = isFolderSelected ? Array.from(selectedFileIds) : [];
+    const folderIds = isFolderSelected ? Array.from(selectedFolderIds) : [folder.id];
+
+    setDragMoveItem({
+      type: "folder",
+      id: folder.id,
+      name: folder.name ?? "Untitled folder",
+      fileIds,
+      folderIds,
+    });
+  };
+
+  const clearDragMoveItem = () => {
+    setDragMoveItem(null);
+  };
+
+  const setCompactDragImage = (
+    event: React.DragEvent<HTMLElement>,
+    label: string,
+    type: "file" | "folder",
+  ) => {
+    const dragPreview = document.createElement("div");
+    const icon = type === "folder" ? "📁" : "📄";
+
+    dragPreview.textContent = `${icon} ${label}`;
+    dragPreview.style.position = "fixed";
+    dragPreview.style.top = "-1000px";
+    dragPreview.style.left = "-1000px";
+    dragPreview.style.maxWidth = "220px";
+    dragPreview.style.padding = "8px 12px";
+    dragPreview.style.borderRadius = "999px";
+    dragPreview.style.background = "rgba(15, 23, 42, 0.96)";
+    dragPreview.style.border = "1px solid rgba(59, 130, 246, 0.7)";
+    dragPreview.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.35)";
+    dragPreview.style.color = "#e2e8f0";
+    dragPreview.style.fontSize = "12px";
+    dragPreview.style.fontWeight = "700";
+    dragPreview.style.whiteSpace = "nowrap";
+    dragPreview.style.overflow = "hidden";
+    dragPreview.style.textOverflow = "ellipsis";
+    dragPreview.style.pointerEvents = "none";
+    dragPreview.style.zIndex = "9999";
+
+    document.body.appendChild(dragPreview);
+    event.dataTransfer.setDragImage(dragPreview, 20, 18);
+
+    window.setTimeout(() => {
+      document.body.removeChild(dragPreview);
+    }, 0);
+  };
+
+  const moveDraggedItemToFolder = async (targetFolderId: string | null) => {
+    if (!moveDragDropEnabled || !dragMoveItem) return;
+
+    const fileIds = dragMoveItem.fileIds?.length
+      ? Array.from(new Set(dragMoveItem.fileIds))
+      : dragMoveItem.type === "file"
+        ? [dragMoveItem.id]
+        : [];
+
+    const folderIds = dragMoveItem.folderIds?.length
+      ? Array.from(new Set(dragMoveItem.folderIds))
+      : dragMoveItem.type === "folder"
+        ? [dragMoveItem.id]
+        : [];
+
+    const safeFolderIds =
+      targetFolderId === null
+        ? folderIds
+        : folderIds.filter((folderId) => folderId !== targetFolderId);
+
+    if (fileIds.length === 0 && safeFolderIds.length === 0) {
+      clearDragMoveItem();
+      return;
+    }
+
+    try {
+      await Promise.all([
+        ...fileIds.map((fileId) =>
+          fileService.moveFile(fileId, targetFolderId),
+        ),
+        ...safeFolderIds.map((folderId) =>
+          folderService.moveFolder(folderId, targetFolderId),
+        ),
+      ]);
+
+      setSelectedFileIds((prev) => {
+        const next = new Set(prev);
+        fileIds.forEach((fileId) => next.delete(fileId));
+        return next;
+      });
+
+      setSelectedFolderIds((prev) => {
+        const next = new Set(prev);
+        safeFolderIds.forEach((folderId) => next.delete(folderId));
+        return next;
+      });
+
+      await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
+    } catch (error) {
+      console.error(
+        "Gagal memindahkan item dengan drag-and-drop:",
+        error,
+      );
+    } finally {
+      clearDragMoveItem();
+    }
+  };
+
   const { addFiles, hasActiveUploads } = useUploadManager();
+
+
+
+
 
   // Stabil refresh function untuk fetch both folders dan files
   const refreshCurrentFolder = useCallback(async () => {
@@ -1740,7 +1980,18 @@ export function MyFiles({
             </button>
           ))}
         </div>
+
+        <button
+          type="button"
+          onClick={() => setMoveDragDropEnabled((value) => !value)}
+          className="rounded-xl border border-[#24314f] px-3 py-2 text-xs font-medium text-[#cbd5e1] transition hover:bg-[#1a2540] hover:text-white"
+          aria-pressed={moveDragDropEnabled}
+          aria-label="Toggle drag move"
+        >
+          Drag Move: {moveDragDropEnabled ? "On" : "Off"}
+        </button>
       </div>
+
 
       {/* Folders */}
       <div className="mb-6">
@@ -1878,6 +2129,41 @@ export function MyFiles({
           {sortedFolders.map((folder) => (
             <div
               key={folder.id}
+              draggable={moveDragDropEnabled}
+              onDragStart={(e) => {
+                if (!moveDragDropEnabled) {
+                  e.preventDefault();
+                  return;
+                }
+
+                e.dataTransfer.effectAllowed = "move";
+                setCompactDragImage(e, folder.name ?? "Untitled folder", "folder");
+                startFolderDragMove(folder);
+              }}
+              onDragEnd={clearDragMoveItem}
+              onDragOver={(e) => {
+                if (!moveDragDropEnabled || !dragMoveItem) return;
+
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                  return;
+                }
+
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!moveDragDropEnabled || !dragMoveItem) return;
+
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                  clearDragMoveItem();
+                  return;
+                }
+
+                moveDraggedItemToFolder(folder.id);
+              }}
               onClick={() => handleOpenFolder(folder)}
               className="rounded-xl p-3 cursor-pointer hover:scale-[1.03] transition-all group"
               style={{ background: "#0f1729", border: "1px solid #1a2540" }}
@@ -1956,6 +2242,20 @@ export function MyFiles({
                         <button
                           type="button"
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                          style={{ color: "#94a3b8" }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openMoveFolderModal(folder);
+                          }}
+                          aria-label={`Move ${folder.name}`}
+                        >
+                          <Folder size={12} /> Move to...
+                        </button>
+
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
                           style={{ color: "#f87171" }}
                           onClick={(e) => {
                             e.preventDefault();
@@ -1968,6 +2268,7 @@ export function MyFiles({
                         >
                           <Trash2 size={12} /> Delete
                         </button>
+
                       </div>
                     )}
                   </div>
@@ -2643,8 +2944,104 @@ export function MyFiles({
         </div>
       )}
 
+      {/* Move Modal */}
+      {moveModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={closeMoveModal}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#24314f] bg-[#0f172a] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {moveItemType === "folder" ? "Move Folder" : "Move File"}
+                </h2>
+                <p className="mt-1 text-sm text-[#94a3b8]">
+                  Pilih folder tujuan untuk memindahkan item ini.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1 text-sm text-[#94a3b8] hover:bg-[#1a2540] hover:text-white"
+                onClick={closeMoveModal}
+                disabled={moveLoading}
+                aria-label="Close move modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-xl border border-[#24314f] bg-[#111c33] p-3">
+              <p className="text-xs uppercase tracking-wide text-[#64748b]">
+                Item
+              </p>
+              <p className="mt-1 truncate text-sm font-medium text-white">
+                {moveItemName}
+              </p>
+            </div>
+
+            <label className="mb-2 block text-sm font-medium text-[#cbd5e1]">
+              Folder tujuan
+            </label>
+
+            <select
+              className="w-full rounded-xl border border-[#24314f] bg-[#0b1220] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              value={moveTargetFolderId ?? "__root__"}
+              onChange={(e) =>
+                setMoveTargetFolderId(
+                  e.target.value === "__root__" ? null : e.target.value,
+                )
+              }
+              disabled={moveLoading}
+            >
+              <option value="__root__">Root / My Files</option>
+              {folders
+                .filter((folder) =>
+                  moveItemType === "folder" ? folder.id !== moveItemId : true,
+                )
+                .map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+            </select>
+
+            {moveError && (
+              <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {moveError}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-[#24314f] px-4 py-2 text-sm text-[#cbd5e1] hover:bg-[#1a2540]"
+                onClick={closeMoveModal}
+                disabled={moveLoading}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={submitMove}
+                disabled={moveLoading || !moveItemId || !moveItemType}
+              >
+                {moveLoading ? "Moving..." : "Move"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk Delete Folder Modal */}
       {isBulkFolderDeleteModalOpen && (
+
         <div
           className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 px-4"
           role="dialog"
@@ -3629,6 +4026,18 @@ export function MyFiles({
               return (
                 <div
                   key={file.id}
+                  draggable={moveDragDropEnabled}
+                  onDragStart={(e) => {
+                    if (!moveDragDropEnabled) {
+                      e.preventDefault();
+                      return;
+                    }
+
+                    e.dataTransfer.effectAllowed = "move";
+                    setCompactDragImage(e, file.original_name ?? "Untitled file", "file");
+                    startFileDragMove(file);
+                  }}
+                  onDragEnd={clearDragMoveItem}
                   onClick={() => {}}
                   className="grid px-4 py-2.5 items-center cursor-pointer hover:bg-[#0d1829] transition-colors group relative"
                   style={{
@@ -3825,6 +4234,20 @@ export function MyFiles({
                           <button
                             type="button"
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
+                            style={{ color: "#94a3b8" }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openMoveFileModal(file);
+                            }}
+                            aria-label={`Move ${file.original_name}`}
+                          >
+                            <Folder size={12} /> Move to...
+                          </button>
+
+                          <button
+                            type="button"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
                             style={{ color: "#f87171" }}
                             onClick={(e) => {
                               e.preventDefault();
@@ -3840,6 +4263,7 @@ export function MyFiles({
                           >
                             <Trash2 size={12} /> Delete
                           </button>
+
                         </div>
                       )}
                     </div>

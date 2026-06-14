@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
+use App\Models\Folder;
 use App\Services\ActivityLogService;
 
 use Illuminate\Http\JsonResponse;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -374,9 +376,70 @@ class FileController extends Controller
         ]);
     }
 
+    public function move(Request $request, File $file, ActivityLogService $activityLogService): JsonResponse
+    {
+        $user = $request->user();
 
+        if ($file->user_id !== $user->id) {
+            return response()->json(['message' => 'File tidak ditemukan'], 403);
+        }
+
+        $validated = $request->validate([
+            'folder_id' => ['nullable', 'uuid'],
+        ]);
+
+        $folderId = $validated['folder_id'] ?? null;
+        if ($folderId === '' || $folderId === 'null') {
+            $folderId = null;
+        }
+
+        $oldFolderId = $file->folder_id;
+
+        if ($folderId !== null) {
+            $targetFolder = Folder::query()
+                ->where('id', $folderId)
+                ->first();
+
+            if (!$targetFolder) {
+                return response()->json([
+                    'message' => 'Folder tujuan tidak ditemukan atau bukan milik Anda',
+                ], 422);
+            }
+        }
+
+
+        $file->update([
+            'folder_id' => $folderId,
+        ]);
+
+        $fileFresh = $file->fresh();
+
+        try {
+            $activityLogService->log(
+                action: 'file.move',
+                description: 'Pindah file: ' . $file->original_name,
+                subject: $fileFresh,
+                user: $user,
+                request: $request,
+                metadata: [
+                    'file_id' => (string) $fileFresh->id,
+                    'original_name' => $fileFresh->original_name,
+                    'old_folder_id' => $oldFolderId,
+                    'new_folder_id' => $folderId,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
+
+        return response()->json([
+            'message' => 'File berhasil dipindahkan',
+            'data' => $fileFresh,
+        ]);
+    }
 
     public function recent(Request $request): JsonResponse
+
     {
         $user = $request->user();
 

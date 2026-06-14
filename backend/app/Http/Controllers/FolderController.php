@@ -217,6 +217,96 @@ class FolderController extends Controller
     }
 
 
+    public function move(Request $request, Folder $folder, ActivityLogService $activityLogService): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'parent_id' => ['nullable', 'uuid'],
+        ]);
+
+        $parentId = $validated['parent_id'] ?? null;
+        if ($parentId === '' || $parentId === 'null') {
+            $parentId = null;
+        }
+
+        if ($parentId !== null && $parentId === (string) $folder->id) {
+            return response()->json(['message' => 'Folder tidak boleh dipindahkan ke dirinya sendiri'], 422);
+        }
+
+        if ($this->isDescendantFolder($folder, $parentId)) {
+            return response()->json(['message' => 'Folder tujuan tidak valid (tidak boleh memindahkan ke child/cucu folder sendiri)'], 422);
+        }
+
+
+        $oldParentId = $folder->parent_id;
+
+        if ($parentId !== null) {
+            $targetParent = Folder::query()
+                ->where('id', $parentId)
+                ->first();
+
+            if (!$targetParent) {
+                return response()->json(['message' => 'Folder tujuan tidak ditemukan atau bukan milik Anda'], 422);
+            }
+        }
+
+        $folder->update([
+            'parent_id' => $parentId,
+        ]);
+
+        $folderFresh = $folder->fresh();
+
+        try {
+            $activityLogService->log(
+                action: 'folder.move',
+                description: 'Pindah folder: ' . $folderFresh->name,
+                subject: $folderFresh,
+                user: $user,
+                request: $request,
+                metadata: [
+                    'folder_id' => (string) $folderFresh->id,
+                    'name' => $folderFresh->name,
+                    'old_parent_id' => $oldParentId,
+                    'new_parent_id' => $parentId,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // must not affect main operation
+        }
+
+        return response()->json([
+            'message' => 'Folder berhasil dipindahkan',
+            'data' => $folderFresh,
+        ]);
+    }
+
+
+    private function isDescendantFolder(Folder $sourceFolder, ?string $targetFolderId): bool
+    {
+        if ($targetFolderId === null) {
+            return false;
+        }
+
+        $currentId = $targetFolderId;
+
+        while ($currentId !== null) {
+            if ((string) $currentId === (string) $sourceFolder->id) {
+                return true;
+            }
+
+            $parentId = Folder::query()
+                ->where('id', $currentId)
+                ->value('parent_id');
+
+            $currentId = $parentId;
+        }
+
+        return false;
+    }
+
+
+
     private function deleteFolderRecursive(Folder $folder): void
     {
         // Soft delete all active child folders

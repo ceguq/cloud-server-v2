@@ -64,16 +64,26 @@ export async function renameFolder(id: string, name: string) {
   return unwrapData<Folder>(res.data);
 }
 
+export async function moveFolder(folderId: string, parentId: string | null) {
+  const res = await api.patch(`/folders/${folderId}/move`, {
+    parent_id: parentId,
+  });
+  return unwrapData<Folder>(res.data);
+}
+
 export async function deleteFolder(id: string) {
   const res = await api.delete(`/folders/${id}`);
   return unwrapData<any>(res.data);
 }
 
+
 const folderService = {
   getFolders,
   createFolder,
   renameFolder,
+  moveFolder,
   deleteFolder,
 };
+
 
 export default folderService;
