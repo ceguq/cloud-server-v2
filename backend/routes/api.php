@@ -37,6 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 
+    Route::middleware('admin')->get('/admin/activity-logs', [ActivityLogController::class, 'adminIndex']);
+
+
     Route::get('/folders', [FolderController::class, 'index']);
 
     Route::post('/folders', [FolderController::class, 'store']);

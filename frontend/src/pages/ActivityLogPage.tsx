@@ -11,7 +11,8 @@ import {
   User,
   Wifi,
 } from "lucide-react";
-import { getActivityLogs } from "../services/activityLogService";
+import { getAdminActivityLogs } from "../services/activityLogService";
+
 import type { ActivityLogItem } from "../types/activityLog";
 import { LoadingSpinner } from "../app/components/LoadingSpinner";
 
@@ -407,8 +408,9 @@ export default function ActivityLogPage() {
           per_page: PER_PAGE,
           ...(selectedAction !== "all" ? { action: selectedAction } : {}),
         };
-        const response = await getActivityLogs(params);
+        const response = await getAdminActivityLogs(params);
         const normalized = normalizeActivityLogs(response);
+
         const deletedLogKeys = readDeletedActivityLogKeys();
         const visibleLogs = normalized.logs.filter(
           (log, index) => !deletedLogKeys.has(getLogKey(log, index)),
@@ -450,14 +452,17 @@ export default function ActivityLogPage() {
 
     try {
       const nextPage = page + 1;
-      const params = {
-        page: nextPage,
-        per_page: PER_PAGE,
-        ...(selectedAction !== "all" ? { action: selectedAction } : {}),
-      };
 
-      const response = await getActivityLogs(params);
+        const params = {
+          page: nextPage,
+          per_page: PER_PAGE,
+          ...(selectedAction !== "all" ? { action: selectedAction } : {}),
+        };
+
+        const response = await getAdminActivityLogs(params);
+
       const normalized = normalizeActivityLogs(response);
+
 
       if (requestVersion !== requestVersionRef.current) return;
 

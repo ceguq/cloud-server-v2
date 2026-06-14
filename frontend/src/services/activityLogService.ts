@@ -26,3 +26,14 @@ export async function getActivityLogs(
 
   return res.data as ActivityLogResponse;
 }
+
+export async function getAdminActivityLogs(
+  params?: ActivityLogQueryParams,
+): Promise<ActivityLogResponse> {
+  const res = await api.get("/admin/activity-logs", {
+    params: buildCleanParams(params),
+  });
+
+  return res.data as ActivityLogResponse;
+}
+
