@@ -1,25 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Upload, Download, Share2, Trash2, Edit3, Eye,
-  FolderPlus, Link2, Shield, Clock, Filter, Search,
-  FileText, Image, Film, Folder, Archive
+  Upload,
+  Download,
+  Share2,
+  Trash2,
+  Edit3,
+  Eye,
+  FolderPlus,
+  Link2,
+  Clock,
+  Search,
+  FileText,
+  Image,
+  Film,
+  Folder,
+  Archive,
 } from "lucide-react";
+import { getActivityLogs } from "../../services/activityLogService";
+import type { ActivityLogItem } from "../../types/activityLog";
 
-const activityLog = [
-  { action: "Uploaded", file: "Annual Report 2024.pdf", user: "You", time: "2 minutes ago", date: "Today", icon: Upload, color: "#22d3ee", fileIcon: FileText, fileColor: "#ef4444" },
-  { action: "Shared", file: "Project Assets folder", user: "You", time: "15 minutes ago", date: "Today", icon: Share2, color: "#3b82f6", fileIcon: Folder, fileColor: "#f59e0b" },
-  { action: "Downloaded", file: "Budget 2024.xlsx", user: "Sarah K.", time: "1 hour ago", date: "Today", icon: Download, color: "#34d399", fileIcon: FileText, fileColor: "#22c55e" },
-  { action: "Created folder", file: "Q2 Reports", user: "You", time: "3 hours ago", date: "Today", icon: FolderPlus, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" },
-  { action: "Shared link", file: "Product Demo.mp4", user: "You", time: "5 hours ago", date: "Today", icon: Link2, color: "#a78bfa", fileIcon: Film, fileColor: "#a78bfa" },
-  { action: "Deleted", file: "old_backup.zip", user: "You", time: "Yesterday 4:32 PM", date: "Yesterday", icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#64748b" },
-  { action: "Downloaded", file: "Cover Image.jpg", user: "Alex M.", time: "Yesterday 2:15 PM", date: "Yesterday", icon: Download, color: "#34d399", fileIcon: Image, fileColor: "#3b82f6" },
-  { action: "Renamed", file: "final_v3.psd → logo_final.psd", user: "You", time: "Yesterday 11:00 AM", date: "Yesterday", icon: Edit3, color: "#f59e0b", fileIcon: Image, fileColor: "#a78bfa" },
-  { action: "Uploaded", file: "source_code_v2.zip", user: "You", time: "May 20, 2024", date: "May 20", icon: Upload, color: "#22d3ee", fileIcon: Archive, fileColor: "#64748b" },
-  { action: "Viewed", file: "Team Roadmap.pdf", user: "Bob J.", time: "May 20, 2024", date: "May 20", icon: Eye, color: "#94a3b8", fileIcon: FileText, fileColor: "#ef4444" },
-];
+// keep icon components loosely typed to avoid TS mismatch with lucide-react types
+// (we only pass them as React components to JSX)
+type LucideIcon = any;
+
 
 const filters = ["All", "Uploads", "Downloads", "Shares", "Edits", "Deletes"];
 const DELETED_ACTIVITY_STORAGE_KEY = "nimbus_deleted_activity_ids";
+
+type ActivityUIItem = {
+  id: string;
+  action: string;
+  file: string;
+  user: string;
+  time: string;
+  date: string;
+  icon: LucideIcon;
+  color: string;
+  fileIcon: LucideIcon;
+  fileColor: string;
+};
+
+
+
+
+
+
+
 
 function readDeletedActivityIds(): Set<string> {
   try {
@@ -39,17 +65,143 @@ function writeDeletedActivityIds(ids: Set<string>) {
   }
 }
 
+function getActionUI(action: string | null, subjectType: string | null): {
+  icon: LucideIcon;
+  color: string;
+  fileIcon: LucideIcon;
+  fileColor: string;
+} {
+
+
+  const a = (action || "").toLowerCase();
+  const st = (subjectType || "").toLowerCase();
+
+  if (a.includes("upload")) {
+    return { icon: Upload, color: "#22d3ee", fileIcon: FileText, fileColor: "#ef4444" };
+  }
+  if (a.includes("download")) {
+    return { icon: Download, color: "#34d399", fileIcon: FileText, fileColor: "#22c55e" };
+  }
+  if (a.includes("share")) {
+    return { icon: Share2, color: "#3b82f6", fileIcon: Folder, fileColor: "#f59e0b" };
+  }
+  if (a.includes("delete")) {
+    return { icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#64748b" };
+  }
+  if (a.includes("rename") || a.includes("edit")) {
+    return { icon: Edit3, color: "#f59e0b", fileIcon: Image, fileColor: "#a78bfa" };
+  }
+  if (a.includes("view")) {
+    return { icon: Eye, color: "#94a3b8", fileIcon: FileText, fileColor: "#ef4444" };
+  }
+
+  if (st.includes("folder")) {
+    return { icon: FolderPlus, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
+  }
+
+  return { icon: Clock, color: "#94a3b8", fileIcon: FileText, fileColor: "#94a3b8" };
+}
+
+function localDateLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown";
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfThatDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfThatDay.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === -1) return "Yesterday";
+
+  return d.toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "2-digit" });
+}
+
+function localTimeLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+}
+
+function mapBackendToUIRows(rows: ActivityLogItem[]): ActivityUIItem[] {
+  const deletedIds = readDeletedActivityIds();
+
+  return rows
+    .map((row, index) => {
+      const id = row.id || row.created_at || `activity-${index}`;
+      const action = row.action || "Aktivitas";
+
+      const file =
+        (row.description && row.description.trim()) ||
+        "";
+
+      const user =
+        row.user?.name?.trim() ||
+        row.user?.email?.trim() ||
+        "You";
+
+      const date = localDateLabel(row.created_at);
+      const time = localTimeLabel(row.created_at);
+
+      const ui = getActionUI(action, row.subject_type);
+
+      return {
+        id,
+        action,
+        file: file || "Activity item",
+        user,
+        time,
+        date,
+        icon: ui.icon,
+        color: ui.color,
+        fileIcon: ui.fileIcon,
+        fileColor: ui.fileColor,
+      };
+    })
+    .filter((item) => !deletedIds.has(item.id));
+}
+
 export function Activity() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [activities, setActivities] = useState(() =>
-    activityLog
-      .map((item, index) => ({
-        ...item,
-        id: `activity-${index}`,
-      }))
-      .filter((item) => !readDeletedActivityIds().has(item.id)),
-  );
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [activities, setActivities] = useState<ActivityUIItem[]>([]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await getActivityLogs({ page: 1, per_page: 50 });
+        if (cancelled) return;
+        const rows = mapBackendToUIRows(res.data);
+        setActivities(rows);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setActivities([]);
+        setError(e instanceof Error ? e.message : "Gagal memuat aktivitas.");
+      } finally {
+        if (cancelled) return;
+        setLoading(false);
+      }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
+
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(
     new Set(),
   );
@@ -190,14 +342,31 @@ export function Activity() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {activityStats.map((s) => (
-          <div key={s.label} className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-            <div className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
-            <div className="text-xs" style={{ color: "#475569" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="rounded-xl p-4"
+              style={{ background: "#0f1729", border: "1px solid #1a2540", opacity: 0.6 }}
+            >
+              <div className="text-2xl font-bold mb-1" style={{ color: "#94a3b8" }}>—</div>
+              <div className="text-xs" style={{ color: "#475569" }}>Memuat...</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {activityStats.map((s) => (
+            <div key={s.label} className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+              <div className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-xs" style={{ color: "#475569" }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
 
       {/* Filters + Search */}
       <div className="flex items-center gap-3 mb-5">
@@ -228,11 +397,22 @@ export function Activity() {
         </div>
       </div>
 
-      {filteredActivities.length > 0 && (
+      {error ? (
+        <div className="mb-4 rounded-xl border border-red-400/20 bg-[#0f1729] px-4 py-4 text-sm" style={{ borderColor: "rgba(248,113,113,0.4)", color: "#f87171" }}>
+          <div className="font-semibold">Gagal memuat aktivitas</div>
+          <div className="mt-1" style={{ color: "#94a3b8", fontSize: 12 }}>{error}</div>
+        </div>
+      ) : loading ? (
+        <div className="mb-4 rounded-xl border border-[#1a2540] bg-[#0f1729] px-4 py-4 text-xs" style={{ color: "#94a3b8" }}>
+          Memuat aktivitas...
+        </div>
+      ) : filteredActivities.length > 0 && (
+
         <div
           className="mb-4 flex flex-col gap-3 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ background: "#0f1729", border: "1px solid #1a2540" }}
         >
+
           <label className="flex items-center gap-3 text-xs" style={{ color: "#94a3b8" }}>
             <input
               ref={selectAllRef}
@@ -436,7 +616,15 @@ export function Activity() {
       )}
 
       {/* Activity Feed */}
+      {!loading && !error && filteredActivities.length === 0 && (
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-[#1a2540] bg-[#0f1729] px-4 py-12 text-center">
+          <div className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Activity masih kosong</div>
+          <div className="mt-1 text-xs" style={{ color: "#475569" }}>Belum ada aktivitas untuk filter pencarian yang dipilih.</div>
+        </div>
+      )}
+
       <div className="space-y-6">
+
         {Object.entries(groupedActivity).map(([date, items]) => (
           <div key={date}>
             <div className="flex items-center gap-3 mb-3">
