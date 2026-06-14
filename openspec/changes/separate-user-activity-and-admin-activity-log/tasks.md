@@ -1,6 +1,10 @@
 # Tasks: separate-user-activity-and-admin-activity-log
 
-* [ ] Task 1: Inspeksi routing & sidebar (read-only).
+* [x] Task 1: Inspeksi routing & sidebar (read-only).
+  
+  * Catatan: sudah ada separation frontend untuk route `/activity-feed` (Activity user) vs `/activity` (ActivityLogPage admin). Sidebar sudah admin-only untuk "Activity Log" dan "Admin Users".
+
+
 
   * Target file (untuk inspeksi tahap implementasi nanti):
     * `frontend/src/app/App.tsx`
@@ -12,7 +16,8 @@
     * Pastikan admin guard/role handling untuk halaman audit jelas (minimal untuk visibility & akses).
 
 
-* [ ] Task 2: Inspeksi halaman Activity user (read-only).
+* [x] Task 2: Inspeksi halaman Activity user (read-only).
+
 
   * Target file:
     * `frontend/src/app/pages/Activity.tsx`
@@ -22,7 +27,8 @@
     * Catat struktur UI yang mendekati desain Figma.
     * Identifikasi gap data: bahwa backend existing `GET /activity-logs` saat ini user-scoped (untuk kebutuhan Activity user).
 
-* [ ] Task 3: Inspeksi Activity Log admin (read-only).
+* [x] Task 3: Inspeksi Activity Log admin (read-only).
+
 
   * Target file:
     * `frontend/src/pages/ActivityLogPage.tsx`
@@ -33,7 +39,8 @@
     * Validasi bahwa backend existing belum mendukung admin global logs, sehingga admin/global scope perlu task backend terpisah.
 
 
-* [ ] Task 4: Tentukan route final Activity user vs Activity Log admin.
+* [x] Task 4: Tentukan route final Activity user vs Activity Log admin.
+
 
   * Target file nanti:
     * `frontend/src/app/App.tsx`
@@ -44,7 +51,8 @@
     * Activity Log admin punya route jelas.
     * Tidak ada duplikasi konsep yang membingungkan.
 
-* [ ] Task 5: Pulihkan Activity user sebagai halaman user-facing.
+* [x] Task 5: Pulihkan Activity user sebagai halaman user-facing.
+
 
   * Target file nanti:
     * `frontend/src/app/App.tsx`
@@ -55,6 +63,13 @@
     * Activity tidak dummy/hardcoded pada tahap implementasi berikutnya.
 
 * [x] Task 6: Ganti data dummy Activity user menjadi data real.
+
+* Catatan tambahan (frontend):
+  * Route separation sudah dipakai: `/activity-feed` (user) vs `/activity` (audit/admin).
+  * Activity user pakai data real backend.
+  * ActivityLogPage admin guard/loading fix sudah diterapkan.
+  * Sidebar admin visibility sudah benar: "Activity" tetap tampil untuk semua, "Activity Log" + "Admin Users" hanya untuk admin.
+
 
   * Catatan implementasi:
     * `frontend/src/app/pages/Activity.tsx` sudah tidak memakai dummy/static `activityLog`.
@@ -70,6 +85,9 @@
 
 * [ ] Task 7: Rapikan UI Activity user sesuai desain Figma.
 
+
+
+
   * Target file nanti:
     * `frontend/src/app/pages/Activity.tsx`
 
@@ -77,7 +95,8 @@
     * Timeline/card/list modern.
     * Tetap responsive.
 
-* [ ] Task 8: Pastikan Activity Log tetap admin/audit.
+* [x] Task 8: Pastikan Activity Log tetap admin/audit.
+
 
   * Target file nanti:
     * `frontend/src/pages/ActivityLogPage.tsx`
@@ -89,7 +108,12 @@
     * Jika guard sudah ada, gunakan guard yang ada tanpa refactor besar.
     * Jika belum ada, tentukan titik guard paling aman.
 
-* [ ] Task 9: Manual verification (tanpa automation).
+* [x] Task 9: Manual verification (tanpa automation).
+
+
+  * Catatan: ditandai selesai. Backend + frontend admin global Activity Log memakai `/admin/activity-logs`.
+
+
 
   * Login sebagai user biasa:
     * User melihat menu Activity.
