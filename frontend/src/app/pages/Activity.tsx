@@ -5,9 +5,9 @@ import {
   Share2,
   Trash2,
   Edit3,
-  Eye,
-  FolderPlus,
-  Link2,
+  LogIn,
+  ArrowRightLeft,
+  RotateCcw,
   Clock,
   Search,
   FileText,
@@ -24,7 +24,8 @@ import type { ActivityLogItem } from "../../types/activityLog";
 type LucideIcon = any;
 
 
-const filters = ["All", "Uploads", "Downloads", "Shares", "Edits", "Deletes"];
+const filters = ["All", "Uploads", "Downloads", "Shares", "Edits", "Deletes", "Login", "Trash", "Move"];
+
 const DELETED_ACTIVITY_STORAGE_KEY = "nimbus_deleted_activity_ids";
 
 type ActivityUIItem = {
@@ -66,6 +67,7 @@ function writeDeletedActivityIds(ids: Set<string>) {
 }
 
 function getActionUI(action: string | null, subjectType: string | null): {
+
   icon: LucideIcon;
   color: string;
   fileIcon: LucideIcon;
@@ -76,6 +78,9 @@ function getActionUI(action: string | null, subjectType: string | null): {
   const a = (action || "").toLowerCase();
   const st = (subjectType || "").toLowerCase();
 
+  const hasAny = (needles: string[]) => needles.some((n) => a.includes(n));
+
+
   if (a.includes("upload")) {
     return { icon: Upload, color: "#22d3ee", fileIcon: FileText, fileColor: "#ef4444" };
   }
@@ -85,19 +90,74 @@ function getActionUI(action: string | null, subjectType: string | null): {
   if (a.includes("share")) {
     return { icon: Share2, color: "#3b82f6", fileIcon: Folder, fileColor: "#f59e0b" };
   }
+  if (
+    hasAny([
+      "login",
+      "logged_in",
+      "logged in",
+      "sign in",
+      "signed in",
+      "auth.login",
+      "user_login",
+    ])
+  ) {
+    return { icon: LogIn, color: "#06b6d4", fileIcon: FileText, fileColor: "#22c55e" };
+  }
+
+  if (
+    hasAny([
+      "trash",
+      "trashed",
+      "move_to_trash",
+      "moved_to_trash",
+      "file_trashed",
+      "folder_trashed",
+    ])
+  ) {
+    return { icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#f59e0b" };
+  }
+
+  if (
+    hasAny([
+      "restore",
+      "restored",
+      "file_restored",
+      "folder_restored",
+    ])
+  ) {
+    return { icon: RotateCcw, color: "#10b981", fileIcon: Archive, fileColor: "#34d399" };
+  }
+
+  if (
+    hasAny([
+      "move",
+      "moved",
+      "file_moved",
+      "folder_moved",
+      "moved_file",
+      "moved_folder",
+      "parent changed",
+      "folder changed",
+    ])
+  ) {
+    return { icon: ArrowRightLeft, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
+  }
+
   if (a.includes("delete")) {
     return { icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#64748b" };
   }
   if (a.includes("rename") || a.includes("edit")) {
     return { icon: Edit3, color: "#f59e0b", fileIcon: Image, fileColor: "#a78bfa" };
   }
+
   if (a.includes("view")) {
-    return { icon: Eye, color: "#94a3b8", fileIcon: FileText, fileColor: "#ef4444" };
+    return { icon: LogIn, color: "#94a3b8", fileIcon: FileText, fileColor: "#ef4444" };
   }
 
   if (st.includes("folder")) {
-    return { icon: FolderPlus, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
+    return { icon: ArrowRightLeft, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
   }
+
 
   return { icon: Clock, color: "#94a3b8", fileIcon: FileText, fileColor: "#94a3b8" };
 }
@@ -165,6 +225,111 @@ export function Activity() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
 
+  function normalizeActivityAction(action: string | null, file: string, message?: string): string {
+    const a = (action || "").toLowerCase();
+    const d = (file || "").toLowerCase();
+    const m = (message || "").toLowerCase();
+
+    const combined = `${a} ${d} ${m}`.trim();
+
+    const hasAny = (needles: string[]) => needles.some((n) => combined.includes(n));
+
+    if (
+      hasAny([
+        "upload",
+        "uploaded",
+        "file_uploaded",
+        "file.uploaded",
+        "file.upload",
+      ])
+    )
+      return "upload";
+
+    if (
+      hasAny([
+        "download",
+        "downloaded",
+        "file_downloaded",
+        "file.downloaded",
+        "file.download",
+      ])
+    )
+      return "download";
+
+    if (hasAny(["share", "shared", "link", "public"])) return "share";
+
+    if (
+      hasAny([
+        "edit",
+        "edited",
+        "rename",
+        "renamed",
+        "update",
+        "updated",
+      ])
+    )
+      return "edit";
+
+    if (
+      hasAny([
+        "login",
+        "logged_in",
+        "logged in",
+        "sign in",
+        "signed in",
+        "auth.login",
+        "user_login",
+      ])
+    )
+      return "login";
+
+    // Trash is separate from Deletes.
+    if (
+      hasAny([
+        "trash",
+        "trashed",
+        "move_to_trash",
+        "moved_to_trash",
+        "restore",
+        "restored",
+        "file_trashed",
+        "folder_trashed",
+        "file_restored",
+        "folder_restored",
+      ])
+    )
+      return "trash";
+
+    if (
+      hasAny([
+        "move",
+        "moved",
+        "file_moved",
+        "folder_moved",
+        "moved_file",
+        "moved_folder",
+        "parent changed",
+        "folder changed",
+      ])
+    )
+      return "move";
+
+    if (
+      hasAny([
+        "delete",
+        "deleted",
+        "remove",
+        "removed",
+        "permanent",
+      ])
+    )
+      return "delete";
+
+    return "unknown";
+  }
+
+
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -228,13 +393,21 @@ export function Activity() {
 
       if (!matchesSearch) return false;
       if (activeFilter === "All") return true;
-      if (activeFilter === "Uploads") return item.action.includes("Upload");
-      if (activeFilter === "Downloads") return item.action.includes("Download");
-      if (activeFilter === "Shares") return item.action.includes("Shar");
-      if (activeFilter === "Edits") return item.action.includes("Renam");
-      if (activeFilter === "Deletes") return item.action.includes("Delet");
+
+      const normalized = normalizeActivityAction(item.action, item.file);
+
+      if (activeFilter === "Uploads") return normalized === "upload";
+      if (activeFilter === "Downloads") return normalized === "download";
+      if (activeFilter === "Shares") return normalized === "share";
+      if (activeFilter === "Edits") return normalized === "edit";
+      if (activeFilter === "Deletes") return normalized === "delete";
+      if (activeFilter === "Login") return normalized === "login";
+      if (activeFilter === "Trash") return normalized === "trash";
+      if (activeFilter === "Move") return normalized === "move";
+
 
       return true;
+
     });
   }, [activeFilter, activities, search]);
 
