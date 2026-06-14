@@ -73,3 +73,58 @@ Jangan langsung coding besar. Implementasi harus dilakukan step kecil:
 5. Rapikan UI Activity user sesuai desain Figma.
 6. Pastikan Activity Log tetap admin-only (atau admin-capable) sesuai requirement.
 
+## Activity User Data Mapping
+
+Existing backend source:
+
+* Use `getActivityLogs()` from `frontend/src/services/activityLogService.ts`.
+* Endpoint `GET /activity-logs` is already scoped to authenticated user.
+* This makes it suitable for user-facing Activity.
+
+Backend row fields:
+
+* `id` / `uuid`
+* `action`
+* `description` / `message`
+* `created_at`
+* `user`
+* `metadata`
+* `subject_type` / `subject_id`
+* `ip_address`
+* `user_agent`
+
+Internal Activity UI shape:
+
+* `id`
+* `action`
+* `file`
+* `user`
+* `time`
+* `date`
+* `icon`
+* `color`
+* `fileIcon`
+* `fileColor`
+
+Mapping:
+
+* `id` should use backend `id` or `uuid`; fallback only if missing.
+* `action` should come from backend `action`.
+* `file` should use `description` first, then `message`, then metadata target/name if available, then a safe fallback like "Activity item".
+* `user` should use `user.name`, then `user.email`, then "You".
+* `created_at` should be transformed into:
+  * `date` group label such as Today, Yesterday, or formatted date.
+  * `time` display label such as relative time or formatted local time.
+* `metadata` can be used to enrich target/file/folder label if available.
+* `subject_type` should help choose file/folder icon.
+* `action` should help choose activity icon and color.
+* `ip_address` and `user_agent` are not required for user Activity UI; keep them for admin Activity Log.
+
+Implementation note:
+
+* Preserve the modern timeline/card UI from `Activity.tsx`.
+* Replace dummy `activityLog` source with mapped backend rows in a later coding step.
+* Keep local hide/delete behavior only if stable backend id is available.
+* Do not implement admin/global activity log in this step.
+
+
