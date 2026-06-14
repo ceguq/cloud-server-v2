@@ -10,13 +10,15 @@ import { MyFiles } from "./pages/MyFiles";
 import { Shared } from "./pages/Shared";
 import { Uploads } from "./pages/Uploads";
 import { Devices } from "./pages/Devices";
-import { Activity } from "./pages/Activity";
+// import { Activity } from "./pages/Activity";
+
 import { Trash } from "./pages/Trash";
 import { ServerMonitor } from "./pages/ServerMonitor";
 import { Settings } from "./pages/Settings";
 import LoginPage from "./pages/LoginPage";
 import { PublicSharePage } from "./pages/PublicSharePage";
 import ActivityLogPage from "../pages/ActivityLogPage";
+
 import { authService } from "../services/authService";
 import { AdminUsers } from "./pages/AdminUsers";
 
@@ -26,8 +28,9 @@ const pages: Record<string, React.ComponentType<any>> = {
   shared: Shared,
   uploads: Uploads,
   devices: Devices,
-  activity: Activity,
+  activity: ActivityLogPage,
   trash: Trash,
+
   "server-monitor": ServerMonitor,
   settings: Settings,
   "admin-users": AdminUsers,
@@ -35,7 +38,9 @@ const pages: Record<string, React.ComponentType<any>> = {
 
 const routePages: Record<string, React.ComponentType> = {
   "/activity": ActivityLogPage,
+  "/activity-feed": ActivityLogPage,
 };
+
 
 const routeActivePages: Record<string, string> = {
   "/activity": "activity-log",
@@ -50,6 +55,8 @@ const pathToActivePage: Record<string, string> = {
   "/uploads": "uploads",
   "/devices": "devices",
   "/activity-feed": "activity",
+
+
   "/activity": "activity-log",
   "/trash": "trash",
   "/server-monitor": "server-monitor",
