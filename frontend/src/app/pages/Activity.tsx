@@ -601,7 +601,7 @@ export function Activity() {
                 }
               }}
               className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-              style={{ accentColor: "#22d3ee" }}
+              style={{ accentColor: "#ef4444" }}
               aria-label="Pilih semua activity"
             />
             <span>
@@ -812,7 +812,16 @@ export function Activity() {
                   <div
                     key={item.id}
                     className="flex items-center gap-4 px-4 py-3 hover:bg-[#0d1829] transition-colors"
-                    style={{ borderBottom: i < items.length - 1 ? "1px solid #0a1020" : "none" }}
+                    style={{
+                      borderBottom: i < items.length - 1 ? "1px solid #0a1020" : "none",
+                      background: selectedActivityIds.has(item.id)
+                        ? "rgba(168, 85, 247, 0.08)"
+                        : "transparent",
+                      borderLeft: selectedActivityIds.has(item.id)
+                        ? "3px solid rgba(168, 85, 247, 0.3)"
+                        : "3px solid transparent",
+                      paddingLeft: selectedActivityIds.has(item.id) ? "calc(1rem - 3px)" : "1rem",
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -826,7 +835,7 @@ export function Activity() {
                         });
                       }}
                       className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829] shrink-0"
-                      style={{ accentColor: "#22d3ee" }}
+                      style={{ accentColor: "#ef4444" }}
                       aria-label={`Pilih activity ${item.action} ${item.file}`}
                     />
 

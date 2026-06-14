@@ -2053,7 +2053,7 @@ export function MyFiles({
                           });
                         }
                       }}
-                      style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                      style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                     />
                     <div className="text-xs" style={{ color: "#e2e8f0" }}>
                       Pilih semua (tampil)
@@ -2166,7 +2166,17 @@ export function MyFiles({
               }}
               onClick={() => handleOpenFolder(folder)}
               className="rounded-xl p-3 cursor-pointer hover:scale-[1.03] transition-all group"
-              style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+              style={{
+                background: selectedFolderIds.has(folder.id)
+                  ? "rgba(168, 85, 247, 0.08)"
+                  : "#0f1729",
+                border: selectedFolderIds.has(folder.id)
+                  ? "1px solid rgba(168, 85, 247, 0.3)"
+                  : "1px solid #1a2540",
+                borderLeft: selectedFolderIds.has(folder.id)
+                  ? "3px solid rgba(168, 85, 247, 0.3)"
+                  : "3px solid transparent",
+              }}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center">
@@ -2181,7 +2191,7 @@ export function MyFiles({
                     style={{
                       width: 14,
                       height: 14,
-                      accentColor: "#3b82f6",
+                      accentColor: "#ef4444",
                     }}
                   />
                 </div>
@@ -3972,7 +3982,7 @@ export function MyFiles({
                   style={{
                     width: 14,
                     height: 14,
-                    accentColor: "#3b82f6",
+                    accentColor: "#ef4444",
                   }}
                 />
               );
@@ -4043,7 +4053,13 @@ export function MyFiles({
                   style={{
                     gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
                     borderBottom: "1px solid #0a1020",
-                    background: undefined,
+                    background: selectedFileIds.has(file.id)
+                      ? "rgba(168, 85, 247, 0.08)"
+                      : "transparent",
+                    borderLeft: selectedFileIds.has(file.id)
+                      ? "3px solid rgba(168, 85, 247, 0.3)"
+                      : "3px solid transparent",
+                    paddingLeft: selectedFileIds.has(file.id) ? "calc(1rem - 3px)" : "1rem",
                   }}
                 >
                   <div className="flex items-center">
@@ -4064,7 +4080,7 @@ export function MyFiles({
                       style={{
                         width: 14,
                         height: 14,
-                        accentColor: "#3b82f6",
+                        accentColor: "#ef4444",
                       }}
                     />
                   </div>

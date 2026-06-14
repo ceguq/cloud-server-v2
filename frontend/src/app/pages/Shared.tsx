@@ -557,7 +557,7 @@ export function Shared() {
                   }
                 }}
                 className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-                style={{ accentColor: "#22d3ee" }}
+                style={{ accentColor: "#ef4444" }}
                 aria-label="Pilih semua share link"
               />
             </span>
@@ -605,6 +605,13 @@ export function Shared() {
                   borderBottom: "1px solid #0a1020",
                   opacity: isDeleting ? 0.5 : 1,
                   transition: "opacity 0.2s",
+                  background: isSelected && !isDeleting
+                    ? "rgba(168, 85, 247, 0.08)"
+                    : "transparent",
+                  borderLeft: isSelected && !isDeleting
+                    ? "3px solid rgba(168, 85, 247, 0.3)"
+                    : "3px solid transparent",
+                  paddingLeft: isSelected && !isDeleting ? "calc(1rem - 3px)" : "1rem",
                 }}
               >
                 <div className="flex items-center">
@@ -621,7 +628,7 @@ export function Shared() {
                       });
                     }}
                     className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-                    style={{ accentColor: "#22d3ee" }}
+                    style={{ accentColor: "#ef4444" }}
                     aria-label={`Pilih share link ${share.file?.original_name ?? share.id}`}
                   />
                 </div>

@@ -632,7 +632,7 @@ export default function ActivityLogPage() {
                     }
                   }}
                   className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                  style={{ accentColor: "#22d3ee" }}
+                  style={{ accentColor: "#ef4444" }}
                   aria-label="Pilih semua activity log yang dimuat"
                 />
                 <span>
@@ -861,6 +861,14 @@ export default function ActivityLogPage() {
                         <tr
                           className="transition hover:bg-slate-800/40"
                           key={logKey}
+                          style={{
+                            background: isSelected
+                              ? "rgba(168, 85, 247, 0.08)"
+                              : "transparent",
+                            borderLeft: isSelected
+                              ? "3px solid rgba(168, 85, 247, 0.3)"
+                              : "3px solid transparent",
+                          }}
                         >
                           <td className="px-5 py-4">
                             <input
@@ -875,7 +883,7 @@ export default function ActivityLogPage() {
                                 });
                               }}
                               className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                              style={{ accentColor: "#22d3ee" }}
+                              style={{ accentColor: "#ef4444" }}
                               aria-label={`Pilih activity log ${getDescription(log)}`}
                             />
                           </td>
@@ -928,6 +936,15 @@ export default function ActivityLogPage() {
                     <article
                       className="rounded-lg border border-slate-800 bg-slate-950/60 p-4"
                       key={logKey}
+                      style={{
+                        background: isSelected
+                          ? "rgba(168, 85, 247, 0.08)"
+                          : "bg-slate-950/60",
+                        borderLeft: isSelected
+                          ? "3px solid rgba(168, 85, 247, 0.3)"
+                          : "none",
+                        paddingLeft: isSelected ? "calc(1rem - 3px)" : "1rem",
+                      }}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -943,7 +960,7 @@ export default function ActivityLogPage() {
                               });
                             }}
                             className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                            style={{ accentColor: "#22d3ee" }}
+                            style={{ accentColor: "#ef4444" }}
                             aria-label={`Pilih activity log ${getDescription(log)}`}
                           />
                           <ActionBadge action={action} />

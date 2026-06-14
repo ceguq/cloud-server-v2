@@ -375,9 +375,9 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-semibold"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: "rgba(16, 185, 129, 0.15)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#10b981",
                   }}
                   aria-label="Bulk Restore"
                   onClick={() =>
@@ -394,8 +394,8 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-semibold"
                   style={{
-                    background: "rgba(239,68,68,0.15)",
-                    border: "1px solid rgba(239,68,68,0.3)",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
                     color: "#ef4444",
                   }}
                   aria-label="Delete Permanently"
@@ -518,7 +518,7 @@ export function Trash({
                           });
                         }
                       }}
-                      style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                      style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                     />
                   );
                 })()}
@@ -562,6 +562,13 @@ export function Trash({
                 style={{
                   gridTemplateColumns: "28px 1fr 120px 150px 130px 170px",
                   borderBottom: "1px solid #0a1020",
+                  background: selectedFileIds.has(item.id)
+                    ? "rgba(168, 85, 247, 0.08)"
+                    : "transparent",
+                  borderLeft: selectedFileIds.has(item.id)
+                    ? "3px solid rgba(168, 85, 247, 0.3)"
+                    : "3px solid transparent",
+                  paddingLeft: selectedFileIds.has(item.id) ? "calc(1rem - 3px)" : "1rem",
                 }}
               >
                 <div className="flex items-center">
@@ -578,7 +585,7 @@ export function Trash({
                         return next;
                       });
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                   />
                 </div>
 
@@ -671,9 +678,9 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-semibold"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: "rgba(16, 185, 129, 0.15)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#10b981",
                   }}
                   aria-label="Bulk Restore Folders"
                   onClick={() =>
@@ -690,8 +697,8 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-semibold"
                   style={{
-                    background: "rgba(239,68,68,0.15)",
-                    border: "1px solid rgba(239,68,68,0.3)",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
                     color: "#ef4444",
                   }}
                   aria-label="Bulk Delete Permanently Folders"
@@ -778,7 +785,7 @@ export function Trash({
                         });
                       }
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                   />
                 );
               })()}
@@ -810,6 +817,13 @@ export function Trash({
                 style={{
                   gridTemplateColumns: "28px 1fr 130px 170px",
                   borderBottom: "1px solid #0a1020",
+                  background: selectedFolderIds.has(folder.id)
+                    ? "rgba(168, 85, 247, 0.08)"
+                    : "transparent",
+                  borderLeft: selectedFolderIds.has(folder.id)
+                    ? "3px solid rgba(168, 85, 247, 0.3)"
+                    : "3px solid transparent",
+                  paddingLeft: selectedFolderIds.has(folder.id) ? "calc(1rem - 3px)" : "1rem",
                 }}
               >
                 <div className="flex items-center">
@@ -826,7 +840,7 @@ export function Trash({
                         return next;
                       });
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#3b82f6" }}
+                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                   />
                 </div>
 
