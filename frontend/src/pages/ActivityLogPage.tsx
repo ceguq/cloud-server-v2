@@ -294,21 +294,24 @@ function LoadingState() {
         style={{ color: "#94a3b8" }}
       >
         <LoadingSpinner size={12} />
-        Memuat aktivitas...
+        Memuat Activity Log...
       </div>
     </div>
   );
 }
 
 export default function ActivityLogPage() {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
+
+
   const [selectedAction, setSelectedAction] =
     useState<ActivityActionFilter>("all");
 
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
 
-  const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -362,13 +365,33 @@ export default function ActivityLogPage() {
   }, [selectAllIndeterminate]);
 
   useEffect(() => {
+    // admin-only guard: prevent fetching activity logs for non-admin users
+    try {
+      const raw = localStorage.getItem("nimbus_user");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const role = parsed?.role;
+
+      // isAdmin: null = belum cek, true = admin, false = non-admin
+      setIsAdmin(role === "admin");
+    } catch {
+      setIsAdmin(false);
+    }
+  }, []);
+
+
+  useEffect(() => {
+    // jangan fetch jika belum tahu role atau non-admin
+    if (isAdmin !== true) return;
+
+
     let ignore = false;
+
 
     async function fetchInitial() {
       const requestVersion = requestVersionRef.current + 1;
       requestVersionRef.current = requestVersion;
 
-      setLoading(true);
+      setLogsLoading(true);
       setError(null);
       setLoadingNext(false);
       setLogs([]);
@@ -404,7 +427,7 @@ export default function ActivityLogPage() {
         setPage(1);
       } finally {
         if (!ignore && requestVersion === requestVersionRef.current) {
-          setLoading(false);
+          setLogsLoading(false);
         }
       }
     }
@@ -414,10 +437,10 @@ export default function ActivityLogPage() {
     return () => {
       ignore = true;
     };
-  }, [clearSelection, selectedAction, reloadKey]);
+  }, [clearSelection, isAdmin, selectedAction, reloadKey]);
 
   const fetchNextPage = useCallback(async () => {
-    if (loading || loadingNext || fetchNextInFlightRef.current) return;
+    if (isAdmin !== true || logsLoading || loadingNext || fetchNextInFlightRef.current) return;
     if (page >= lastPage) return;
 
     const requestVersion = requestVersionRef.current;
@@ -457,7 +480,7 @@ export default function ActivityLogPage() {
         setLoadingNext(false);
       }
     }
-  }, [lastPage, loading, loadingNext, page, selectedAction]);
+  }, [isAdmin, lastPage, logsLoading, loadingNext, page, selectedAction]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -589,7 +612,7 @@ export default function ActivityLogPage() {
             </div>
           </div>
 
-          {!loading && !error && logs.length > 0 ? (
+          {isAdmin === true && !logsLoading && !error && logs.length > 0 ? (
             <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <label className="flex items-center gap-3 text-sm text-slate-300">
                 <input
@@ -640,7 +663,7 @@ export default function ActivityLogPage() {
             </div>
           ) : null}
 
-          {isBulkDeleteModalOpen ? (
+          {isAdmin === true && isBulkDeleteModalOpen ? (
             <div
               className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
               role="dialog"
@@ -740,7 +763,28 @@ export default function ActivityLogPage() {
             </div>
           ) : null}
 
-          {loading ? (
+          {isAdmin === null ? (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+              <div
+                className="flex items-center gap-2 text-sm"
+                style={{ color: "#94a3b8" }}
+              >
+                <LoadingSpinner size={12} />
+                Memeriksa akses admin...
+              </div>
+            </div>
+          ) : isAdmin === false ? (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-400/10 text-rose-200">
+                <AlertCircle className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div className="space-y-1">
+                <p className="font-semibold text-white">
+                  Akses ditolak. Activity Log hanya untuk admin.
+                </p>
+              </div>
+            </div>
+          ) : logsLoading ? (
             <LoadingState />
           ) : error ? (
             <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
