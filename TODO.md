@@ -1,11 +1,8 @@
-- [x] add Move to... menu to file overflow actions
-- [x] add Move to... menu to folder overflow actions
-- [x] implement Move modal state + UI in frontend/src/app/pages/MyFiles.tsx
-- [x] wire to fileService.moveFile and folderService.moveFolder
-- [x] refresh folders/files after successful move
-- [x] ensure root target is null
-- [x] show errors inside modal
-- [ ] manual testing checklist
-
-
+- [ ] Create edit plan for Sidebar.tsx visibility rules (Activity vs Activity Log vs Admin Users)
+- [ ] Implement conditional rendering in frontend/src/app/components/Sidebar.tsx:
+  - [ ] Keep Activity visible for all users
+  - [ ] Hide Activity Log from non-admins
+  - [ ] Hide Admin Users from non-admins
+- [ ] Ensure admin detection uses existing localStorage.getItem('nimbus_user') and role === 'admin'
+- [ ] Sanity-check that only Sidebar.tsx is modified and no routing/guards are changed
 
