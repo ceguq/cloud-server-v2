@@ -34,6 +34,17 @@ Arah final yang direkomendasikan (konseptual):
 - Menu Activity Log admin memakai route terpisah, misalnya `/activity-log` atau route yang sudah ada saat ini.
 - Jangan menyamakan Activity user dengan ActivityLogPage admin untuk final design.
 
+## Backend Finding
+
+* Existing `GET /activity-logs` is user-scoped.
+* It returns activity logs only for the authenticated user (`where user_id = current user`).
+* This endpoint is suitable as the first data source for user-facing Activity.
+* It is not yet suitable for admin Activity Log global/all-users, because admin cannot currently fetch logs across all users.
+* There is no `if admin` logic in `ActivityLogController`.
+* There are no query params like `user_id`, `all`, `admin`, or `scope`.
+* Admin middleware exists and is registered, but `/activity-logs` does not use admin middleware.
+* Admin/global activity log should be handled as a later backend task.
+
 ## Current Technical Concern (dicatat untuk implementasi berikutnya)
 
 Pada implementasi saat ini, ada indikasi bahwa:

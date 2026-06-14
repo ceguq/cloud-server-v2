@@ -7,9 +7,10 @@
     * `frontend/src/app/components/Sidebar.tsx`
 
   * Tujuan:
-    * Pastikan route Activity dan Activity Log benar-benar terpisah.
+    * Pastikan route Activity (user-facing) dan Activity Log (admin/audit) benar-benar terpisah.
     * Pastikan active menu highlight sesuai ekspektasi.
-    * Pastikan admin guard berjalan untuk Activity Log.
+    * Pastikan admin guard/role handling untuk halaman audit jelas (minimal untuk visibility & akses).
+
 
 * [ ] Task 2: Inspeksi halaman Activity user (read-only).
 
@@ -19,7 +20,7 @@
   * Tujuan:
     * Temukan bagian yang masih dummy/static.
     * Catat struktur UI yang mendekati desain Figma.
-    * Identifikasi gap data: endpoint/shape data real yang dibutuhkan.
+    * Identifikasi gap data: bahwa backend existing `GET /activity-logs` saat ini user-scoped (untuk kebutuhan Activity user).
 
 * [ ] Task 3: Inspeksi Activity Log admin (read-only).
 
@@ -28,8 +29,9 @@
 
   * Tujuan:
     * Pastikan data source audit/log berasal dari backend.
-    * Pastikan kemampuan filter/delete yang ada cocok untuk admin.
-    * Pastikan guard/role handling untuk menampilkan semua user saat admin.
+    * Pastikan kemampuan filter/delete yang ada cocok untuk audit/admin UI.
+    * Validasi bahwa backend existing belum mendukung admin global logs, sehingga admin/global scope perlu task backend terpisah.
+
 
 * [ ] Task 4: Tentukan route final Activity user vs Activity Log admin.
 
