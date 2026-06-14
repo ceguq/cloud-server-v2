@@ -70,21 +70,29 @@ export function Sidebar({
 
   const visibleNavItems = isAdmin
     ? [
-        ...navItems.slice(0, navItems.findIndex((i) => i.id === "settings")),
+        // Up to (but not including) Activity Log
+        ...navItems.slice(
+          0,
+          navItems.findIndex((i) => i.id === "activity-log")
+        ),
+        // Admin: Activity Log
+        ...navItems.filter((i) => i.id === "activity-log"),
+        // Admin: Admin Users
         {
           id: "admin-users",
           label: "Admin Users",
           icon: ShieldCheck,
           path: "/admin/users",
         },
-        ...navItems.slice(navItems.findIndex((i) => i.id === "settings")),
+        // Admin: rest of items (including Settings)
+        ...navItems.slice(navItems.findIndex((i) => i.id === "server-monitor")),
       ]
-    : navItems;
-
+    : navItems.filter((i) => i.id !== "activity-log");
 
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
 
   const [storageLoading, setStorageLoading] = useState(false);
+
   const [storageError, setStorageError] = useState<string>("");
 
   useEffect(() => {
