@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   HardDrive,
@@ -60,17 +61,18 @@ const statCards = [
     change: "+12%",
     up: true,
     icon: HardDrive,
+    color: "#3b82f6",
     glow: "rgba(59,130,246,0.2)",
     kind: "storage" as const,
   },
   {
     label: "Files",
-    icon: FileText,
-    color: "#22d3ee",
     value: "",
     sub: "",
     change: "+8%",
     up: true,
+    icon: FileText,
+    color: "#22d3ee",
     glow: "rgba(34,211,238,0.2)",
     kind: "files" as const,
   },
@@ -80,19 +82,19 @@ const statCards = [
     sub: "active links",
     change: "Real API",
     up: true,
+    icon: Share2,
     color: "#a78bfa",
     glow: "rgba(167,139,250,0.2)",
     kind: "shared" as const,
   },
-
   {
     label: "Active Devices",
     value: "",
     sub: "connected",
-
     change: "+1",
     up: true,
     icon: Monitor,
+    color: "#34d399",
     glow: "rgba(52,211,153,0.2)",
     kind: "devices" as const,
   },
