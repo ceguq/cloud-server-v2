@@ -74,8 +74,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/share-links/{shareLink}', [ShareController::class, 'destroy']);
 
     Route::get('/storage', [StorageController::class, 'info']);
+    Route::get('/storage/breakdown', [StorageController::class, 'breakdown']);
 
     // Server Monitor (read-only)
+
     Route::get('/server-monitor', [ServerMonitorController::class, 'index']);
 
     // Devices (read-only)

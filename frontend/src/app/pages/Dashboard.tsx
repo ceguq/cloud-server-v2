@@ -38,6 +38,11 @@ import {
 import storageService, {
   type StorageInfo,
 } from "../../services/storageService";
+import storageBreakdownService, {
+  getStorageBreakdown,
+  type StorageBreakdownInfo,
+} from "../../services/storageBreakdownService";
+
 import recentFileService, {
   type RecentFile,
 } from "../../services/recentFileService";
@@ -113,13 +118,7 @@ const statCards = [
 
 // Dummy recent files removed; Dashboard uses backend GET /api/files/recent.
 
-const storageBreakdown = [
-  { name: "Photos", value: 38, color: "#3b82f6" },
-  { name: "Videos", value: 22, color: "#22d3ee" },
-  { name: "Documents", value: 18, color: "#a78bfa" },
-  { name: "Music", value: 12, color: "#34d399" },
-  { name: "Others", value: 10, color: "#f59e0b" },
-];
+
 
 const toPercent = (value: number | null | undefined) => {
   const numeric = Number(value);
@@ -160,8 +159,13 @@ export function Dashboard() {
   const [fileMenu, setFileMenu] = useState<number | null>(null);
 
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [storageBreakdownInfo, setStorageBreakdownInfo] = useState<StorageBreakdownInfo | null>(null);
+  const [storageBreakdownLoading, setStorageBreakdownLoading] = useState(false);
+  const [storageBreakdownError, setStorageBreakdownError] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+
 
   const [sharedLinksCount, setSharedLinksCount] = useState<number | null>(
     null
@@ -335,6 +339,23 @@ export function Dashboard() {
       }
     };
 
+    const runStorageBreakdown = async () => {
+      try {
+        setStorageBreakdownLoading(true);
+        setStorageBreakdownError(false);
+
+        const data = await getStorageBreakdown();
+        if (!cancelled) setStorageBreakdownInfo(data);
+      } catch (e) {
+        if (!cancelled) {
+          setStorageBreakdownError(true);
+          setStorageBreakdownInfo(null);
+        }
+      } finally {
+        if (!cancelled) setStorageBreakdownLoading(false);
+      }
+    };
+
     const runServerMonitor = async () => {
       try {
         setServerMonitorLoading(true);
@@ -354,6 +375,8 @@ export function Dashboard() {
 
 
     runStorage();
+    runStorageBreakdown();
+
     runRecent();
     runSharedLinksCount();
     runActiveDevicesCount();
@@ -744,19 +767,57 @@ export function Dashboard() {
                   },
                 ];
 
-                const centerText =
-                  loading && !storageInfo
-                    ? "..."
-                    : !storageInfo
-                      ? "0%"
-                      : `${safeUsedPercent}%`;
+                const categoryColorByKey: Record<string, string> = {
+                  photos: "#3b82f6",
+                  videos: "#22d3ee",
+                  documents: "#a78bfa",
+                  music: "#34d399",
+                  others: "#f59e0b",
+                };
+
+                const fallbackCategories = [
+                  { key: "photos", name: "Photos", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "videos", name: "Videos", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "documents", name: "Documents", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "music", name: "Music", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "others", name: "Others", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                ];
+
+                const categoriesFromApi = storageBreakdownInfo?.categories;
+                const breakdownCategories = Array.isArray(categoriesFromApi) && categoriesFromApi.length
+                  ? fallbackCategories.map((fb) =>
+                      categoriesFromApi.find((c) => c?.key === fb.key) ? categoriesFromApi.find((c) => c?.key === fb.key)! : fb
+                    )
+                  : fallbackCategories;
+
+                const pieData = breakdownCategories.map((c) => ({
+                  key: c.key,
+                  name: c.name,
+                  value: typeof c.share_percent === "number" ? c.share_percent : Number(c.share_percent ?? 0) || 0,
+                  human: c.human,
+                  bytes: c.bytes,
+                }));
+
+                const usagePercentRaw = storageBreakdownInfo?.usage_percent ?? storageInfo?.usage_percent ?? 0;
+                const usagePercent =
+                  typeof usagePercentRaw === "number"
+                    ? usagePercentRaw
+                    : parseFloat(String(usagePercentRaw ?? 0)) || 0;
+
+                const displayUsageText = storageBreakdownLoading
+                  ? "..."
+                  : storageBreakdownError
+                    ? "0%"
+                    : usagePercent > 0 && usagePercent < 1
+                      ? "<1%"
+                      : `${Math.round(usagePercent)}%`;
 
                 return (
                   <div className="relative">
                     <ResponsiveContainer width={140} height={140}>
                       <PieChart>
                         <Pie
-                          data={realStorageBreakdown}
+                          data={pieData}
                           cx={65}
                           cy={65}
                           innerRadius={45}
@@ -764,8 +825,11 @@ export function Dashboard() {
                           paddingAngle={2}
                           dataKey="value"
                         >
-                          {realStorageBreakdown.map((entry, index) => (
-                            <Cell key={index} fill={entry.color} />
+                          {pieData.map((entry) => (
+                            <Cell
+                              key={entry.key}
+                              fill={categoryColorByKey[entry.key] ?? "#3b82f6"}
+                            />
                           ))}
                         </Pie>
                       </PieChart>
@@ -775,7 +839,7 @@ export function Dashboard() {
                         className="text-lg font-bold"
                         style={{ color: "#e2e8f0" }}
                       >
-                        {centerText}
+                        {displayUsageText}
                       </span>
                       <span className="text-[10px]" style={{ color: "#475569" }}>
                         Used
@@ -787,35 +851,34 @@ export function Dashboard() {
             </div>
             <div className="space-y-2">
               {(() => {
-                const usedPercentRaw = storageInfo?.usage_percent;
-                const usedPercent =
-                  typeof usedPercentRaw === "number"
-                    ? usedPercentRaw
-                    : parseFloat(String(usedPercentRaw ?? 0)) || 0;
+                const categoryColorByKey: Record<string, string> = {
+                  photos: "#3b82f6",
+                  videos: "#22d3ee",
+                  documents: "#a78bfa",
+                  music: "#34d399",
+                  others: "#f59e0b",
+                };
 
-                const safeUsedPercent = Math.round(
-                  Math.max(0, Math.min(100, usedPercent))
-                );
-                const safeFreePercent = Math.max(0, 100 - safeUsedPercent);
-
-                const realStorageBreakdown = [
-                  {
-                    name: "Used",
-                    value: safeUsedPercent,
-                    color: "#3b82f6",
-                  },
-                  {
-                    name: "Free",
-                    value: safeFreePercent,
-                    color: "#1e293b",
-                  },
+                const fallbackCategories = [
+                  { key: "photos", name: "Photos", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "videos", name: "Videos", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "documents", name: "Documents", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "music", name: "Music", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
+                  { key: "others", name: "Others", bytes: 0, human: "0 B", share_percent: 0, quota_percent: 0 },
                 ];
 
-                return realStorageBreakdown.map((item) => (
-                  <div key={item.name} className="flex items-center gap-2">
+                const categoriesFromApi = storageBreakdownInfo?.categories;
+                const breakdownCategories = Array.isArray(categoriesFromApi) && categoriesFromApi.length
+                  ? fallbackCategories.map((fb) =>
+                      categoriesFromApi.find((c) => c?.key === fb.key) ? categoriesFromApi.find((c) => c?.key === fb.key)! : fb
+                    )
+                  : fallbackCategories;
+
+                return breakdownCategories.map((item) => (
+                  <div key={item.key} className="flex items-center gap-2">
                     <span
                       className="w-2 h-2 rounded-full shrink-0"
-                      style={{ background: item.color }}
+                      style={{ background: categoryColorByKey[item.key] ?? "#3b82f6" }}
                     />
                     <span className="text-xs flex-1" style={{ color: "#64748b" }}>
                       {item.name}
@@ -824,7 +887,7 @@ export function Dashboard() {
                       className="text-xs font-medium"
                       style={{ color: "#94a3b8" }}
                     >
-                      {item.value}%
+                      {typeof item.share_percent === "number" ? item.share_percent : Number(item.share_percent ?? 0) || 0}%
                     </span>
                   </div>
                 ));
