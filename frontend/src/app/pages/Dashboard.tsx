@@ -595,55 +595,116 @@ export function Dashboard() {
               </button>
             </div>
             <div className="flex items-center justify-center mb-3">
-              <div className="relative">
-                <ResponsiveContainer width={140} height={140}>
-                  <PieChart>
-                    <Pie
-                      data={storageBreakdown}
-                      cx={65}
-                      cy={65}
-                      innerRadius={45}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {storageBreakdown.map((entry, index) => (
-                        <Cell key={index} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span
-                    className="text-lg font-bold"
-                    style={{ color: "#e2e8f0" }}
-                  >
-                    68%
-                  </span>
-                  <span className="text-[10px]" style={{ color: "#475569" }}>
-                    Used
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const usedPercentRaw = storageInfo?.usage_percent;
+                const usedPercent =
+                  typeof usedPercentRaw === "number"
+                    ? usedPercentRaw
+                    : parseFloat(String(usedPercentRaw ?? 0)) || 0;
+
+                const safeUsedPercent = Math.round(
+                  Math.max(0, Math.min(100, usedPercent))
+                );
+                const safeFreePercent = Math.max(0, 100 - safeUsedPercent);
+
+                const realStorageBreakdown = [
+                  {
+                    name: "Used",
+                    value: safeUsedPercent,
+                    color: "#3b82f6",
+                  },
+                  {
+                    name: "Free",
+                    value: safeFreePercent,
+                    color: "#1e293b",
+                  },
+                ];
+
+                const centerText =
+                  loading && !storageInfo
+                    ? "..."
+                    : !storageInfo
+                      ? "0%"
+                      : `${safeUsedPercent}%`;
+
+                return (
+                  <div className="relative">
+                    <ResponsiveContainer width={140} height={140}>
+                      <PieChart>
+                        <Pie
+                          data={realStorageBreakdown}
+                          cx={65}
+                          cy={65}
+                          innerRadius={45}
+                          outerRadius={65}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {realStorageBreakdown.map((entry, index) => (
+                            <Cell key={index} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span
+                        className="text-lg font-bold"
+                        style={{ color: "#e2e8f0" }}
+                      >
+                        {centerText}
+                      </span>
+                      <span className="text-[10px]" style={{ color: "#475569" }}>
+                        Used
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-2">
-              {storageBreakdown.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: item.color }}
-                  />
-                  <span className="text-xs flex-1" style={{ color: "#64748b" }}>
-                    {item.name}
-                  </span>
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: "#94a3b8" }}
-                  >
-                    {item.value}%
-                  </span>
-                </div>
-              ))}
+              {(() => {
+                const usedPercentRaw = storageInfo?.usage_percent;
+                const usedPercent =
+                  typeof usedPercentRaw === "number"
+                    ? usedPercentRaw
+                    : parseFloat(String(usedPercentRaw ?? 0)) || 0;
+
+                const safeUsedPercent = Math.round(
+                  Math.max(0, Math.min(100, usedPercent))
+                );
+                const safeFreePercent = Math.max(0, 100 - safeUsedPercent);
+
+                const realStorageBreakdown = [
+                  {
+                    name: "Used",
+                    value: safeUsedPercent,
+                    color: "#3b82f6",
+                  },
+                  {
+                    name: "Free",
+                    value: safeFreePercent,
+                    color: "#1e293b",
+                  },
+                ];
+
+                return realStorageBreakdown.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: item.color }}
+                    />
+                    <span className="text-xs flex-1" style={{ color: "#64748b" }}>
+                      {item.name}
+                    </span>
+                    <span
+                      className="text-xs font-medium"
+                      style={{ color: "#94a3b8" }}
+                    >
+                      {item.value}%
+                    </span>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
