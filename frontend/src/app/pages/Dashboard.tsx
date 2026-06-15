@@ -1,4 +1,5 @@
 
+
 import { useEffect, useState } from "react";
 import {
   HardDrive,
@@ -43,6 +44,12 @@ import recentFileService, {
 import { getShareLinks } from "../../services/shareService";
 import { getDevices } from "../../services/deviceService";
 import { getActivityLogs } from "../../services/activityLogService";
+import {
+  getServerMonitor,
+  type ServerMonitorResponse,
+} from "../../services/serverMonitorService";
+
+
 
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
@@ -110,12 +117,18 @@ const storageBreakdown = [
   { name: "Others", value: 10, color: "#f59e0b" },
 ];
 
-const serverData = Array.from({ length: 12 }, (_, i) => ({
-  time: `${i * 2}:00`,
-  cpu: 20 + Math.random() * 40,
-  memory: 45 + Math.random() * 30,
-  storage: 60 + Math.random() * 10,
-}));
+const toPercent = (value: number | null | undefined) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.min(100, Math.max(0, Math.round(numeric)));
+};
+
+const toLoadAverage = (value: number | null | undefined) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Number(numeric.toFixed(2));
+};
+
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length) {
     return (
@@ -160,14 +173,22 @@ export function Dashboard() {
   const [recentActivityLoading, setRecentActivityLoading] = useState(false);
   const [recentActivityError, setRecentActivityError] = useState(false);
 
-  // existing UI keeps fileMenu actions as placeholders
+  const [serverMonitor, setServerMonitor] =
+    useState<ServerMonitorResponse | null>(null);
+  const [serverMonitorLoading, setServerMonitorLoading] = useState(false);
+  const [serverMonitorError, setServerMonitorError] = useState(false);
 
+  // existing UI keeps fileMenu actions as placeholders
 
   // (won't affect recent files rendering)
 
   const [recentFiles, setRecentFiles] = useState<RecentFileUI[]>([]);
   const [recentFilesLoading, setRecentFilesLoading] = useState(false);
   const [recentFilesError, setRecentFilesError] = useState(false);
+
+
+
+
 
   useEffect(() => {
     let cancelled = false;
@@ -276,6 +297,7 @@ export function Dashboard() {
         setRecentActivityError(false);
 
         const response = await getActivityLogs();
+
         const items = Array.isArray(response?.data)
           ? response.data.slice(0, 5)
           : [];
@@ -293,11 +315,32 @@ export function Dashboard() {
       }
     };
 
+    const runServerMonitor = async () => {
+      try {
+        setServerMonitorLoading(true);
+        setServerMonitorError(false);
+
+        const response = await getServerMonitor();
+        if (!cancelled) setServerMonitor(response);
+      } catch (e) {
+        if (!cancelled) {
+          setServerMonitorError(true);
+          setServerMonitor(null);
+        }
+      } finally {
+        if (!cancelled) setServerMonitorLoading(false);
+      }
+    };
+
+
     runStorage();
     runRecent();
     runSharedLinksCount();
     runActiveDevicesCount();
     runRecentActivity();
+    runServerMonitor();
+
+
 
     return () => {
 
@@ -305,6 +348,67 @@ export function Dashboard() {
     };
   }, []);
 
+
+  const serverStatusLabel = serverMonitorLoading
+    ? "Checking"
+    : serverMonitorError
+      ? "Offline"
+      : "Online";
+  const serverStatusColor = serverMonitorLoading
+    ? "#60a5fa"
+    : serverMonitorError
+      ? "#f87171"
+      : "#34d399";
+  const serverStatusBackground = serverMonitorLoading
+    ? "rgba(96,165,250,0.1)"
+    : serverMonitorError
+      ? "rgba(248,113,113,0.1)"
+      : "rgba(52,211,153,0.1)";
+  const serverStatusBorder = serverMonitorLoading
+    ? "rgba(96,165,250,0.2)"
+    : serverMonitorError
+      ? "rgba(248,113,113,0.2)"
+      : "rgba(52,211,153,0.2)";
+
+  const cpuLoad1m = toLoadAverage(serverMonitor?.cpu?.load_1m);
+  const memoryUsage = toPercent(serverMonitor?.memory?.usage_percent);
+  const diskUsage = toPercent(serverMonitor?.disk?.usage_percent);
+
+  const serverMetrics = [
+    {
+      label: "CPU Load",
+      value: cpuLoad1m.toFixed(2),
+      suffix: "",
+      color: "#3b82f6",
+      data: [
+        { time: "15m", value: toLoadAverage(serverMonitor?.cpu?.load_15m) },
+        { time: "5m", value: toLoadAverage(serverMonitor?.cpu?.load_5m) },
+        { time: "1m", value: cpuLoad1m },
+      ],
+    },
+    {
+      label: "Memory Usage",
+      value: memoryUsage,
+      suffix: "%",
+      color: "#a78bfa",
+      data: [
+        { time: "15m", value: memoryUsage },
+        { time: "5m", value: memoryUsage },
+        { time: "1m", value: memoryUsage },
+      ],
+    },
+    {
+      label: "Disk Usage",
+      value: diskUsage,
+      suffix: "%",
+      color: "#22d3ee",
+      data: [
+        { time: "15m", value: diskUsage },
+        { time: "5m", value: diskUsage },
+        { time: "1m", value: diskUsage },
+      ],
+    },
+  ];
 
   return (
     <div
@@ -788,25 +892,25 @@ export function Dashboard() {
               <span
                 className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full"
                 style={{
-                  background: "rgba(52,211,153,0.1)",
-                  color: "#34d399",
-                  border: "1px solid rgba(52,211,153,0.2)",
+                  background: serverStatusBackground,
+                  color: serverStatusColor,
+                  border: `1px solid ${serverStatusBorder}`,
                 }}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#34d399] inline-block" />
-                Online
+                <span
+                  className="w-1.5 h-1.5 rounded-full inline-block"
+                  style={{ background: serverStatusColor }}
+                />
+                {serverStatusLabel}
               </span>
             </div>
             <span className="text-xs" style={{ color: "#475569" }}>
-              NimbusDrive Server
+              {serverMonitor?.server.hostname || "NimbusDrive Server"}
             </span>
+
           </div>
           <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: "CPU Usage", value: 42, color: "#3b82f6" },
-              { label: "Memory Usage", value: 67, color: "#a78bfa" },
-              { label: "Storage I/O", value: 28, color: "#22d3ee" },
-            ].map((metric) => (
+            {serverMetrics.map((metric) => (
               <div key={metric.label}>
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-xs" style={{ color: "#64748b" }}>
@@ -816,11 +920,12 @@ export function Dashboard() {
                     className="text-xs font-semibold"
                     style={{ color: metric.color }}
                   >
-                    {metric.value}%
+                    {metric.value}
+                    {metric.suffix}
                   </span>
                 </div>
                 <ResponsiveContainer width="100%" height={50}>
-                  <AreaChart data={serverData}>
+                  <AreaChart data={metric.data}>
                     <defs>
                       <linearGradient
                         id={`g-${metric.label}`}
@@ -843,13 +948,7 @@ export function Dashboard() {
                     </defs>
                     <Area
                       type="monotone"
-                      dataKey={
-                        metric.label === "CPU Usage"
-                          ? "cpu"
-                          : metric.label === "Memory Usage"
-                            ? "memory"
-                            : "storage"
-                      }
+                      dataKey="value"
                       stroke={metric.color}
                       strokeWidth={1.5}
                       fill={`url(#g-${metric.label})`}
