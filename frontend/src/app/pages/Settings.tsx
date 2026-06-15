@@ -156,13 +156,71 @@ export function Settings() {
     }
   }, [appearanceTheme, accentColor]);
 
+  const resolvedSettingsTheme: "dark" | "light" = (() => {
+    try {
+      if (appearanceTheme === "system") {
+        if (typeof window === "undefined") return "dark";
+        const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+        return mq?.matches ? "dark" : "light";
+      }
+      return appearanceTheme === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  })();
+
+  const settingsColors =
+    resolvedSettingsTheme === "light"
+      ? {
+          pageBg: "#f8fafc",
+          sidebarBg: "#ffffff",
+          border: "#dbe3ef",
+          title: "#0f172a",
+          text: "#334155",
+          muted: "#64748b",
+          muted2: "#94a3b8",
+          sectionLabel: "#64748b",
+          itemActiveBg: `${accentColor}12`,
+          itemActiveBorder: `${accentColor}55`,
+          itemInactiveText: "#64748b",
+          itemActiveText: "#0f172a",
+          cardBg: "#ffffff",
+          panelBg: "#f8fafc",
+          panelBorder: "#dbe3ef",
+        }
+      : {
+          pageBg: "#080d1a",
+          sidebarBg: "#0b1121",
+          border: "#1a2540",
+          title: "#e2e8f0",
+          text: "#cbd5e1",
+          muted: "#64748b",
+          muted2: "#475569",
+          sectionLabel: "#334155",
+          itemActiveBg: "#0d1829",
+          itemActiveBorder: "#1e3a8a",
+          itemInactiveText: "#64748b",
+          itemActiveText: "#e2e8f0",
+          cardBg: "#0f1729",
+          panelBg: "#0d1829",
+          panelBorder: "#1a2540",
+        };
+
   return (
-    <div className="flex-1 overflow-hidden flex" style={{ background: "#080d1a" }}>
+    <div className="flex-1 overflow-hidden flex" style={{ background: settingsColors.pageBg }}>
+
       {/* Settings Sidebar */}
-      <div className="w-52 shrink-0 p-4" style={{ background: "#0b1121", borderRight: "1px solid #1a2540" }}>
-        <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#334155" }}>
+      <div
+        className="w-52 shrink-0 p-4"
+        style={{ background: settingsColors.sidebarBg, borderRight: `1px solid ${settingsColors.border}` }}
+      >
+        <div
+          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          style={{ color: settingsColors.sectionLabel }}
+        >
           Settings
         </div>
+
         <div className="space-y-0.5">
           {sections.map((s) => {
             const Icon = s.icon;
@@ -190,35 +248,48 @@ export function Settings() {
       <div className="flex-1 overflow-y-auto p-6">
         {activeSection === "profile" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: "#e2e8f0" }}>
+            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
               Profile
             </h2>
-            <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
               Manage your personal information
             </p>
 
             {/* Avatar */}
-            <div className="flex items-center gap-5 mb-6 p-5 rounded-xl" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div
+              className="flex items-center gap-5 mb-6 p-5 rounded-xl"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
               <div
                 className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-                style={{ background: "linear-gradient(135deg, #3b82f6, #22d3ee)", color: "#fff" }}
+                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
               >
                 A
               </div>
               <div>
-                <div className="text-sm font-semibold mb-0.5" style={{ color: "#e2e8f0" }}>
+                <div className="text-sm font-semibold mb-0.5" style={{ color: settingsColors.title }}>
                   Alex Johnson
                 </div>
-                <div className="text-xs mb-2" style={{ color: "#475569" }}>
+                <div className="text-xs mb-2" style={{ color: settingsColors.muted }}>
                   alex@example.com
                 </div>
-                <button className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "#1a2540", color: "#94a3b8", border: "1px solid #1e2d45" }}>
+                <button
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.text,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
                   Change Avatar
                 </button>
               </div>
             </div>
 
-            <div className="rounded-xl p-5" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div
+              className="rounded-xl p-5"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
               <div className="grid grid-cols-2 gap-4 mb-4">
                 {[
                   { label: "First Name", value: "Alex" },
@@ -227,37 +298,48 @@ export function Settings() {
                   { label: "Username", value: "@alex_nimbus" },
                 ].map((f) => (
                   <div key={f.label}>
-                    <label className="block text-xs mb-1.5" style={{ color: "#64748b" }}>
+                    <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
                       {f.label}
                     </label>
                     <input
                       defaultValue={f.value}
                       className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                      style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#e2e8f0" }}
+                      style={{
+                        background: settingsColors.panelBg,
+                        border: `1px solid ${settingsColors.panelBorder}`,
+                        color: settingsColors.text,
+                        caretColor: accentColor,
+                      }}
                     />
                   </div>
                 ))}
               </div>
               <div className="mb-4">
-                <label className="block text-xs mb-1.5" style={{ color: "#64748b" }}>
+                <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
                   Bio
                 </label>
                 <textarea
                   defaultValue="Cloud enthusiast, self-hosting advocate."
                   rows={3}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-                  style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#94a3b8" }}
+                  style={{
+                    background: settingsColors.panelBg,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                    color: settingsColors.text,
+                    caretColor: accentColor,
+                  }}
                 />
               </div>
               <button
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: "linear-gradient(135deg, #3b82f6, #22d3ee)", color: "#fff" }}
+                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
               >
                 <Save size={13} /> Save Changes
               </button>
             </div>
           </div>
         )}
+
 
         {activeSection === "notifications" && (
           <div>
