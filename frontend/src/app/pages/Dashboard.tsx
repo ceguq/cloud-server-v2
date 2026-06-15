@@ -43,6 +43,10 @@ import recentFileService, {
 } from "../../services/recentFileService";
 import { getShareLinks } from "../../services/shareService";
 import { getDevices } from "../../services/deviceService";
+import type { Device } from "../../services/deviceService";
+
+
+
 import { getActivityLogs } from "../../services/activityLogService";
 import {
   getServerMonitor,
@@ -168,8 +172,11 @@ export function Dashboard() {
   const [activeDevicesCount, setActiveDevicesCount] = useState<number>(0);
   const [activeDevicesLoading, setActiveDevicesLoading] = useState(false);
   const [activeDevicesError, setActiveDevicesError] = useState(false);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+
+
   const [recentActivityLoading, setRecentActivityLoading] = useState(false);
   const [recentActivityError, setRecentActivityError] = useState(false);
 
@@ -273,19 +280,32 @@ export function Dashboard() {
 
         // getDevices() currently unwraps to Device[]
         let count = 0;
+        let items: Device[] = [];
         if (Array.isArray(payload)) {
           count = payload.length;
+          items = payload;
         } else if (payload && typeof payload === "object") {
           const maybe = (payload as any).data;
-          if (Array.isArray(maybe)) count = maybe.length;
+          if (Array.isArray(maybe)) {
+            count = maybe.length;
+            items = maybe;
+          }
         }
 
-        if (!cancelled) setActiveDevicesCount(count);
+        if (!cancelled) {
+          setActiveDevicesCount(count);
+          setDevices(items);
+
+        }
+
       } catch (e) {
         if (!cancelled) {
           setActiveDevicesError(true);
           setActiveDevicesCount(0);
+          setDevices([]);
+
         }
+
       } finally {
         if (!cancelled) setActiveDevicesLoading(false);
       }
@@ -968,7 +988,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Sync Status */}
+        {/* Connected Devices */}
         <div
           className="rounded-xl p-4"
           style={{ background: "#0f1729", border: "1px solid #1a2540" }}
@@ -978,7 +998,7 @@ export function Dashboard() {
               className="text-sm font-semibold"
               style={{ color: "#e2e8f0" }}
             >
-              Sync Status
+              Connected Devices
             </span>
             <RefreshCw size={13} style={{ color: "#3b82f6" }} />
           </div>
@@ -990,57 +1010,70 @@ export function Dashboard() {
                 border: "2px solid rgba(52,211,153,0.3)",
               }}
             >
-              <CheckCircle size={24} style={{ color: "#34d399" }} />
+              {activeDevicesLoading ? (
+                <RefreshCw size={24} style={{ color: "#3b82f6" }} />
+              ) : (
+                <CheckCircle
+                  size={24}
+                  style={{ color: activeDevicesError ? "#f87171" : "#34d399" }}
+                />
+              )}
             </div>
             <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
-              All synced
+              {activeDevicesLoading
+                ? "Checking devices"
+                : activeDevicesError
+                  ? "Devices unavailable"
+                  : devices.length === 0
+                    ? "No devices connected"
+                    : `${devices.length} device(s) connected`}
             </span>
             <span className="text-xs mt-0.5" style={{ color: "#475569" }}>
-              All files are up to date
+              {activeDevicesLoading
+                ? "Loading device status..."
+                : activeDevicesError
+                  ? "Unable to load devices"
+                  : devices.length === 0
+                    ? "No device activity yet"
+                    : "Showing latest known devices"}
             </span>
           </div>
           <div className="space-y-2">
-            {[
-              {
-                device: "MacBook Pro",
-                status: "Synced",
-                time: "Just now",
-                color: "#34d399",
-              },
-              {
-                device: "iPhone 15",
-                status: "Synced",
-                color: "#34d399",
-              },
-              {
-                device: "Home Desktop",
-                status: "Synced",
-                time: "5 min ago",
-                color: "#34d399",
-              },
-            ].map((d, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                style={{ background: "#0d1829" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Monitor size={12} style={{ color: "#64748b" }} />
-                  <span className="text-xs" style={{ color: "#94a3b8" }}>
-                    {d.device}
-                  </span>
+            {devices.slice(0, 3).map((device, i) => {
+              const platformBrowser = [device.platform, device.browser]
+                .filter(Boolean)
+                .join(" ");
+              const deviceName =
+                device.display_name || platformBrowser || "Unknown device";
+              const lastSeen = device.last_seen_at
+                ? new Date(device.last_seen_at).toLocaleString()
+                : "Never seen";
+              const dotColor = device.trusted ? "#34d399" : "#f59e0b";
+
+              return (
+                <div
+                  key={device.id ?? i}
+                  className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                  style={{ background: "#0d1829" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Monitor size={12} style={{ color: "#64748b" }} />
+                    <span className="text-xs" style={{ color: "#94a3b8" }}>
+                      {deviceName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: dotColor }}
+                    />
+                    <span className="text-[10px]" style={{ color: "#475569" }}>
+                      {lastSeen}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: d.color }}
-                  />
-                  <span className="text-[10px]" style={{ color: "#475569" }}>
-                    {d.time}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
