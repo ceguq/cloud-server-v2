@@ -39,8 +39,14 @@ import storageService, {
 import recentFileService, {
   type RecentFile,
 } from "../../services/recentFileService";
+import { getShareLinks } from "../../services/shareService";
+import { getDevices } from "../../services/deviceService";
+import { getActivityLogs } from "../../services/activityLogService";
+
 import { LoadingSpinner } from "../components/LoadingSpinner";
+
 import { FileTypeIcon } from "../components/FileTypeIcon";
+
 
 type RecentFileUI = RecentFile & {
   display_date: string;
@@ -54,40 +60,39 @@ const statCards = [
     change: "+12%",
     up: true,
     icon: HardDrive,
-    color: "#3b82f6",
     glow: "rgba(59,130,246,0.2)",
     kind: "storage" as const,
   },
   {
     label: "Files",
+    icon: FileText,
+    color: "#22d3ee",
     value: "",
     sub: "",
     change: "+8%",
     up: true,
-    icon: FileText,
-    color: "#22d3ee",
     glow: "rgba(34,211,238,0.2)",
     kind: "files" as const,
   },
   {
     label: "Shared Links",
-    value: "243",
+    value: "",
     sub: "active links",
-    change: "-3%",
-    up: false,
-    icon: Share2,
+    change: "Real API",
+    up: true,
     color: "#a78bfa",
     glow: "rgba(167,139,250,0.2)",
     kind: "shared" as const,
   },
+
   {
     label: "Active Devices",
-    value: "4",
+    value: "",
     sub: "connected",
+
     change: "+1",
     up: true,
     icon: Monitor,
-    color: "#34d399",
     glow: "rgba(52,211,153,0.2)",
     kind: "devices" as const,
   },
@@ -109,38 +114,6 @@ const serverData = Array.from({ length: 12 }, (_, i) => ({
   memory: 45 + Math.random() * 30,
   storage: 60 + Math.random() * 10,
 }));
-
-const activity = [
-  {
-    action: "Uploaded",
-    file: "Project Proposal.pdf",
-    time: "2 minutes ago",
-    icon: "↑",
-    color: "#22d3ee",
-  },
-  {
-    action: "Shared",
-    file: "3 files to Projects",
-    time: "15 minutes ago",
-    icon: "→",
-    color: "#3b82f6",
-  },
-  {
-    action: "Downloaded",
-    file: "Budget 2024.xlsx",
-    time: "1 hour ago",
-    icon: "↓",
-    color: "#34d399",
-  },
-  {
-    action: "Shared 'NimbusDrive'",
-    file: "to Projects",
-    time: "3 hours ago",
-    icon: "→",
-    color: "#3b82f6",
-  },
-];
-
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length) {
     return (
@@ -171,7 +144,23 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
+  const [sharedLinksCount, setSharedLinksCount] = useState<number | null>(
+    null
+  );
+  const [sharedLinksLoading, setSharedLinksLoading] = useState(false);
+  const [sharedLinksError, setSharedLinksError] = useState(false);
+
+  const [activeDevicesCount, setActiveDevicesCount] = useState<number>(0);
+  const [activeDevicesLoading, setActiveDevicesLoading] = useState(false);
+  const [activeDevicesError, setActiveDevicesError] = useState(false);
+
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [recentActivityLoading, setRecentActivityLoading] = useState(false);
+  const [recentActivityError, setRecentActivityError] = useState(false);
+
   // existing UI keeps fileMenu actions as placeholders
+
+
   // (won't affect recent files rendering)
 
   const [recentFiles, setRecentFiles] = useState<RecentFileUI[]>([]);
@@ -217,19 +206,110 @@ export function Dashboard() {
       }
     };
 
+    const runSharedLinksCount = async () => {
+      try {
+        setSharedLinksLoading(true);
+        setSharedLinksError(false);
+
+
+        const payload = await getShareLinks();
+
+        // getShareLinks() currently unwraps to ShareLink[]
+        // but we still guard for wrapped/unknown shapes.
+        let count = 0;
+        if (Array.isArray(payload)) {
+          count = payload.length;
+        } else if (payload && typeof payload === "object") {
+          const maybe = (payload as any).data;
+          if (Array.isArray(maybe)) count = maybe.length;
+        }
+
+        if (!cancelled) setSharedLinksCount(count);
+      } catch (e) {
+        if (!cancelled) {
+          setSharedLinksError(true);
+          setSharedLinksCount(0);
+        }
+      } finally {
+        if (!cancelled) setSharedLinksLoading(false);
+      }
+    };
+
+    const runActiveDevicesCount = async () => {
+      try {
+
+
+
+        setActiveDevicesLoading(true);
+
+
+        setActiveDevicesError(false);
+
+
+        const payload = await getDevices();
+
+        // getDevices() currently unwraps to Device[]
+        let count = 0;
+        if (Array.isArray(payload)) {
+          count = payload.length;
+        } else if (payload && typeof payload === "object") {
+          const maybe = (payload as any).data;
+          if (Array.isArray(maybe)) count = maybe.length;
+        }
+
+        if (!cancelled) setActiveDevicesCount(count);
+      } catch (e) {
+        if (!cancelled) {
+          setActiveDevicesError(true);
+          setActiveDevicesCount(0);
+        }
+      } finally {
+        if (!cancelled) setActiveDevicesLoading(false);
+      }
+    };
+
+    const runRecentActivity = async () => {
+      try {
+        setRecentActivityLoading(true);
+        setRecentActivityError(false);
+
+        const response = await getActivityLogs();
+        const items = Array.isArray(response?.data)
+          ? response.data.slice(0, 5)
+          : [];
+
+        if (!cancelled) {
+          setRecentActivity(items);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setRecentActivityError(true);
+          setRecentActivity([]);
+        }
+      } finally {
+        if (!cancelled) setRecentActivityLoading(false);
+      }
+    };
+
     runStorage();
     runRecent();
+    runSharedLinksCount();
+    runActiveDevicesCount();
+    runRecentActivity();
 
     return () => {
+
       cancelled = true;
     };
   }, []);
+
 
   return (
     <div
       className="flex-1 overflow-y-auto p-6 nimbus-scrollbar"
       style={{ background: "#080d1a" }}
     >
+
       {/* Welcome */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -261,13 +341,27 @@ export function Dashboard() {
           const Icon = card.icon;
           const storageValue =
             card.kind === "storage"
+
               ? storageInfo?.used_human
               : card.kind === "files"
                 ? (storageInfo?.file_count?.toString?.() ??
                   storageInfo?.file_count)
                 : card.kind === "shared"
-                  ? "243"
-                  : "4";
+                  ? sharedLinksLoading
+                    ? "..."
+                    : sharedLinksError
+                      ? 0
+                      : sharedLinksCount ?? 0
+                  : card.kind === "devices"
+                    ? activeDevicesLoading
+                      ? "..."
+                      : activeDevicesError
+                        ? 0
+                        : activeDevicesCount
+                    : "4";
+
+
+
           const storageSub =
             card.kind === "storage"
               ? storageInfo?.limit_human
@@ -292,7 +386,11 @@ export function Dashboard() {
                     border: `1px solid ${card.color}33`,
                   }}
                 >
-                  <Icon size={18} style={{ color: card.color }} />
+                  {Icon ? (
+                    <Icon size={18} style={{ color: card.color }} />
+                  ) : (
+                    <span style={{ color: card.color }}>•</span>
+                  )}
                 </div>
                 <span
                   className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-md"
@@ -568,31 +666,42 @@ export function Dashboard() {
               </button>
             </div>
             <div className="space-y-3">
-              {activity.map((a, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5"
-                    style={{ background: `${a.color}18`, color: a.color }}
-                  >
-                    {a.icon}
-                  </div>
-                  <div>
-                    <div className="text-xs" style={{ color: "#cbd5e1" }}>
-                      <span style={{ color: "#94a3b8" }}>{a.action}</span>{" "}
-                      <span style={{ color: "#e2e8f0" }}>{a.file}</span>
-                    </div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Clock size={9} style={{ color: "#334155" }} />
-                      <span
-                        className="text-[10px]"
-                        style={{ color: "#334155" }}
-                      >
-                        {a.time}
-                      </span>
-                    </div>
-                  </div>
+              {recentActivityLoading ? (
+                <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  Loading activity...
                 </div>
-              ))}
+              ) : recentActivityError ? (
+                <div className="text-xs" style={{ color: "#f87171" }}>
+                  Failed to load activity
+                </div>
+              ) : recentActivity.length === 0 ? (
+                <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  No recent activity yet
+                </div>
+              ) : (
+                recentActivity.map((item, i) => (
+                  <div key={item.id ?? i} className="flex items-start gap-2.5">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5"
+                      style={{ background: "#3b82f618", color: "#3b82f6" }}
+                    >
+                      •
+                    </div>
+                    <div>
+                      <div className="text-xs" style={{ color: "#cbd5e1" }}>
+                        <span style={{ color: "#e2e8f0" }}>
+                          {item.description || item.action || "Activity"}
+                        </span>
+                      </div>
+                      <div className="text-[10px] mt-0.5" style={{ color: "#334155" }}>
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleString()
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -739,7 +848,6 @@ export function Dashboard() {
               {
                 device: "iPhone 15",
                 status: "Synced",
-                time: "2 min ago",
                 color: "#34d399",
               },
               {
