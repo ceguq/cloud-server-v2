@@ -118,6 +118,13 @@ export function Settings() {
       // ignore
     }
 
+    try {
+      window.dispatchEvent(new CustomEvent("nimbus-appearance-change"));
+    } catch {
+      // ignore
+    }
+
+
     const applyDark = (isDark: boolean) => {
       if (!document?.documentElement) return;
       if (isDark) document.documentElement.classList.add("dark");

@@ -89,7 +89,125 @@ export function Sidebar({
       ]
     : navItems.filter((i) => i.id !== "activity-log");
 
+  type AppearanceTheme = "dark" | "light" | "system";
+  type ResolvedTheme = "dark" | "light";
+
+  function safeReadAppearanceTheme(): AppearanceTheme {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const raw = window.localStorage.getItem("nimbus_appearance_theme");
+      if (raw === "dark" || raw === "light" || raw === "system") return raw;
+    } catch {
+      // ignore
+    }
+    return "dark";
+  }
+
+  function safeReadAccentColor(): string {
+    if (typeof window === "undefined") return "#3b82f6";
+    try {
+      const raw = window.localStorage.getItem("nimbus_accent_color");
+      if (typeof raw === "string" && raw.trim().length > 0) return raw;
+    } catch {
+      // ignore
+    }
+    return "#3b82f6";
+  }
+
+  function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+    if (theme === "dark") return "dark";
+    if (theme === "light") return "light";
+
+    try {
+      const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+      return mq?.matches ? "dark" : "light";
+    } catch {
+      return "dark";
+    }
+  }
+
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(() => safeReadAppearanceTheme());
+  const [accentColor, setAccentColor] = useState<string>(() => safeReadAccentColor());
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncThemeFromStorage = () => {
+      const nextTheme = safeReadAppearanceTheme();
+      const nextAccent = safeReadAccentColor();
+
+      setAppearanceTheme(nextTheme);
+      setAccentColor(nextAccent);
+      setResolvedTheme(resolveAppearanceTheme(nextTheme));
+    };
+
+    syncThemeFromStorage();
+
+    try {
+      window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+      syncThemeFromStorage();
+
+      window.addEventListener("storage", syncThemeFromStorage);
+      window.addEventListener("focus", syncThemeFromStorage);
+
+      const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+      const onChange = () => {
+        syncThemeFromStorage();
+      };
+      mq?.addEventListener?.("change", onChange);
+
+      return () => {
+        window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
+        window.removeEventListener("storage", syncThemeFromStorage);
+        window.removeEventListener("focus", syncThemeFromStorage);
+        mq?.removeEventListener?.("change", onChange);
+      };
+    } catch {
+      return;
+    }
+  }, []);
+
+  const accentSoftBg = `${accentColor}26`;
+  const accentBorder = `${accentColor}66`;
+
+  const sidebarColors =
+    resolvedTheme === "light"
+      ? {
+          sidebarBg: "#ffffff",
+          border: "#dbe3ef",
+          logoText: "#0f172a",
+          subtitle: "#64748b",
+          navText: "#64748b",
+          navTextActive: "#0f172a",
+          navIcon: "#94a3b8",
+          cardBg: "#f8fafc",
+          panelBg: "#e2e8f0",
+          storageText: "#0f172a",
+          storageLabel: "#334155",
+          muted: "#64748b",
+          muted2: "#94a3b8",
+          error: "#dc2626",
+        }
+      : {
+          sidebarBg: "#0b1121",
+          border: "#1a2540",
+          logoText: "#ffffff",
+          subtitle: "#64748b",
+          navText: "#64748b",
+          navTextActive: "#e2e8f0",
+          navIcon: "#475569",
+          cardBg: "#0d1829",
+          panelBg: "#1e2d45",
+          storageText: "#e2e8f0",
+          storageLabel: "#94a3b8",
+          muted: "#64748b",
+          muted2: "#475569",
+          error: "#f87171",
+        };
+
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+
 
   const [storageLoading, setStorageLoading] = useState(false);
 
@@ -128,26 +246,31 @@ export function Sidebar({
   return (
     <aside
       className="flex flex-col h-full w-[220px] shrink-0"
-      style={{ background: "#0b1121", borderRight: "1px solid #1a2540" }}
+      style={{ background: sidebarColors.sidebarBg, borderRight: `1px solid ${sidebarColors.border}` }}
     >
+
       {/* Logo */}
       <div
         className="flex items-center gap-2.5 px-5 py-5"
-        style={{ borderBottom: "1px solid #1a2540" }}
+        style={{ borderBottom: `1px solid ${sidebarColors.border}` }}
       >
+
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center"
           style={{
-            background: "linear-gradient(135deg, #3b82f6 0%, #22d3ee 100%)",
+            background: `linear-gradient(135deg, ${accentColor} 0%, #22d3ee 100%)`,
+
           }}
         >
           <Cloud size={16} className="text-white" />
         </div>
         <div>
-          <div className="text-white font-semibold text-sm tracking-wide">
+          <div className="font-semibold text-sm tracking-wide" style={{ color: sidebarColors.logoText }}>
             NimbusDrive
           </div>
-          <div className="text-[10px]" style={{ color: "#64748b" }}>
+
+          <div className="text-[10px]" style={{ color: sidebarColors.subtitle }}>
+
             Your Cloud. Your Data.
           </div>
         </div>
@@ -169,23 +292,27 @@ export function Sidebar({
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group text-left"
                 style={{
                   background: isActive
-                    ? "linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(34,211,238,0.1) 100%)"
+                    ? `linear-gradient(135deg, ${accentSoftBg} 0%, rgba(34,211,238,0.1) 100%)`
                     : "transparent",
+
                   border: isActive
-                    ? "1px solid rgba(59,130,246,0.3)"
+                    ? `1px solid ${accentBorder}`
                     : "1px solid transparent",
                 }}
               >
+
                 <Icon
                   size={16}
-                  style={{ color: isActive ? "#22d3ee" : "#475569" }}
+                  style={{ color: isActive ? accentColor : sidebarColors.navIcon }}
                   className="shrink-0 transition-colors group-hover:text-blue-400"
+
                 />
                 <span
                   className="text-sm transition-colors"
                   style={{
-                    color: isActive ? "#e2e8f0" : "#64748b",
+                    color: isActive ? sidebarColors.navTextActive : sidebarColors.navText,
                     fontWeight: isActive ? 500 : 400,
+
                   }}
                 >
                   {item.label}
@@ -194,8 +321,9 @@ export function Sidebar({
                   <ChevronRight
                     size={12}
                     className="ml-auto"
-                    style={{ color: "#3b82f6" }}
+                    style={{ color: accentColor }}
                   />
+
                 )}
               </button>
             );
@@ -204,57 +332,68 @@ export function Sidebar({
       </nav>
 
       {/* Storage Usage */}
-      <div className="px-4 py-4" style={{ borderTop: "1px solid #1a2540" }}>
+      <div className="px-4 py-4" style={{ borderTop: `1px solid ${sidebarColors.border}` }}>
+
         <div
           className="rounded-xl p-3"
-          style={{ background: "#0d1829", border: "1px solid #1a2540" }}
+          style={{ background: sidebarColors.cardBg, border: `1px solid ${sidebarColors.border}` }}
         >
+
           <div className="flex items-center gap-2 mb-2">
-            <HardDrive size={13} style={{ color: "#3b82f6" }} />
-            <span className="text-xs font-medium" style={{ color: "#94a3b8" }}>
+            <HardDrive size={13} style={{ color: accentColor }} />
+            <span className="text-xs font-medium" style={{ color: sidebarColors.storageLabel }}>
               Storage Used
             </span>
+
           </div>
           {storageLoading ? (
             <div
               className="flex items-center gap-2 text-xs"
-              style={{ color: "#64748b" }}
+              style={{ color: sidebarColors.muted }}
             >
+
               <LoadingSpinner size={12} />
               Loading storage...
+
             </div>
           ) : storageError ? (
-            <div className="text-xs" style={{ color: "#f87171" }}>
+            <div className="text-xs" style={{ color: sidebarColors.error }}>
               Storage unavailable
             </div>
+
           ) : (
             <>
               <div className="flex justify-between items-center mb-2">
                 <span
                   className="text-xs font-medium"
-                  style={{ color: "#e2e8f0" }}
+                  style={{ color: sidebarColors.storageText }}
+
                 >
                   {usedHuman || "—"} of {limitHuman || "—"}
                 </span>
                 {/* Persentase tidak ditampilkan */}
-                <span className="text-xs" style={{ color: "#64748b" }} />
+                <span className="text-xs" style={{ color: sidebarColors.muted }} />
+
               </div>
 
               <div
                 className="relative h-1.5 rounded-full overflow-hidden"
-                style={{ background: "#1e2d45" }}
+                style={{ background: sidebarColors.panelBg }}
+
               >
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-all"
                   style={{
                     width: `${usagePercent}%`,
-                    background: "linear-gradient(90deg, #3b82f6, #22d3ee)",
+                    background: `linear-gradient(90deg, ${accentColor}, #22d3ee)`,
+
                   }}
                 />
               </div>
-              <div className="mt-2.5 text-xs" style={{ color: "#475569" }}>
+              <div className="mt-2.5 text-xs" style={{ color: sidebarColors.muted2 }}>
                 {Math.max(0, 100 - usagePercent)}% free remaining
               </div>
+
             </>
           )}
         </div>
@@ -262,9 +401,10 @@ export function Sidebar({
         <button
           className="mt-3 w-full py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
           style={{
-            background: "linear-gradient(135deg, #1d4ed8 0%, #0891b2 100%)",
+            background: `linear-gradient(135deg, ${accentColor} 0%, #0891b2 100%)`,
             color: "#fff",
           }}
+
         >
           ↑ Upgrade to Pro
         </button>
