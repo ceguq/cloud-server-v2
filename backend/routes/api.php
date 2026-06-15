@@ -9,6 +9,7 @@ use App\Http\Controllers\TrashController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ServerMonitorController;
+use App\Http\Controllers\DeviceController;
 
 
 use Illuminate\Support\Facades\Route;
@@ -76,6 +77,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Server Monitor (read-only)
     Route::get('/server-monitor', [ServerMonitorController::class, 'index']);
+
+    // Devices (read-only)
+    Route::get('/devices', [DeviceController::class, 'index']);
 
 
     // Trash endpoints (soft deleted files)
