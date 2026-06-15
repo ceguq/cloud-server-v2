@@ -150,7 +150,8 @@ frontend/src/
 | 9   | `pages/Devices.tsx`                | Device list (PLACEHOLDER: hardcoded data, belum API)          | 🔴 Placeholder     |
 | 10  | `pages/Activity.tsx`               | Activity feed (STATIC/DUMMY: local hardcoded activity list)   | 🟡 Partial/Static  |
 | 11  | `pages/Trash.tsx`                  | Trash management: restore, permanent delete                    | ✅ Selesai         |
-| 12  | `pages/ServerMonitor.tsx`          | Server monitoring (PLACEHOLDER: dummy CPU/RAM/disk/services)  | 🔴 Placeholder     |
+| 12  | `pages/ServerMonitor.tsx`          | Server monitoring (🟡 Partial / Real API) | 🟡 Partial / Real API     |
+
 | 13  | `pages/Settings.tsx`               | Settings form (PLACEHOLDER: toggles not persisted to backend)  | 🔴 Placeholder     |
 | 14  | `pages/AdminUsers.tsx`             | Admin panel: list users from API, role editing belum ada       | ✅ Selesai sebagian|
 | 15  | `pages/LoginPage.tsx`              | Login form: email/password                                     | ✅ Selesai         |
@@ -274,8 +275,10 @@ Semua endpoint di bawah ini prefiksnya adalah `/api/...` (relatif).
 | 29  | DELETE | `/trash/folders/{id}/force`       | TrashController           | Permanently delete folder              | ✅ Sanctum  |
 | 30  | GET    | `/activity-logs`                  | ActivityLogController     | List activity log (paginated/filtered) | ✅ Sanctum  |
 | 31  | GET    | `/admin/users`                    | Admin\UserController      | List all users (ADMIN ONLY)           | ✅ Admin    |
+| 32  | GET    | `/server-monitor`                | ServerMonitorController   | Get server monitor summary            | ✅ Sanctum  |
 
 **Format Endpoint Notes:**
+
 - Format relatif benar: `/auth/login`, `/files`, `/storage`
 - Format full benar: `/api/auth/login`, `/api/files`, `/api/storage`
 - Hindari format salah: `GET / api / storage` (spasi), `POST / api / auth / login`
@@ -398,6 +401,8 @@ Semua endpoint di bawah ini prefiksnya adalah `/api/...` (relatif).
 | 8   | `adminUserService.ts`   | `Admin/UserController`  | `/admin/users`                                  | ✅ Selesai         |
 | 9   | `recentFileService.ts`  | `FileController`        | `/files/recent`                                 | ✅ Selesai         |
 | 10  | `api.ts` (base)         | (middleware)            | All endpoints via Sanctum token injection       | ✅ Selesai         |
+| 11  | `serverMonitorService.ts` | `ServerMonitorController` | `/server-monitor`                            | 🟡 Partial / Real API |
+
 
 ---
 
@@ -547,3 +552,168 @@ Semua endpoint di bawah ini prefiksnya adalah `/api/...` (relatif).
 **END OF AUDIT DOCUMENT**
 
 **Generated: 2026-06-14 | Auditor: AI Code Audit System | Confidence Level: HIGH**
+
+---
+
+## 17. Scan Ulang Struktur Project (Update 2026-06-15)
+
+Bagian ini ditambahkan sebagai update hasil scan ulang folder project. Isi audit utama tanggal 2026-06-14 di atas tetap dipertahankan.
+
+### Scope Scan
+
+Scan dilakukan pada root `CLOUD_SERVER_V2/` dengan fokus pada source code dan dokumen project. Folder besar/generated seperti `.git/`, `backend/vendor/`, `frontend/node_modules/`, cache Laravel, session, compiled views, log, dan private uploaded files tidak dimasukkan sebagai struktur source.
+
+### Ringkasan File Source Saat Ini
+
+| Area / Path            | Jumlah File Ter-scan | Catatan |
+| ---------------------- | -------------------- | ------- |
+| Root docs/config       | 4                    | `.gitignore`, `PROJECT_STRUCTURE.md`, `TODO.md`, `UPLOAD_LIMIT_FIX.md` |
+| `.codex/`              | 5                    | Local Codex/OpenSpec skill definitions |
+| `.github/`             | 10                   | Prompt dan skill workflow OpenSpec |
+| `.vscode/`             | 1                    | Workspace settings |
+| `backend/`             | 83                   | Laravel backend source, config, tests, routes, migrations |
+| `frontend/`            | 103                  | React/Vite frontend source, services, UI components, assets |
+| `openspec/`            | 6                    | Active OpenSpec change proposals/design/tasks |
+
+### Struktur Root Aktual Tambahan
+
+```
+CLOUD_SERVER_V2/
+|-- .codex/
+|   `-- skills/
+|       |-- openspec-apply-change/
+|       |-- openspec-archive-change/
+|       |-- openspec-explore/
+|       |-- openspec-propose/
+|       `-- openspec-sync-specs/
+|-- .github/
+|   |-- prompts/
+|   |   |-- opsx-apply.prompt.md
+|   |   |-- opsx-archive.prompt.md
+|   |   |-- opsx-explore.prompt.md
+|   |   |-- opsx-propose.prompt.md
+|   |   `-- opsx-sync.prompt.md
+|   `-- skills/
+|       |-- openspec-apply-change/
+|       |-- openspec-archive-change/
+|       |-- openspec-explore/
+|       |-- openspec-propose/
+|       `-- openspec-sync-specs/
+|-- .vscode/
+|   `-- settings.json
+|-- backend/
+|-- frontend/
+|-- openspec/
+|   |-- changes/
+|   |   |-- merge-activity-feed-into-activity-log/
+|   |   `-- separate-user-activity-and-admin-activity-log/
+|   `-- specs/
+|-- PROJECT_STRUCTURE.md
+|-- TODO.md
+|-- UPLOAD_LIMIT_FIX.md
+`-- .gitignore
+```
+
+### Update Path Root
+
+| Path | Tipe | Fungsi / Catatan |
+| ---- | ---- | ---------------- |
+| `.codex/skills/` | Folder | Skill lokal Codex untuk workflow OpenSpec di project ini |
+| `.github/prompts/` | Folder | Prompt workflow OpenSpec: apply, archive, explore, propose, sync |
+| `.github/skills/` | Folder | Mirror skill OpenSpec untuk GitHub/Copilot workflow |
+| `.vscode/settings.json` | File | Setting workspace, termasuk tambahan PATH OpenSpec untuk terminal Windows |
+| `openspec/changes/` | Folder | Draft perubahan aktif berbasis proposal, design, dan tasks |
+| `openspec/specs/` | Folder | Folder target spesifikasi utama; saat scan ini belum berisi file source spec |
+| `frontend/ATTRIBUTIONS.md` | File | Attribution/licensing frontend assets atau generated/imported resources |
+| `frontend/guidelines/Guidelines.md` | File | Guidelines frontend/design yang ikut tersimpan di repo |
+
+### Update Frontend Structure
+
+Tambahan dan detail yang belum tercatat eksplisit pada audit sebelumnya:
+
+```
+frontend/
+|-- ATTRIBUTIONS.md
+|-- guidelines/
+|   `-- Guidelines.md
+|-- src/
+|   |-- imports/
+|   |   |-- ChatGPT_Image_8_Jun_2026__02.33.08.png
+|   |   `-- ChatGPT_Image_8_Jun_2026__02.33.08-1.png
+|   |-- types/
+|   |   `-- activityLog.ts
+|   |-- app/
+|   |   |-- components/
+|   |   |   |-- figma/
+|   |   |   |   `-- ImageWithFallback.tsx
+|   |   |   `-- ui/
+|   |   |       `-- 48 shadcn/Radix-style UI component/helper files
+|   |   |-- pages/
+|   |   |   `-- 12 app page files
+|   |   `-- upload/
+|   |       `-- 2 upload context/tray files
+|   |-- pages/
+|   |   `-- ActivityLogPage.tsx
+|   |-- services/
+|   |   `-- 11 service files
+|   `-- styles/
+|       `-- 5 CSS/theme files
+```
+
+| Path | Catatan Update |
+| ---- | -------------- |
+| `frontend/src/app/components/ui/` | Berisi 48 file komponen/helper UI seperti `button`, `dialog`, `table`, `tabs`, `tooltip`, `utils`, dan `use-mobile` |
+| `frontend/src/app/components/figma/ImageWithFallback.tsx` | Komponen fallback image dari export/design source |
+| `frontend/src/types/activityLog.ts` | TypeScript type khusus activity log |
+| `frontend/src/imports/` | Menyimpan 2 asset PNG hasil import/generate |
+| `frontend/src/services/authServices.ts` | File service tambahan dengan nama mirip `authService.ts`; perlu diperhatikan agar tidak membingungkan import |
+| `frontend/guidelines/Guidelines.md` | Dokumen guideline frontend yang belum masuk daftar struktur lama |
+
+### Update Backend Structure
+
+Struktur backend utama masih sesuai audit sebelumnya: controller, model, middleware, service, route, dan migration inti tetap berada pada lokasi yang sama. Tambahan detail file yang ter-scan:
+
+| Path | Catatan Update |
+| ---- | -------------- |
+| `backend/.editorconfig` | Editor config backend |
+| `backend/.env.example` | Template environment Laravel |
+| `backend/.gitattributes` | Git attributes backend |
+| `backend/.gitignore` | Ignore rules backend |
+| `backend/.npmrc` | NPM config backend |
+| `backend/public/.htaccess` | Apache rewrite config untuk public entry |
+| `backend/resources/css/app.css` | Default Laravel frontend CSS resource |
+| `backend/resources/js/app.js` | Default Laravel frontend JS resource |
+| `backend/resources/views/welcome.blade.php` | Default Laravel Blade view |
+| `backend/shared-download-test` | File test/manual artifact untuk shared download |
+
+### Backend App Files Terkonfirmasi
+
+| Area | File Terkonfirmasi |
+| ---- | ------------------ |
+| Controllers | `ActivityLogController.php`, `AuthController.php`, `FileController.php`, `FolderController.php`, `ShareController.php`, `StorageController.php`, `TrashController.php`, `Admin/UserController.php` |
+| Middleware | `EnsureUserIsAdmin.php` |
+| Models | `ActivityLog.php`, `File.php`, `Folder.php`, `ShareLink.php`, `User.php` |
+| Services | `ActivityLogService.php` |
+| Routes | `api.php`, `console.php`, `web.php` |
+| Migrations | 11 migration files, sama seperti daftar audit 2026-06-14 |
+
+### Update OpenSpec / Workflow Docs
+
+OpenSpec sekarang menjadi bagian struktur repo dan memiliki dua change aktif:
+
+| Change | File | Status Struktur |
+| ------ | ---- | --------------- |
+| `merge-activity-feed-into-activity-log` | `design.md`, `proposal.md`, `tasks.md` | Ada di `openspec/changes/` |
+| `separate-user-activity-and-admin-activity-log` | `design.md`, `proposal.md`, `tasks.md` | Ada di `openspec/changes/` |
+
+Catatan: `openspec/specs/` ada sebagai folder, tetapi pada scan ini belum ditemukan file spec di dalamnya.
+
+### Catatan Konsistensi Setelah Scan
+
+- Dokumentasi lama sudah mencatat struktur aplikasi inti dengan cukup lengkap.
+- Update utama yang perlu dianggap tambahan adalah folder workflow/tooling: `.codex/`, `.github/`, `.vscode/`, dan `openspec/`.
+- Struktur frontend aktual lebih detail dari ringkasan lama karena sudah mencakup `ATTRIBUTIONS.md`, `guidelines/`, `imports/`, `types/activityLog.ts`, dan 48 file UI component/helper.
+- Struktur backend inti tidak menunjukkan penambahan controller/model/migration baru di luar yang sudah tercatat pada audit sebelumnya.
+- File `frontend/src/services/authServices.ts` dan `frontend/src/services/authService.ts` sama-sama ada; ini bukan perubahan kode, hanya temuan struktur yang perlu diwaspadai saat import service.
+
+**Scan Update Generated: 2026-06-15 | Scope: Source structure only | Original audit retained**

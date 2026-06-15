@@ -8,9 +8,11 @@ use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\ServerMonitorController;
 
 
 use Illuminate\Support\Facades\Route;
+
 
 
 
@@ -71,6 +73,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/share-links/{shareLink}', [ShareController::class, 'destroy']);
 
     Route::get('/storage', [StorageController::class, 'info']);
+
+    // Server Monitor (read-only)
+    Route::get('/server-monitor', [ServerMonitorController::class, 'index']);
+
 
     // Trash endpoints (soft deleted files)
     Route::get('/trash/files', [TrashController::class, 'files']);
