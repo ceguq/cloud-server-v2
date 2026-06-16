@@ -48,39 +48,70 @@ const sections = [
   { id: "api", label: "API Keys", icon: Key },
 ];
 
-function Toggle({ on }: { on: boolean }) {
+function Toggle({
+  on,
+  accentColor,
+  offBg,
+  knobBg,
+}: {
+  on: boolean;
+  accentColor?: string;
+  offBg?: string;
+  knobBg?: string;
+}) {
   const [checked, setChecked] = useState(on);
+  const resolvedAccent = accentColor ?? "#3b82f6";
+  const resolvedOffBg = offBg ?? "#1e2d45";
+  const resolvedKnobBg = knobBg ?? "#fff";
+
   return (
     <button
       onClick={() => setChecked(!checked)}
       className="relative w-10 h-5 rounded-full transition-all"
-      style={{ background: checked ? "linear-gradient(135deg, #3b82f6, #22d3ee)" : "#1e2d45" }}
+      style={{
+        background: checked
+          ? `linear-gradient(135deg, ${resolvedAccent}, #22d3ee)`
+          : resolvedOffBg,
+      }}
     >
       <span
         className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
-        style={{ background: "#fff", left: checked ? "calc(100% - 18px)" : "2px" }}
+        style={{
+          background: resolvedKnobBg,
+          left: checked ? "calc(100% - 18px)" : "2px",
+        }}
       />
     </button>
   );
 }
 
+
 function SettingRow({
   label,
   desc,
   children,
+  labelColor,
+  descColor,
+  borderColor,
 }: {
   label: string;
   desc?: string;
   children?: React.ReactNode;
+  labelColor?: string;
+  descColor?: string;
+  borderColor?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-3.5" style={{ borderBottom: "1px solid #0d1829" }}>
+    <div
+      className="flex items-center justify-between py-3.5"
+      style={{ borderBottom: `1px solid ${borderColor ?? "#0d1829"}` }}
+    >
       <div>
-        <div className="text-sm" style={{ color: "#cbd5e1" }}>
+        <div className="text-sm" style={{ color: labelColor ?? "#cbd5e1" }}>
           {label}
         </div>
         {desc && (
-          <div className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <div className="text-xs mt-0.5" style={{ color: descColor ?? "#475569" }}>
             {desc}
           </div>
         )}
@@ -89,6 +120,7 @@ function SettingRow({
     </div>
   );
 }
+
 
 export function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
@@ -343,13 +375,17 @@ export function Settings() {
 
         {activeSection === "notifications" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: "#e2e8f0" }}>
+            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
               Notifications
             </h2>
-            <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
               Configure when and how you get notified
             </p>
-            <div className="rounded-xl px-5" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div
+              className="rounded-xl px-5"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
+
               {[
                 { label: "Upload Complete", desc: "Notify when file uploads finish", on: true },
                 { label: "Sync Status", desc: "Notify when devices sync", on: true },
@@ -359,30 +395,47 @@ export function Settings() {
                 { label: "Server Alerts", desc: "CPU/Memory critical thresholds", on: true },
                 { label: "Weekly Report", desc: "Summary of your cloud activity", on: false },
               ].map((n) => (
-                <SettingRow key={n.label} label={n.label} desc={n.desc}>
-                  <Toggle on={n.on} />
+                <SettingRow
+                  key={n.label}
+                  label={n.label}
+                  desc={n.desc}
+                  labelColor={settingsColors.text}
+                  descColor={settingsColors.muted}
+                  borderColor={settingsColors.border}
+                >
+                  <Toggle
+                    on={n.on}
+                    accentColor={accentColor}
+                    offBg={settingsColors.panelBg}
+                    knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                  />
                 </SettingRow>
               ))}
+
             </div>
           </div>
         )}
 
         {activeSection === "security" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: "#e2e8f0" }}>
+            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
               Security
             </h2>
-            <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
               Manage your account security settings
             </p>
 
-            <div className="rounded-xl p-5 mb-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-              <h3 className="text-sm font-semibold mb-4" style={{ color: "#e2e8f0" }}>
+            <div
+              className="rounded-xl p-5 mb-4"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
+              <h3 className="text-sm font-semibold mb-4" style={{ color: settingsColors.title }}>
                 Change Password
               </h3>
+
               {["Current Password", "New Password", "Confirm Password"].map((f) => (
                 <div key={f} className="mb-3">
-                  <label className="block text-xs mb-1.5" style={{ color: "#64748b" }}>
+              <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
                     {f}
                   </label>
                   <div className="relative">
@@ -390,37 +443,90 @@ export function Settings() {
                       type={showPass ? "text" : "password"}
                       placeholder="••••••••"
                       className="w-full px-3 py-2 pr-9 rounded-lg text-sm outline-none"
-                      style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#e2e8f0" }}
+                      style={{
+                        background: settingsColors.panelBg,
+                        border: `1px solid ${settingsColors.panelBorder}`,
+                        color: settingsColors.text,
+                        caretColor: accentColor,
+                      }}
                     />
-                    <button
+              <button
                       onClick={() => setShowPass(!showPass)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2"
                     >
-                      {showPass ? <EyeOff size={13} style={{ color: "#475569" }} /> : <Eye size={13} style={{ color: "#475569" }} />}
+                      {showPass ? <EyeOff size={13} style={{ color: settingsColors.muted }} /> : <Eye size={13} style={{ color: settingsColors.muted }} />}
+
                     </button>
                   </div>
                 </div>
               ))}
               <button
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: "linear-gradient(135deg, #3b82f6, #22d3ee)", color: "#fff" }}
+                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
               >
                 <Lock size={13} /> Update Password
               </button>
             </div>
 
-            <div className="rounded-xl px-5" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-              <SettingRow label="Two-Factor Authentication" desc="Require 2FA for sign-in">
-                <Toggle on={false} />
+            <div
+              className="rounded-xl px-5"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
+              <SettingRow
+                label="Two-Factor Authentication"
+                desc="Require 2FA for sign-in"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <Toggle
+                  on={false}
+                  accentColor={accentColor}
+                  offBg={settingsColors.panelBg}
+                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                />
               </SettingRow>
-              <SettingRow label="Login Notifications" desc="Email on new device login">
-                <Toggle on={true} />
+              <SettingRow
+                label="Login Notifications"
+                desc="Email on new device login"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <Toggle
+                  on={true}
+                  accentColor={accentColor}
+                  offBg={settingsColors.panelBg}
+                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                />
               </SettingRow>
-              <SettingRow label="Session Timeout" desc="Auto-logout after 24h of inactivity">
-                <Toggle on={true} />
+              <SettingRow
+                label="Session Timeout"
+                desc="Auto-logout after 24h of inactivity"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <Toggle
+                  on={true}
+                  accentColor={accentColor}
+                  offBg={settingsColors.panelBg}
+                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                />
               </SettingRow>
-              <SettingRow label="End-to-End Encryption" desc="Encrypt files before upload">
-                <Toggle on={false} />
+              <SettingRow
+                label="End-to-End Encryption"
+                desc="Encrypt files before upload"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <Toggle
+                  on={false}
+                  accentColor={accentColor}
+                  offBg={settingsColors.panelBg}
+                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                />
               </SettingRow>
             </div>
           </div>
@@ -428,24 +534,34 @@ export function Settings() {
 
         {activeSection === "storage" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: "#e2e8f0" }}>
+            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
               Storage
             </h2>
-            <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
               Manage storage and cleanup settings
             </p>
 
-            <div className="rounded-xl p-5 mb-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+
+            <div
+              className="rounded-xl p-5 mb-4"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                <span className="text-sm font-medium" style={{ color: settingsColors.title }}>
                   Storage Usage
                 </span>
-                <span className="text-sm font-bold" style={{ color: "#22d3ee" }}>
+                <span className="text-sm font-bold" style={{ color: accentColor }}>
                   68% used
                 </span>
               </div>
-              <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: "#1e2d45" }}>
-                <div className="h-full rounded-full" style={{ width: "68%", background: "linear-gradient(90deg, #3b82f6, #22d3ee)" }} />
+              <div
+                className="h-3 rounded-full overflow-hidden mb-3"
+                style={{ background: settingsColors.panelBg }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: "68%", background: `linear-gradient(90deg, ${accentColor}, #22d3ee)` }}
+                />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
@@ -453,11 +569,18 @@ export function Settings() {
                   { label: "Videos", pct: 22, color: "#22d3ee" },
                   { label: "Documents", pct: 18, color: "#a78bfa" },
                 ].map((s) => (
-                  <div key={s.label} className="p-3 rounded-lg" style={{ background: "#0d1829", border: "1px solid #1a2540" }}>
+                  <div
+                    key={s.label}
+                    className="p-3 rounded-lg"
+                    style={{
+                      background: settingsColors.panelBg,
+                      border: `1px solid ${settingsColors.panelBorder}`,
+                    }}
+                  >
                     <div className="text-xs font-semibold mb-0.5" style={{ color: s.color }}>
                       {s.pct}%
                     </div>
-                    <div className="text-xs" style={{ color: "#64748b" }}>
+                    <div className="text-xs" style={{ color: settingsColors.muted }}>
                       {s.label}
                     </div>
                   </div>
@@ -465,17 +588,55 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="rounded-xl px-5" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-              <SettingRow label="Auto-Delete Trash" desc="Permanently delete after 30 days">
-                <Toggle on={true} />
+
+            <div className="rounded-xl px-5" style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}>
+              <SettingRow
+                label="Auto-Delete Trash"
+                desc="Permanently delete after 30 days"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <Toggle
+                  on={true}
+                  accentColor={accentColor}
+                  offBg={settingsColors.panelBg}
+                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
+                />
               </SettingRow>
-              <SettingRow label="Duplicate Detection" desc="Find and remove duplicate files">
-                <button className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "#1a2540", color: "#94a3b8" }}>
+              <SettingRow
+                label="Duplicate Detection"
+                desc="Find and remove duplicate files"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <button
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.text,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
                   Run Scan
                 </button>
               </SettingRow>
-              <SettingRow label="Download All Data" desc="Export all your files as ZIP">
-                <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: "#1a2540", color: "#94a3b8" }}>
+              <SettingRow
+                label="Download All Data"
+                desc="Export all your files as ZIP"
+                labelColor={settingsColors.text}
+                descColor={settingsColors.muted}
+                borderColor={settingsColors.border}
+              >
+                <button
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.text,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
                   <Download size={12} /> Export
                 </button>
               </SettingRow>
@@ -556,8 +717,9 @@ export function Settings() {
           </div>
         )}
 
-        {!['profile', 'notifications', 'security', 'storage', 'appearance'].includes(activeSection) && (
+        {!['profile', 'notifications', 'security', 'storage', 'appearance'].includes(activeSection as "profile" | "notifications" | "security" | "storage" | "appearance") && (
           <div className="flex flex-col items-center justify-center h-full" style={{ color: "#475569" }}>
+
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center mb-3"
               style={{ background: "#0f1729", border: "1px solid #1a2540" }}
