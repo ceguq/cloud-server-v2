@@ -391,12 +391,12 @@ export function MyFiles({
     null,
   );
   const [openFileActionId, setOpenFileActionId] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState<number | null>(null);
 
   const [fileActionMenuPosition, setFileActionMenuPosition] = useState<{
     x: number;
     y: number;
   } | null>(null);
+
 
   // click-outside untuk menu aksi file
   const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
@@ -418,6 +418,7 @@ export function MyFiles({
   >("all");
 
   const [sortMenuOpen, setSortMenuOpen] = useState<boolean>(false);
+
   const [sortBy, setSortBy] = useState<"name" | "date" | "size" | "type">(
     "name",
   );
@@ -1183,9 +1184,8 @@ export function MyFiles({
     setOpenFolderActionId(null);
 
     if (openFileActionId === fileId) {
-                      setOpenFileActionId(null);
+                    setOpenFileActionId(null);
                       setFileActionMenuPosition(null);
-                      setMenuOpen(null);
                       return;
                     }
 
@@ -1209,7 +1209,6 @@ export function MyFiles({
                       x: Math.max(8, x),
                       y: Math.max(8, y),
                     });
-                    setMenuOpen(null);
                   }
 
   // Move modal helpers
@@ -1515,7 +1514,6 @@ export function MyFiles({
       if (!wrap.contains(target)) {
         setOpenFileActionId(null);
         setFileActionMenuPosition(null);
-        setMenuOpen(null);
       }
     };
 
@@ -1532,6 +1530,7 @@ export function MyFiles({
   );
 
   const [uploadError, setUploadError] = useState("");
+
 
   const folderList = loadingFolders ? [] : folders;
 
