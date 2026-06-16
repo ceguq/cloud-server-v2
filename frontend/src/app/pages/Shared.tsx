@@ -1,4 +1,40 @@
 import { useEffect, useRef, useState } from "react";
+
+
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+  return "dark";
+}
+
+function safeReadAccentColor(): string {
+  if (typeof window === "undefined") return "#3b82f6";
+  try {
+    const raw = window.localStorage.getItem("nimbus_accent_color");
+    if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  } catch {
+    // ignore
+  }
+  return "#3b82f6";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  try {
+    if (theme === "dark" || theme === "light") return theme;
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
 import {
   Link2,
   Eye,
@@ -92,6 +128,102 @@ async function copyToClipboard(text: string): Promise<boolean> {
 // ─── component ──────────────────────────────────────────────────────────────
 
 export function Shared() {
+  // Note: resolvedTheme digunakan langsung untuk styling.
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
+    safeReadAppearanceTheme(),
+  );
+  const [accentColor, setAccentColor] = useState<string>(
+    safeReadAccentColor,
+  );
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
+    resolveAppearanceTheme(safeReadAppearanceTheme()),
+  );
+
+  const syncThemeFromStorage = () => {
+    const nextTheme = safeReadAppearanceTheme();
+    const nextAccent = safeReadAccentColor();
+    setAppearanceTheme(nextTheme);
+    setAccentColor(nextAccent);
+    setResolvedTheme(resolveAppearanceTheme(nextTheme));
+  };
+
+  useEffect(() => {
+    try {
+      syncThemeFromStorage();
+    } catch {
+      // ignore
+    }
+
+    if (typeof window === "undefined") return;
+
+    const onNimbusAppearanceChange = () => syncThemeFromStorage();
+    window.addEventListener(
+      "nimbus-appearance-change",
+      onNimbusAppearanceChange,
+    );
+    window.addEventListener("storage", onNimbusAppearanceChange);
+    window.addEventListener("focus", onNimbusAppearanceChange);
+
+    let mq: MediaQueryList | null = null;
+    let onMqChange: (() => void) | null = null;
+
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      onMqChange = () => {
+        syncThemeFromStorage();
+      };
+      mq?.addEventListener?.("change", onMqChange);
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      try {
+        mq?.removeEventListener?.("change", onMqChange as any);
+      } catch {
+        // ignore
+      }
+
+      window.removeEventListener(
+        "nimbus-appearance-change",
+        onNimbusAppearanceChange,
+      );
+      window.removeEventListener("storage", onNimbusAppearanceChange);
+      window.removeEventListener("focus", onNimbusAppearanceChange);
+    };
+  }, []);
+
+  const sharedColors =
+    resolvedTheme === "light"
+      ? {
+          pageBg: "#f8fafc",
+          cardBg: "#ffffff",
+          panelBg: "#f1f5f9",
+          border: "#dbe3ef",
+          title: "#0f172a",
+          text: "#334155",
+          muted: "#64748b",
+          muted2: "#94a3b8",
+          inputBg: "#ffffff",
+          inputBorder: "#dbe3ef",
+          inputText: "#334155",
+          buttonSoftBg: "#f1f5f9",
+        }
+      : {
+          pageBg: "#080d1a",
+          cardBg: "#0f1729",
+          panelBg: "#0d1829",
+          border: "#1a2540",
+          title: "#e2e8f0",
+          text: "#cbd5e1",
+          muted: "#64748b",
+          muted2: "#475569",
+          inputBg: "#0d1829",
+          inputBorder: "#1a2540",
+          inputText: "#94a3b8",
+          buttonSoftBg: "#1a2540",
+        };
+
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -247,15 +379,15 @@ export function Shared() {
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: "#080d1a" }}
+      style={{ background: sharedColors.pageBg }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
+          <h1 className="text-xl font-semibold" style={{ color: sharedColors.title }}>
             Shared Links
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <p className="text-xs mt-0.5" style={{ color: sharedColors.muted }}>
             Semua share link yang sudah kamu buat
           </p>
         </div>
@@ -265,13 +397,13 @@ export function Shared() {
           <div
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
             style={{
-              background: "#0f1729",
-              border: "1px solid #1a2540",
-              color: "#64748b",
+              background: sharedColors.cardBg,
+              border: `1px solid ${sharedColors.border}`,
+              color: sharedColors.muted,
             }}
           >
-            <Link2 size={12} style={{ color: "#3b82f6" }} />
-            <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+            <Link2 size={12} style={{ color: accentColor }} />
+            <span style={{ color: sharedColors.muted2, fontWeight: 600 }}>
               {shareLinks.length}
             </span>
             active link{shareLinks.length !== 1 ? "s" : ""}

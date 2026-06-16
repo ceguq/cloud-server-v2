@@ -1,8 +1,45 @@
 
 
 import { useEffect, useState } from "react";
+
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+  return "dark";
+}
+
+function safeReadAccentColor(): string {
+  if (typeof window === "undefined") return "#3b82f6";
+  try {
+    const raw = window.localStorage.getItem("nimbus_accent_color");
+    if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  } catch {
+    // ignore
+  }
+  return "#3b82f6";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  try {
+    if (theme === "light" || theme === "dark") return theme;
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
 import {
   HardDrive,
+
   FileText,
   Share2,
   Monitor,
@@ -158,6 +195,11 @@ const CustomTooltip = ({ active, payload }: any) => {
 export function Dashboard() {
   const [fileMenu, setFileMenu] = useState<number | null>(null);
 
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
+  const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(resolveAppearanceTheme(safeReadAppearanceTheme()));
+
+
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [storageBreakdownInfo, setStorageBreakdownInfo] = useState<StorageBreakdownInfo | null>(null);
   const [storageBreakdownLoading, setStorageBreakdownLoading] = useState(false);
@@ -204,7 +246,55 @@ export function Dashboard() {
   useEffect(() => {
     let cancelled = false;
 
+    const syncThemeFromStorage = () => {
+
+      const nextTheme = safeReadAppearanceTheme();
+      const nextAccent = safeReadAccentColor();
+      setAppearanceTheme(nextTheme);
+      setAccentColor(nextAccent);
+      setResolvedTheme(resolveAppearanceTheme(nextTheme));
+    };
+
+    try {
+      syncThemeFromStorage();
+    } catch {
+      // ignore
+    }
+
+    if (typeof window !== "undefined") {
+      const onNimbusAppearanceChange = () => syncThemeFromStorage();
+      window.addEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+      window.addEventListener("storage", onNimbusAppearanceChange);
+      window.addEventListener("focus", onNimbusAppearanceChange);
+
+      let mq: MediaQueryList | null = null;
+      try {
+        mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+        const onMqChange = () => syncThemeFromStorage();
+        mq?.addEventListener?.("change", onMqChange);
+
+        return () => {
+          cancelled = true;
+          mq?.removeEventListener?.("change", onMqChange);
+          window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+          window.removeEventListener("storage", onNimbusAppearanceChange);
+          window.removeEventListener("focus", onNimbusAppearanceChange);
+        };
+      } catch {
+        // ignore
+      }
+
+      return () => {
+        cancelled = true;
+        window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+        window.removeEventListener("storage", onNimbusAppearanceChange);
+        window.removeEventListener("focus", onNimbusAppearanceChange);
+      };
+    }
+
     const runStorage = async () => {
+
+
       try {
         setLoading(true);
         setError("");
@@ -453,19 +543,71 @@ export function Dashboard() {
     },
   ];
 
+  const dashboardColors =
+    resolvedTheme === "light"
+      ? {
+          pageBg: "#f8fafc",
+          cardBg: "#ffffff",
+          panelBg: "#f1f5f9",
+          border: "#dbe3ef",
+          title: "#0f172a",
+          text: "#334155",
+          muted: "#64748b",
+          muted2: "#94a3b8",
+          iconBg: `${accentColor}12`,
+          iconBorder: `${accentColor}33`,
+        }
+      : {
+          pageBg: "#080d1a",
+          cardBg: "#0f1729",
+          panelBg: "#0d1829",
+          border: "#1a2540",
+          title: "#e2e8f0",
+          text: "#cbd5e1",
+          muted: "#64748b",
+          muted2: "#475569",
+          iconBg: "rgba(59,130,246,0.12)",
+          iconBorder: "rgba(59,130,246,0.25)",
+        };
+
+  // theme-aware small surface colors used by Server Status / Recent Activity / table borders
+  const themeUI =
+    resolvedTheme === "light"
+      ? {
+          subtleBg: "#f8fafc",
+          subtleBg2: "#f1f5f9",
+          divider: "#e5eaf1",
+          dividerSoft: "#eef2f7",
+          rowHoverBg: "rgba(59,130,246,0.06)",
+          rowDivider: "#e7edf5",
+          textMutedStrong: "#475569",
+          textMutedSoft: "#64748b",
+        }
+      : {
+          subtleBg: "#0f1729",
+          subtleBg2: "#0d1829",
+          divider: "#1a2540",
+          dividerSoft: "#122043",
+          rowHoverBg: "rgba(59,130,246,0.08)",
+          rowDivider: "#0a1020",
+          textMutedStrong: "#64748b",
+          textMutedSoft: "#94a3b8",
+        };
+
   return (
     <div
       className="flex-1 overflow-y-auto p-6 nimbus-scrollbar"
-      style={{ background: "#080d1a" }}
+      style={{ background: dashboardColors.pageBg }}
     >
+
 
       {/* Welcome */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
+          <h1 className="text-xl font-semibold" style={{ color: dashboardColors.title }}>
             Welcome back, Alex 👋
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "#475569" }}>
+          <p className="text-sm mt-0.5" style={{ color: dashboardColors.muted }}>
             Here's what's happening with your cloud today.
           </p>
         </div>
@@ -474,9 +616,9 @@ export function Dashboard() {
           title="Customize Dashboard"
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-90"
           style={{
-            background: "#0d1829",
-            border: "1px solid #1a2540",
-            color: "#94a3b8",
+            background: dashboardColors.panelBg,
+            border: `1px solid ${dashboardColors.border}`,
+            color: dashboardColors.muted2,
           }}
         >
           <Activity size={13} />
@@ -525,15 +667,17 @@ export function Dashboard() {
             <div
               key={card.label}
               className="rounded-xl p-4 transition-all hover:scale-[1.02]"
-              style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+              style={{ background: dashboardColors.cardBg, border: `1px solid ${dashboardColors.border}` }}
+
             >
               <div className="flex items-start justify-between mb-3">
                 <div
                   className="w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{
-                    background: card.glow,
-                    border: `1px solid ${card.color}33`,
+                    background: dashboardColors.iconBg,
+                    border: `1px solid ${dashboardColors.iconBorder}`,
                   }}
+
                 >
                   {Icon ? (
                     <Icon size={18} style={{ color: card.color }} />
@@ -549,6 +693,7 @@ export function Dashboard() {
                       ? "rgba(52,211,153,0.1)"
                       : "rgba(248,113,113,0.1)",
                   }}
+
                 >
                   {card.up ? (
                     <TrendingUp size={10} />
@@ -558,13 +703,13 @@ export function Dashboard() {
                   {card.change}
                 </span>
               </div>
-              <div className="text-2xl font-bold" style={{ color: "#e2e8f0" }}>
+              <div className="text-2xl font-bold" style={{ color: dashboardColors.title }}>
                 {showStorageLoading ? <LoadingSpinner size={20} /> : storageValue ?? card.value}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: "#475569" }}>
+              <div className="text-xs mt-0.5" style={{ color: dashboardColors.muted }}>
                 {card.label}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: "#334155" }}>
+              <div className="text-xs mt-0.5" style={{ color: dashboardColors.muted2 }}>
                 {storageSub ?? card.sub}
               </div>
             </div>
@@ -577,38 +722,41 @@ export function Dashboard() {
         {/* My Files Table */}
         <div
           className="col-span-2 rounded-xl overflow-hidden"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{
+            background: dashboardColors.cardBg,
+            border: `1px solid ${dashboardColors.border}`,
+          }}
         >
           <div
             className="flex items-center justify-between px-4 py-3"
-            style={{ borderBottom: "1px solid #1a2540" }}
+            style={{ borderBottom: `1px solid ${themeUI.divider}` }}
           >
-            <span
-              className="text-sm font-semibold"
-              style={{ color: "#e2e8f0" }}
-            >
-              My Files
-            </span>
+              <span
+                className="text-sm font-semibold"
+                style={{ color: dashboardColors.title }}
+              >
+                My Files
+              </span>
             <button
               className="text-xs hover:underline"
-              style={{ color: "#3b82f6" }}
+              style={{ color: accentColor }}
             >
               View All
             </button>
           </div>
           <div>
             <div
-              className="grid px-4 py-2"
-              style={{
-                gridTemplateColumns: "1fr 160px 80px 36px",
-                borderBottom: "1px solid #0d1829",
-              }}
-            >
+            className="grid px-4 py-2"
+            style={{
+              gridTemplateColumns: "1fr 160px 80px 36px",
+              borderBottom: `1px solid ${themeUI.dividerSoft}`,
+            }}
+          >
               {["Name", "Modified", "Size", ""].map((h, i) => (
                 <span
                   key={i}
                   className="text-xs font-medium"
-                  style={{ color: "#334155" }}
+                  style={{ color: dashboardColors.text }}
                 >
                   {h}
                 </span>
@@ -630,14 +778,15 @@ export function Dashboard() {
               </div>
             ) : (
               recentFiles.map((file, i) => (
-                <div
-                  key={file.id}
-                  className="grid px-4 py-2.5 items-center hover:bg-[#0d1829] transition-colors cursor-pointer group relative"
-                  style={{
-                    gridTemplateColumns: "1fr 160px 80px 36px",
-                    borderBottom: "1px solid #0a1020",
-                  }}
-                >
+                  <div
+                    key={file.id}
+                    className="grid px-4 py-2.5 items-center transition-colors cursor-pointer group relative"
+                    style={{
+                      gridTemplateColumns: "1fr 160px 80px 36px",
+                      borderBottom: `1px solid ${themeUI.rowDivider}`,
+                      backgroundColor: resolvedTheme === "light" ? "#ffffff" : "transparent",
+                    }}
+                  >
                   <div className="flex items-center gap-2.5">
                     <FileTypeIcon
                       originalName={file.original_name}
@@ -670,8 +819,8 @@ export function Dashboard() {
                       <div
                         className="absolute right-0 top-8 w-40 rounded-lg shadow-2xl z-50 overflow-hidden"
                         style={{
-                          background: "#0f1729",
-                          border: "1px solid #1a2540",
+                          background: themeUI.subtleBg2,
+                          border: `1px solid ${themeUI.divider}`,
                         }}
                       >
                         {[
@@ -708,13 +857,13 @@ export function Dashboard() {
               ))
             )}
           </div>
-          <div
-            className="flex justify-center py-2.5"
-            style={{ borderTop: "1px solid #1a2540" }}
-          >
-            <button className="text-xs" style={{ color: "#475569" }}>
+              <div
+                className="flex justify-center py-2.5"
+                style={{ borderTop: `1px solid ${themeUI.divider}` }}
+              >
+            <button className="text-xs" style={{ color: themeUI.textMutedSoft }}>
               Showing recent uploads —{" "}
-              <span style={{ color: "#3b82f6" }}>View All</span>
+              <span style={{ color: accentColor }}>View All</span>
             </button>
           </div>
         </div>
@@ -723,19 +872,19 @@ export function Dashboard() {
         <div className="flex flex-col gap-4">
           <div
             className="rounded-xl p-4"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{ background: dashboardColors.cardBg, border: `1px solid ${dashboardColors.border}` }}
           >
             <div className="flex items-center justify-between mb-3">
               <span
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: dashboardColors.title }}
               >
                 Storage Overview
               </span>
               <button
                 type="button"
                 className="text-xs"
-                style={{ color: "#3b82f6" }}
+                style={{ color: accentColor }}
                 title="Storage details"
               >
                 Details
@@ -837,11 +986,11 @@ export function Dashboard() {
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span
                         className="text-lg font-bold"
-                        style={{ color: "#e2e8f0" }}
+                        style={{ color: dashboardColors.title }}
                       >
                         {displayUsageText}
                       </span>
-                      <span className="text-[10px]" style={{ color: "#475569" }}>
+                      <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
                         Used
                       </span>
                     </div>
@@ -880,12 +1029,12 @@ export function Dashboard() {
                       className="w-2 h-2 rounded-full shrink-0"
                       style={{ background: categoryColorByKey[item.key] ?? "#3b82f6" }}
                     />
-                    <span className="text-xs flex-1" style={{ color: "#64748b" }}>
+                    <span className="text-xs flex-1" style={{ color: dashboardColors.text }}>
                       {item.name}
                     </span>
                     <span
                       className="text-xs font-medium"
-                      style={{ color: "#94a3b8" }}
+                      style={{ color: dashboardColors.muted2 }}
                     >
                       {typeof item.share_percent === "number" ? item.share_percent : Number(item.share_percent ?? 0) || 0}%
                     </span>
@@ -898,18 +1047,21 @@ export function Dashboard() {
           {/* Recent Activity */}
           <div
             className="rounded-xl p-4 flex-1"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+                style={{
+                  background: dashboardColors.cardBg,
+                  border: `1px solid ${dashboardColors.border}`,
+                }}
           >
             <div className="flex items-center justify-between mb-3">
               <span
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: dashboardColors.title }}
               >
                 Recent Activity
               </span>
               <button
                 className="text-xs"
-                style={{ color: "#3b82f6" }}
+                style={{ color: accentColor }}
                 title="See all"
               >
                 See All
@@ -917,7 +1069,7 @@ export function Dashboard() {
             </div>
             <div className="space-y-3">
               {recentActivityLoading ? (
-                <div className="text-xs" style={{ color: "#94a3b8" }}>
+                <div className="text-xs" style={{ color: dashboardColors.muted2 }}>
                   Loading activity...
                 </div>
               ) : recentActivityError ? (
@@ -925,7 +1077,7 @@ export function Dashboard() {
                   Failed to load activity
                 </div>
               ) : recentActivity.length === 0 ? (
-                <div className="text-xs" style={{ color: "#94a3b8" }}>
+                <div className="text-xs" style={{ color: dashboardColors.muted2 }}>
                   No recent activity yet
                 </div>
               ) : (
@@ -933,17 +1085,30 @@ export function Dashboard() {
                   <div key={item.id ?? i} className="flex items-start gap-2.5">
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5"
-                      style={{ background: "#3b82f618", color: "#3b82f6" }}
+                      style={{
+                        background:
+                          resolvedTheme === "light"
+                            ? `${accentColor}14`
+                            : "rgba(59,130,246,0.16)",
+                        color: accentColor,
+                        border:
+                          resolvedTheme === "light"
+                            ? `1px solid ${accentColor}2A`
+                            : "1px solid rgba(59,130,246,0.22)",
+                      }}
                     >
                       •
                     </div>
                     <div>
-                      <div className="text-xs" style={{ color: "#cbd5e1" }}>
-                        <span style={{ color: "#e2e8f0" }}>
+                      <div className="text-xs" style={{ color: dashboardColors.text }}>
+                        <span style={{ color: dashboardColors.title }}>
                           {item.description || item.action || "Activity"}
                         </span>
                       </div>
-                      <div className="text-[10px] mt-0.5" style={{ color: "#334155" }}>
+                      <div
+                        className="text-[10px] mt-0.5"
+                        style={{ color: themeUI.textMutedStrong }}
+                      >
                         {item.created_at
                           ? new Date(item.created_at).toLocaleString()
                           : "—"}
@@ -960,15 +1125,18 @@ export function Dashboard() {
       {/* Bottom Row */}
       <div className="grid grid-cols-3 gap-4">
         {/* Server Status */}
-        <div
-          className="col-span-2 rounded-xl p-4"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
-        >
+          <div
+            className="col-span-2 rounded-xl p-4"
+            style={{
+              background: dashboardColors.cardBg,
+              border: `1px solid ${dashboardColors.border}`,
+            }}
+          >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5">
               <span
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: dashboardColors.title }}
               >
                 Server Status
               </span>
@@ -987,7 +1155,7 @@ export function Dashboard() {
                 {serverStatusLabel}
               </span>
             </div>
-            <span className="text-xs" style={{ color: "#475569" }}>
+            <span className="text-xs" style={{ color: dashboardColors.muted2 }}>
               {serverMonitor?.server.hostname || "NimbusDrive Server"}
             </span>
 
@@ -996,7 +1164,7 @@ export function Dashboard() {
             {serverMetrics.map((metric) => (
               <div key={metric.label}>
                 <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs" style={{ color: "#64748b" }}>
+                  <span className="text-xs" style={{ color: dashboardColors.muted }}>
                     {metric.label}
                   </span>
                   <span
@@ -1039,10 +1207,10 @@ export function Dashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
                 <div className="flex justify-between mt-1">
-                  <span className="text-[10px]" style={{ color: "#334155" }}>
+                  <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
                     234 MB/s
                   </span>
-                  <span className="text-[10px]" style={{ color: "#334155" }}>
+                  <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
                     14h 30m
                   </span>
                 </div>
@@ -1054,12 +1222,12 @@ export function Dashboard() {
         {/* Connected Devices */}
         <div
           className="rounded-xl p-4"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{ background: dashboardColors.cardBg, border: `1px solid ${dashboardColors.border}` }}
         >
           <div className="flex items-center justify-between mb-3">
             <span
               className="text-sm font-semibold"
-              style={{ color: "#e2e8f0" }}
+              style={{ color: dashboardColors.title }}
             >
               Connected Devices
             </span>
@@ -1114,14 +1282,14 @@ export function Dashboard() {
               const dotColor = device.trusted ? "#34d399" : "#f59e0b";
 
               return (
-                <div
-                  key={device.id ?? i}
-                  className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                  style={{ background: "#0d1829" }}
-                >
+                  <div
+                    key={device.id ?? i}
+                    className="flex items-center justify-between py-1.5 px-2 rounded-lg"
+                    style={{ background: dashboardColors.panelBg }}
+                  >
                   <div className="flex items-center gap-2">
-                    <Monitor size={12} style={{ color: "#64748b" }} />
-                    <span className="text-xs" style={{ color: "#94a3b8" }}>
+                    <Monitor size={12} style={{ color: accentColor }} />
+                    <span className="text-xs" style={{ color: dashboardColors.text }}>
                       {deviceName}
                     </span>
                   </div>
@@ -1130,7 +1298,7 @@ export function Dashboard() {
                       className="w-1.5 h-1.5 rounded-full"
                       style={{ background: dotColor }}
                     />
-                    <span className="text-[10px]" style={{ color: "#475569" }}>
+                    <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
                       {lastSeen}
                     </span>
                   </div>

@@ -1,5 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+  return "dark";
+}
+
+function safeReadAccentColor(): string {
+  if (typeof window === "undefined") return "#3b82f6";
+  try {
+    const raw = window.localStorage.getItem("nimbus_accent_color");
+    if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  } catch {
+    // ignore
+  }
+  return "#3b82f6";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  try {
+    if (theme === "light" || theme === "dark") return theme;
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
+
 function formatTime(seconds?: number | null): string {
   const s =
     typeof seconds === "number" && Number.isFinite(seconds) ? seconds : 0;
@@ -340,6 +376,13 @@ export function MyFiles({
   onStorageChanged?: () => void;
 }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
+  const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
+    resolveAppearanceTheme(safeReadAppearanceTheme()),
+  );
+
 
   // filesRefreshKey changes should only refresh currentFolderId list
   // without changing active folder or causing request loops.
@@ -1354,11 +1397,58 @@ export function MyFiles({
   }, [currentFolderId, searchQuery]);
 
 
+  const syncThemeFromStorage = () => {
+    const nextTheme = safeReadAppearanceTheme();
+    const nextAccent = safeReadAccentColor();
+    setAppearanceTheme(nextTheme);
+    setAccentColor(nextAccent);
+    setResolvedTheme(resolveAppearanceTheme(nextTheme));
+  };
+
+  useEffect(() => {
+    // Initialize
+    try {
+      syncThemeFromStorage();
+    } catch {
+      // ignore
+    }
+
+    if (typeof window === "undefined") return;
+
+    const onNimbusAppearanceChange = () => syncThemeFromStorage();
+    window.addEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+    window.addEventListener("storage", onNimbusAppearanceChange);
+    window.addEventListener("focus", onNimbusAppearanceChange);
+
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      const onMqChange = () => {
+        // Only affects when stored theme is system, but safe to resolve anyway
+        syncThemeFromStorage();
+      };
+      mq?.addEventListener?.("change", onMqChange);
+      return () => {
+        mq?.removeEventListener?.("change", onMqChange);
+        window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+        window.removeEventListener("storage", onNimbusAppearanceChange);
+        window.removeEventListener("focus", onNimbusAppearanceChange);
+      };
+    } catch {
+      return () => {
+        window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+        window.removeEventListener("storage", onNimbusAppearanceChange);
+        window.removeEventListener("focus", onNimbusAppearanceChange);
+      };
+    }
+  }, []);
+
   // Main effect: fetch saat mount, folder berubah, filesRefreshKey berubah, atau search berubah
   useEffect(() => {
     refreshCurrentFolder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFolderId, filesRefreshKey, searchQuery]);
+
 
   // Clear selection agar bulk action tidak nyasar saat keyword search berubah
   useEffect(() => {
@@ -1599,10 +1689,41 @@ export function MyFiles({
     typedFolders.length === 0 &&
     typedFiles.length === 0;
 
+  const myFilesColors =
+    resolvedTheme === "light"
+      ? {
+          pageBg: "#f8fafc",
+          cardBg: "#ffffff",
+          panelBg: "#f1f5f9",
+          border: "#dbe3ef",
+          title: "#0f172a",
+          text: "#334155",
+          muted: "#64748b",
+          muted2: "#94a3b8",
+          inputBg: "#ffffff",
+          inputBorder: "#dbe3ef",
+          inputText: "#334155",
+          buttonSoftBg: "#f1f5f9",
+        }
+      : {
+          pageBg: "#080d1a",
+          cardBg: "#0f1729",
+          panelBg: "#0d1829",
+          border: "#1a2540",
+          title: "#e2e8f0",
+          text: "#cbd5e1",
+          muted: "#64748b",
+          muted2: "#475569",
+          inputBg: "#0d1829",
+          inputBorder: "#1a2540",
+          inputText: "#94a3b8",
+          buttonSoftBg: "#1a2540",
+        };
+
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: "#080d1a" }}
+      style={{ background: myFilesColors.pageBg }}
     >
       {/* Breadcrumb */}
 
@@ -1612,43 +1733,46 @@ export function MyFiles({
             type="button"
             onClick={handleBackToRoot}
             className="flex items-center gap-1 text-xs hover:opacity-80"
-            style={{ color: "#3b82f6" }}
+            style={{ color: accentColor }}
             aria-label="Breadcrumb My Files (root)"
           >
             <Home size={12} />
             My Files
           </button>
 
-          {breadcrumbs.map((b, idx) => (
-            <div key={b.id} className="flex items-center gap-1.5">
-              <ChevronRight size={12} style={{ color: "#334155" }} />
-              {idx === breadcrumbs.length - 1 ? (
-                <span className="text-xs" style={{ color: "#64748b" }}>
-                  {b.name}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleBreadcrumbClick(b.id)}
-                  className="text-xs"
-                  style={{ color: "#64748b" }}
-                  aria-label={`Breadcrumb ${b.name}`}
-                >
-                  {b.name}
-                </button>
-              )}
-            </div>
-          ))}
+          {breadcrumbs.map((b, idx) => {
+            const isActive = idx === breadcrumbs.length - 1;
+            return (
+              <div key={b.id} className="flex items-center gap-1.5">
+                <ChevronRight size={12} style={{ color: myFilesColors.muted2 }} />
+                {isActive ? (
+                  <span className="text-xs" style={{ color: myFilesColors.text }}>
+                    {b.name}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleBreadcrumbClick(b.id)}
+                    className="text-xs"
+                    style={{ color: myFilesColors.muted }}
+                    aria-label={`Breadcrumb ${b.name}`}
+                  >
+                    {b.name}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
+          <h1 className="text-xl font-semibold" style={{ color: myFilesColors.title }}>
             My Files
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <p className="text-xs mt-0.5" style={{ color: myFilesColors.muted }}>
             {folders.length + files.length} items
           </p>
         </div>
@@ -1656,7 +1780,13 @@ export function MyFiles({
           {uploadError && (
             <div
               className="text-xs px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/10"
-              style={{ color: "#f87171" }}
+              style={{
+                borderColor: "rgba(248,113,113,0.35)",
+                background: resolvedTheme === "light"
+                  ? "rgba(248,113,113,0.08)"
+                  : "rgba(248,113,113,0.12)",
+                color: "#f87171",
+              }}
               role="alert"
             >
               {uploadError}
@@ -1670,9 +1800,9 @@ export function MyFiles({
             title="Create new folder"
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-80"
             style={{
-              background: "#0d1829",
-              border: "1px solid #1a2540",
-              color: "#94a3b8",
+              background: "linear-gradient(135deg, " + accentColor + ", #22d3ee)",
+              border: `1px solid ${myFilesColors.border}`,
+              color: "#fff",
             }}
           >
             <FolderPlus size={13} /> New Folder
@@ -1711,7 +1841,7 @@ export function MyFiles({
             aria-label="Upload Files"
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
             style={{
-              background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
+              background: "linear-gradient(135deg, " + accentColor + ", #22d3ee)",
               color: "#fff",
               opacity: hasActiveUploads ? 0.9 : 1,
             }}
@@ -1722,18 +1852,20 @@ export function MyFiles({
           </button>
 
           {uploadError && (
-            <div
-              className="text-xs px-3 py-2 rounded-lg border"
-              style={{
-                borderColor: "rgba(248,113,113,0.35)",
-                background: "rgba(248,113,113,0.08)",
-                color: "#f87171",
-              }}
-              role="status"
-              aria-live="polite"
-            >
-              {uploadError}
-            </div>
+              <div
+                className="text-xs px-3 py-2 rounded-lg border"
+                style={{
+                  borderColor: "rgba(248,113,113,0.35)",
+                  background: resolvedTheme === "light"
+                    ? "rgba(248,113,113,0.08)"
+                    : "rgba(248,113,113,0.12)",
+                  color: "#f87171",
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                {uploadError}
+              </div>
           )}
         </div>
       </div>
@@ -1744,15 +1876,16 @@ export function MyFiles({
           <Search
             size={13}
             className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: "#475569" }}
+            style={{ color: myFilesColors.muted }}
           />
           <input
             placeholder="Search files..."
             className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
             style={{
-              background: "#0d1829",
-              border: "1px solid #1a2540",
-              color: "#94a3b8",
+              background: myFilesColors.inputBg,
+              border: `1px solid ${myFilesColors.inputBorder}`,
+              color: myFilesColors.inputText,
+              caretColor: accentColor,
             }}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -1765,9 +1898,9 @@ export function MyFiles({
             onClick={() => setFilterMenuOpen((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
             style={{
-              background: "#0d1829",
-              border: "1px solid #1a2540",
-              color: "#64748b",
+              background: myFilesColors.buttonSoftBg,
+              border: `1px solid ${myFilesColors.border}`,
+              color: myFilesColors.text,
             }}
           >
             <Filter size={12} /> Filter: {fileTypeFilterLabel(fileTypeFilter)}
@@ -1778,8 +1911,8 @@ export function MyFiles({
               className="absolute right-0 top-full mt-2 rounded-lg shadow-2xl"
               style={{
                 zIndex: 50,
-                background: "#0f1729",
-                border: "1px solid #1a2540",
+                background: myFilesColors.cardBg,
+                border: `1px solid ${myFilesColors.border}`,
                 minWidth: 240,
               }}
               role="menu"
@@ -1797,30 +1930,52 @@ export function MyFiles({
                   ["archives", "Archives"],
                   ["others", "Others"],
                 ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="menuitem"
-                  aria-label={`Filter ${label}`}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                  style={{ color: "#94a3b8" }}
-                  onClick={() => {
-                    setFileTypeFilter(value);
-                    setFilterMenuOpen(false);
-                  }}
-                >
-                  <span>{label}</span>
-                  {fileTypeFilter === value ? (
-                    <span style={{ color: "#60a5fa", fontWeight: 600 }}>✓</span>
-                  ) : (
-                    <span />
-                  )}
-                </button>
-              ))}
+              ).map(([value, label]) => {
+                const isActive = fileTypeFilter === value;
+                const activeBg = `${accentColor}12`;
+                const activeBorder = `1px solid ${accentColor}55`;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitem"
+                    aria-label={`Filter ${label}`}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                    style={{
+                      color: isActive ? accentColor : myFilesColors.muted,
+                      background: isActive ? activeBg : "transparent",
+                      border: isActive ? activeBorder : "1px solid transparent",
+                      borderRadius: 8,
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = isActive
+                        ? activeBg
+                        : `${accentColor}10`;
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = isActive ? activeBg : "transparent";
+                    }}
+                    onClick={() => {
+                      setFileTypeFilter(value);
+                      setFilterMenuOpen(false);
+                    }}
+                  >
+                    <span style={{ color: isActive ? accentColor : myFilesColors.text }}>
+                      {label}
+                    </span>
+                    {isActive ? (
+                      <span style={{ color: accentColor, fontWeight: 600 }}>✓</span>
+                    ) : (
+                      <span style={{ color: myFilesColors.muted }}> </span>
+                    )}
+                  </button>
+                );
+              })}
 
               <div style={{ padding: "0 12px 10px" }}>
-                <div className="text-[10px]" style={{ color: "#64748b" }}>
+                <div className="text-[10px]" style={{ color: myFilesColors.muted }}>
                   Filter diterapkan setelah Search & sebelum Sort.
                 </div>
               </div>
@@ -1834,9 +1989,9 @@ export function MyFiles({
             onClick={() => setSortMenuOpen((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
             style={{
-              background: "#0d1829",
-              border: "1px solid #1a2540",
-              color: "#64748b",
+              background: myFilesColors.buttonSoftBg,
+              border: `1px solid ${myFilesColors.border}`,
+              color: myFilesColors.text,
             }}
           >
             <SortAsc size={12} /> Sort
@@ -1847,117 +2002,290 @@ export function MyFiles({
               className="absolute right-0 top-full mt-2 rounded-lg shadow-2xl"
               style={{
                 zIndex: 50,
-                background: "#0f1729",
-                border: "1px solid #1a2540",
+                background: myFilesColors.cardBg,
+                border: `1px solid ${myFilesColors.border}`,
                 minWidth: 220,
               }}
               role="menu"
               aria-label="Sort menu"
             >
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Name A-Z"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("name");
-                  setSortDirection("asc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Name A-Z
-              </button>
+              {(() => {
+                const isActive = (by: typeof sortBy, dir: typeof sortDirection) =>
+                  sortBy === by && sortDirection === dir;
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Name Z-A"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("name");
-                  setSortDirection("desc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Name Z-A
-              </button>
+                const activeBg = `${accentColor}12`;
+                const activeBorder = `1px solid ${accentColor}55`;
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Newest first"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("date");
-                  setSortDirection("desc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Newest first
-              </button>
+                return (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Name A-Z"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("name", "asc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("name", "asc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("name", "asc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("name", "asc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("name", "asc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("name");
+                        setSortDirection("asc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Name A-Z</span>
+                    </button>
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Oldest first"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("date");
-                  setSortDirection("asc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Oldest first
-              </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Name Z-A"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("name", "desc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("name", "desc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("name", "desc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("name", "desc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("name", "desc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("name");
+                        setSortDirection("desc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Name Z-A</span>
+                    </button>
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Size smallest"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("size");
-                  setSortDirection("asc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Size smallest
-              </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Newest first"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("date", "desc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("date", "desc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("date", "desc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("date", "desc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("date", "desc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("date");
+                        setSortDirection("desc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Newest first</span>
+                    </button>
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Size largest"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("size");
-                  setSortDirection("desc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Size largest
-              </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Oldest first"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("date", "asc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("date", "asc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("date", "asc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("date", "asc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("date", "asc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("date");
+                        setSortDirection("asc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Oldest first</span>
+                    </button>
 
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Type A-Z"
-                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                style={{ color: "#94a3b8" }}
-                onClick={() => {
-                  setSortBy("type");
-                  setSortDirection("asc");
-                  setSortMenuOpen(false);
-                }}
-              >
-                Type A-Z
-              </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Size smallest"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("size", "asc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("size", "asc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("size", "asc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("size", "asc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("size", "asc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("size");
+                        setSortDirection("asc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Size smallest</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Size largest"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("size", "desc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("size", "desc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("size", "desc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("size", "desc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("size", "desc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("size");
+                        setSortDirection("desc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Size largest</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="Type A-Z"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
+                      style={{
+                        color: isActive("type", "asc")
+                          ? accentColor
+                          : myFilesColors.muted,
+                        background: isActive("type", "asc")
+                          ? activeBg
+                          : "transparent",
+                        border: isActive("type", "asc")
+                          ? activeBorder
+                          : "1px solid transparent",
+                        borderRadius: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("type", "asc")
+                          ? activeBg
+                          : `${accentColor}10`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.background = isActive("type", "asc")
+                          ? activeBg
+                          : "transparent";
+                      }}
+                      onClick={() => {
+                        setSortBy("type");
+                        setSortDirection("asc");
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <span>Type A-Z</span>
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -1996,7 +2324,7 @@ export function MyFiles({
       {/* Folders */}
       <div className="mb-6">
         {showEmptySearchState && (
-          <div className="text-xs" style={{ color: "#64748b" }}>
+          <div className="text-xs" style={{ color: myFilesColors.muted }}>
             Tidak ada item untuk filter ini.
           </div>
         )}
@@ -2108,7 +2436,7 @@ export function MyFiles({
         {loadingFolders && (
           <div
             className="flex items-center gap-2 text-xs"
-            style={{ color: "#64748b" }}
+            style={{ color: myFilesColors.muted }}
           >
             <LoadingSpinner size={12} />
             Loading folders...
@@ -2120,17 +2448,18 @@ export function MyFiles({
           </div>
         )}
         {!loadingFolders && !folderError && folderList.length === 0 && (
-          <div className="text-xs" style={{ color: "#64748b" }}>
+          <div className="text-xs" style={{ color: myFilesColors.muted }}>
             Belum ada folder.
           </div>
         )}
 
         <div className="grid grid-cols-6 gap-3">
           {sortedFolders.map((folder) => (
-            <div
-              key={folder.id}
-              draggable={moveDragDropEnabled}
-              onDragStart={(e) => {
+                <div
+                  key={folder.id}
+                  draggable={moveDragDropEnabled}
+                  onDragStart={(e) => {
+
                 if (!moveDragDropEnabled) {
                   e.preventDefault();
                   return;
@@ -2169,12 +2498,10 @@ export function MyFiles({
               style={{
                 background: selectedFolderIds.has(folder.id)
                   ? "rgba(168, 85, 247, 0.08)"
-                  : "#0f1729",
-                border: selectedFolderIds.has(folder.id)
-                  ? "1px solid rgba(168, 85, 247, 0.3)"
-                  : "1px solid #1a2540",
+                  : myFilesColors.cardBg,
+                border: `1px solid ${myFilesColors.border}`,
                 borderLeft: selectedFolderIds.has(folder.id)
-                  ? "3px solid rgba(168, 85, 247, 0.3)"
+                  ? `3px solid ${accentColor}55`
                   : "3px solid transparent",
               }}
             >
@@ -2198,9 +2525,9 @@ export function MyFiles({
 
                 <div
                   className="w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{ background: "#3b82f618" }}
+                  style={{ background: myFilesColors.panelBg }}
                 >
-                  <Folder size={18} style={{ color: "#3b82f6" }} />
+                  <Folder size={18} style={{ color: accentColor }} />
                 </div>
 
                 <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2209,8 +2536,11 @@ export function MyFiles({
                       type="button"
                       aria-label={`Open actions for ${folder.name}`}
                       title="Folder actions"
-                      className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-[#1a2540] transition-colors z-50 opacity-100 pointer-events-auto"
-                      style={{ color: "#64748b" }}
+                      className="flex items-center justify-center w-7 h-7 rounded-md transition-colors z-50 opacity-100 pointer-events-auto"
+                      style={{
+                        color: myFilesColors.muted,
+                        background: "transparent",
+                      }}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -2226,8 +2556,8 @@ export function MyFiles({
                       <div
                         className="absolute right-0 top-full mt-2 w-28 rounded-lg shadow-2xl z-50 overflow-visible pointer-events-auto"
                         style={{
-                          background: "#0f1729",
-                          border: "1px solid #1a2540",
+                          background: myFilesColors.cardBg,
+                          border: `1px solid ${myFilesColors.border}`,
                         }}
                         role="menu"
                         aria-label={`Folder menu ${folder.name}`}
@@ -2235,8 +2565,17 @@ export function MyFiles({
                       >
                         <button
                           type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#94a3b8" }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                          style={{ color: myFilesColors.text, background: "transparent" }}
+                          onMouseEnter={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = `${accentColor}10`;
+                            el.style.color = myFilesColors.text;
+                          }}
+                          onMouseLeave={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = "transparent";
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -2246,13 +2585,22 @@ export function MyFiles({
                           }}
                           aria-label={`Rename ${folder.name}`}
                         >
-                          <Edit3 size={12} /> Rename
+                          <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
                         </button>
 
                         <button
                           type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#94a3b8" }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                          style={{ color: myFilesColors.text, background: "transparent" }}
+                          onMouseEnter={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = `${accentColor}10`;
+                            el.style.color = myFilesColors.text;
+                          }}
+                          onMouseLeave={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = "transparent";
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -2260,13 +2608,24 @@ export function MyFiles({
                           }}
                           aria-label={`Move ${folder.name}`}
                         >
-                          <Folder size={12} /> Move to...
+                          <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
                         </button>
 
                         <button
                           type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                          style={{ color: "#f87171" }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                          style={{
+                            color: "#f87171",
+                            background: "transparent",
+                          }}
+                          onMouseEnter={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = "rgba(239,68,68,0.12)";
+                          }}
+                          onMouseLeave={(e) => {
+                            const el = e.currentTarget;
+                            el.style.background = "transparent";
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -2276,7 +2635,7 @@ export function MyFiles({
                           }}
                           aria-label={`Delete ${folder.name}`}
                         >
-                          <Trash2 size={12} /> Delete
+                          <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
                         </button>
 
                       </div>
@@ -2287,14 +2646,14 @@ export function MyFiles({
 
               <div
                 className="text-xs font-medium truncate"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: myFilesColors.text }}
               >
                 {folder.name}
               </div>
-              <div className="text-[10px] mt-0.5" style={{ color: "#475569" }}>
+              <div className="text-[10px] mt-0.5" style={{ color: myFilesColors.muted }}>
                 —
               </div>
-              <div className="text-[10px]" style={{ color: "#334155" }}>
+              <div className="text-[10px]" style={{ color: myFilesColors.muted2 }}>
                 —
               </div>
             </div>
@@ -2309,95 +2668,105 @@ export function MyFiles({
           role="dialog"
           aria-modal="true"
         >
-          <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
-          >
-            <div className="mb-4">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
-              >
-                {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
-              </h2>
-              <p className="text-xs mt-1" style={{ color: "#64748b" }}>
-                {folderModalMode === "create"
-                  ? "Buat folder baru di dalam folder saat ini."
-                  : "Perbarui nama folder."}
-              </p>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitFolderModal();
+            <div
+              className="w-full max-w-md rounded-2xl border p-6"
+              style={{
+                boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+                background: myFilesColors.cardBg,
+                border: `1px solid ${myFilesColors.border}`,
               }}
-              className="space-y-3"
             >
-              <div>
-                <label className="text-xs" style={{ color: "#94a3b8" }}>
-                  Folder name
-                </label>
-                <input
-                  autoFocus
-                  type="text"
-                  className="mt-1 w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-4 py-2 text-sm outline-none focus:border-blue-500"
-                  placeholder="Nama folder"
-                  value={folderModalName}
-                  onChange={(e) => {
-                    setFolderModalName(e.target.value);
-                    if (folderModalError) setFolderModalError("");
-                  }}
-                  aria-label="Nama folder"
-                />
+              <div className="mb-4">
+                <h2
+                  className="text-sm font-semibold"
+                  style={{ color: myFilesColors.title }}
+                >
+                  {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
+                </h2>
+                <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
+                  {folderModalMode === "create"
+                    ? "Buat folder baru di dalam folder saat ini."
+                    : "Perbarui nama folder."}
+                </p>
               </div>
 
-              {folderModalError && (
-                <div
-                  className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
-                  style={{ color: "#f87171" }}
-                >
-                  {folderModalError}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitFolderModal();
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="text-xs" style={{ color: myFilesColors.muted }}>
+                    Folder name
+                  </label>
+                  <input
+                    autoFocus
+                    type="text"
+                    className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="Nama folder"
+                    value={folderModalName}
+                    onChange={(e) => {
+                      setFolderModalName(e.target.value);
+                      if (folderModalError) setFolderModalError("");
+                    }}
+                    aria-label="Nama folder"
+                    style={{
+                      background: myFilesColors.inputBg,
+                      border: `1px solid ${myFilesColors.inputBorder}`,
+                      color: myFilesColors.inputText,
+                      caretColor: accentColor,
+                    }}
+                  />
                 </div>
-              )}
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeFolderModal}
-                  disabled={folderActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-medium"
-                  style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
-                    opacity: folderActionLoading ? 0.6 : 1,
-                  }}
-                  aria-label="Cancel"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={folderActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                  style={{
-                    background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
-                    opacity: folderActionLoading ? 0.7 : 1,
-                  }}
-                  aria-label={folderModalMode === "create" ? "Create" : "Save"}
-                >
-                  {folderActionLoading
-                    ? folderModalMode === "create"
-                      ? "Creating..."
-                      : "Saving..."
-                    : folderModalMode === "create"
-                      ? "Create"
-                      : "Save"}
-                </button>
-              </div>
-            </form>
-          </div>
+                {folderModalError && (
+                  <div
+                    className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
+                    style={{ color: "#f87171" }}
+                  >
+                    {folderModalError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeFolderModal}
+                    disabled={folderActionLoading}
+                    className="px-3 py-2 rounded-xl text-xs font-medium"
+                    style={{
+                      background: myFilesColors.buttonSoftBg,
+                      border: `1px solid ${myFilesColors.border}`,
+                      color: myFilesColors.text,
+                      opacity: folderActionLoading ? 0.6 : 1,
+                    }}
+                    aria-label="Cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={folderActionLoading}
+                    className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
+                    style={{
+                      background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                      opacity: folderActionLoading ? 0.7 : 1,
+                    }}
+                    aria-label={folderModalMode === "create" ? "Create" : "Save"}
+                  >
+                    {folderActionLoading
+                      ? folderModalMode === "create"
+                        ? "Creating..."
+                        : "Saving..."
+                      : folderModalMode === "create"
+                        ? "Create"
+                        : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
         </div>
       )}
 
@@ -2429,7 +2798,15 @@ export function MyFiles({
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-4">
+            <div
+              className="mb-3 flex items-center justify-between gap-4 rounded-xl"
+              style={{
+                background:
+                  previewModalMode === "minimized" ? myFilesColors.cardBg : undefined,
+                borderBottom: `1px solid ${myFilesColors.border}`,
+                paddingBottom: 12,
+              }}
+            >
               <div
                 className="min-w-0"
                 onPointerDown={
@@ -2445,19 +2822,19 @@ export function MyFiles({
               >
                 <h2
                   className="text-sm font-semibold"
-                  style={{ color: "#e2e8f0" }}
+                  style={{ color: myFilesColors.title }}
                 >
                   Preview
                 </h2>
                 <p
                   className="truncate text-xs mt-1"
-                  style={{ color: "#64748b" }}
+                  style={{ color: myFilesColors.muted }}
                 >
                   {previewFileName}
                 </p>
               </div>
 
-                  <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                     <button
                   type="button"
                   onClick={() =>
@@ -2507,9 +2884,13 @@ export function MyFiles({
                       }}
                       className="px-3 h-8 flex items-center justify-center rounded-lg text-xs"
                       style={{
-                        background: "#0d1829",
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        color: "#e2e8f0",
+                        background: previewFile
+                          ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
+                          : myFilesColors.buttonSoftBg,
+                        border: previewFile
+                          ? `1px solid ${accentColor}`
+                          : `1px solid ${myFilesColors.border}`,
+                        color: "#fff",
                       }}
                       aria-label="Download preview file"
                       title="Download"
@@ -2530,9 +2911,9 @@ export function MyFiles({
                       }
                       className="h-8 rounded-lg px-3 text-xs"
                       style={{
-                        background: "#0d1829",
-                        border: "1px solid #1a2540",
-                        color: "#94a3b8",
+                        background: myFilesColors.buttonSoftBg,
+                        border: `1px solid ${myFilesColors.border}`,
+                        color: myFilesColors.muted,
                       }}
                       aria-label="Zoom out image"
                       title="Zoom out"
@@ -2545,9 +2926,9 @@ export function MyFiles({
                       onClick={() => setPreviewImageScale(1)}
                       className="h-8 rounded-lg px-3 text-xs"
                       style={{
-                        background: "#0d1829",
-                        border: "1px solid #1a2540",
-                        color: "#94a3b8",
+                        background: myFilesColors.buttonSoftBg,
+                        border: `1px solid ${myFilesColors.border}`,
+                        color: myFilesColors.muted,
                       }}
                       aria-label="Reset image zoom"
                       title="Reset zoom"
@@ -2564,9 +2945,9 @@ export function MyFiles({
                       }
                       className="h-8 rounded-lg px-3 text-xs"
                       style={{
-                        background: "#0d1829",
-                        border: "1px solid #1a2540",
-                        color: "#94a3b8",
+                        background: myFilesColors.buttonSoftBg,
+                        border: `1px solid ${myFilesColors.border}`,
+                        color: myFilesColors.muted,
                       }}
                       aria-label="Zoom in image"
                       title="Zoom in"
@@ -2581,9 +2962,17 @@ export function MyFiles({
                   onClick={closePreviewModal}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: myFilesColors.buttonSoftBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.muted,
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = `${accentColor}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = myFilesColors.buttonSoftBg;
                   }}
                   aria-label="Close preview"
                   title="Close preview"
@@ -2594,7 +2983,13 @@ export function MyFiles({
             </div>
 
             {previewModalMode !== "minimized" && (
-              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border border-[#1a2540] bg-[#080d1a]">
+              <div
+                className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border"
+                style={{
+                  background: myFilesColors.panelBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                }}
+              >
                 {previewContentType.startsWith("image/") ? (
                   <img
                     src={previewUrl}
@@ -2674,12 +3069,12 @@ export function MyFiles({
                         {previewTextError}
                       </div>
                     ) : previewIsTextTooLarge ? (
-                      <div className="text-xs" style={{ color: "#94a3b8" }}>
+                      <div className="text-xs" style={{ color: myFilesColors.muted }}>
                         Preview text terlalu besar. Silakan download file untuk
                         melihat isinya.
                       </div>
                     ) : previewTextLoading ? (
-                      <div className="text-xs" style={{ color: "#94a3b8" }}>
+                      <div className="text-xs" style={{ color: myFilesColors.muted }}>
                         Loading preview text...
                       </div>
                     ) : (
@@ -2687,7 +3082,7 @@ export function MyFiles({
                         style={{
                           margin: 0,
                           padding: 16,
-                          color: "#cbd5e1",
+                          color: myFilesColors.text,
                           background: "transparent",
                           fontFamily:
                             "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
@@ -2703,7 +3098,7 @@ export function MyFiles({
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  <div className="text-xs" style={{ color: myFilesColors.muted }}>
                     Preview tipe file ini belum tersedia di modal.
                   </div>
                 )}
@@ -2721,17 +3116,21 @@ export function MyFiles({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
           >
             <div className="mb-4">
               <h2
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: myFilesColors.title }}
               >
                 Rename File
               </h2>
-              <p className="text-xs mt-1" style={{ color: "#64748b" }}>
+              <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
                 Ganti nama file.
               </p>
             </div>
@@ -2750,19 +3149,25 @@ export function MyFiles({
               className="space-y-3"
             >
               <div>
-                <label className="text-xs" style={{ color: "#94a3b8" }}>
+                <label className="text-xs" style={{ color: myFilesColors.muted }}>
                   New name
                 </label>
                 <input
                   autoFocus
                   type="text"
-                  className="mt-1 w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
                   value={fileRenameName}
                   onChange={(e) => {
                     setFileRenameName(e.target.value);
                     if (fileModalError) setFileModalError("");
                   }}
                   aria-label="Rename file input"
+                  style={{
+                    background: myFilesColors.inputBg,
+                    border: `1px solid ${myFilesColors.inputBorder}`,
+                    color: myFilesColors.inputText,
+                    caretColor: accentColor,
+                  }}
                 />
               </div>
 
@@ -2776,9 +3181,9 @@ export function MyFiles({
                   disabled={fileActionLoading}
                   className="px-3 py-2 rounded-xl text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: myFilesColors.buttonSoftBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.text,
                     opacity: fileActionLoading ? 0.6 : 1,
                   }}
                 >
@@ -2789,7 +3194,7 @@ export function MyFiles({
                   disabled={fileActionLoading}
                   className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
                   style={{
-                    background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                    background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
                     opacity: fileActionLoading ? 0.7 : 1,
                   }}
                 >
@@ -2809,17 +3214,21 @@ export function MyFiles({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
           >
             <div className="mb-3">
               <h2
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: myFilesColors.title }}
               >
                 Share File
               </h2>
-              <p className="text-xs mt-2" style={{ color: "#64748b" }}>
+              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
                 {selectedFileForShare?.original_name ?? "-"}
               </p>
             </div>
@@ -2835,14 +3244,14 @@ export function MyFiles({
 
             <div className="mb-4">
               {shareLoading && (
-                <div className="text-xs" style={{ color: "#94a3b8" }}>
+                <div className="text-xs" style={{ color: myFilesColors.muted2 }}>
                   Creating share link...
                 </div>
               )}
 
               {!shareLoading && activeShareLink && (
                 <>
-                  <label className="text-xs" style={{ color: "#94a3b8" }}>
+                  <label className="text-xs" style={{ color: myFilesColors.muted }}>
                     Public share URL
                   </label>
                   <div className="mt-2">
@@ -2850,8 +3259,14 @@ export function MyFiles({
                       type="text"
                       readOnly
                       value={getPublicShareUrl(activeShareLink.token)}
-                      className="w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-4 py-2 text-sm outline-none text-[#cbd5e1]"
+                      className="w-full rounded-xl border px-4 py-2 text-sm outline-none"
                       aria-label="Public share URL"
+                      style={{
+                        background: myFilesColors.inputBg,
+                        border: `1px solid ${myFilesColors.inputBorder}`,
+                        color: myFilesColors.inputText,
+                        caretColor: accentColor,
+                      }}
                     />
                   </div>
                 </>
@@ -2919,7 +3334,7 @@ export function MyFiles({
                 style={{
                   background: !activeShareLink
                     ? "#334155"
-                    : "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                    : `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
                   opacity: activeShareLink ? 1 : 0.7,
                 }}
                 aria-label="Copy Link"
@@ -2940,9 +3355,9 @@ export function MyFiles({
                 disabled={shareLoading}
                 className="px-3 py-2 rounded-xl text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: myFilesColors.buttonSoftBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                  color: myFilesColors.text,
                   opacity: shareLoading ? 0.6 : 1,
                 }}
                 aria-label="Close Share Modal"
@@ -2961,22 +3376,40 @@ export function MyFiles({
           onClick={closeMoveModal}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#24314f] bg-[#0f172a] p-5 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border p-5 shadow-2xl"
+            style={{
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold" style={{ color: myFilesColors.title }}>
                   {moveItemType === "folder" ? "Move Folder" : "Move File"}
                 </h2>
-                <p className="mt-1 text-sm text-[#94a3b8]">
+                <p className="mt-1 text-sm" style={{ color: myFilesColors.muted }}>
                   Pilih folder tujuan untuk memindahkan item ini.
                 </p>
               </div>
 
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-sm text-[#94a3b8] hover:bg-[#1a2540] hover:text-white"
+                className="rounded-lg px-2 py-1 text-sm transition-colors"
+                style={{
+                  color: myFilesColors.muted,
+                  background: "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = `${accentColor}10`;
+                  el.style.color = myFilesColors.text;
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = "transparent";
+                  el.style.color = myFilesColors.muted;
+                }}
                 onClick={closeMoveModal}
                 disabled={moveLoading}
                 aria-label="Close move modal"
@@ -2985,21 +3418,27 @@ export function MyFiles({
               </button>
             </div>
 
-            <div className="mb-4 rounded-xl border border-[#24314f] bg-[#111c33] p-3">
-              <p className="text-xs uppercase tracking-wide text-[#64748b]">
+            <div
+              className="mb-4 rounded-xl border p-3"
+              style={{
+                background: myFilesColors.panelBg,
+                border: `1px solid ${myFilesColors.border}`,
+              }}
+            >
+              <p className="text-xs uppercase tracking-wide" style={{ color: myFilesColors.muted }}>
                 Item
               </p>
-              <p className="mt-1 truncate text-sm font-medium text-white">
+              <p className="mt-1 truncate text-sm font-medium" style={{ color: myFilesColors.text }}>
                 {moveItemName}
               </p>
             </div>
 
-            <label className="mb-2 block text-sm font-medium text-[#cbd5e1]">
+            <label className="mb-2 block text-sm font-medium" style={{ color: myFilesColors.text }}>
               Folder tujuan
             </label>
 
             <select
-              className="w-full rounded-xl border border-[#24314f] bg-[#0b1220] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
               value={moveTargetFolderId ?? "__root__"}
               onChange={(e) =>
                 setMoveTargetFolderId(
@@ -3007,6 +3446,12 @@ export function MyFiles({
                 )
               }
               disabled={moveLoading}
+              style={{
+                background: myFilesColors.inputBg,
+                border: `1px solid ${myFilesColors.inputBorder}`,
+                color: myFilesColors.inputText,
+                caretColor: accentColor,
+              }}
             >
               <option value="__root__">Root / My Files</option>
               {folders
@@ -3029,18 +3474,26 @@ export function MyFiles({
             <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
-                className="rounded-xl border border-[#24314f] px-4 py-2 text-sm text-[#cbd5e1] hover:bg-[#1a2540]"
+                className="rounded-xl px-4 py-2 text-sm font-medium transition-colors"
                 onClick={closeMoveModal}
                 disabled={moveLoading}
+                style={{
+                  background: myFilesColors.buttonSoftBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                  color: myFilesColors.text,
+                }}
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={submitMove}
                 disabled={moveLoading || !moveItemId || !moveItemType}
+                style={{
+                  background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                }}
               >
                 {moveLoading ? "Moving..." : "Move"}
               </button>
@@ -3199,19 +3652,36 @@ export function MyFiles({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
           >
             <div className="mb-3">
               <h2
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: myFilesColors.title }}
               >
                 Delete Folder?
               </h2>
-              <p className="text-xs mt-2" style={{ color: "#64748b" }}>
+              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
                 Apakah kamu yakin ingin menghapus "
-                {selectedFolderForDelete.name}"?
+                <span
+                  style={{
+                    color: myFilesColors.text,
+                    background: myFilesColors.panelBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    display: "inline-block",
+                    margin: "0 4px", /* small name box */
+                  }}
+                >
+                  {selectedFolderForDelete.name}
+                </span>
+                "?
               </p>
             </div>
 
@@ -3236,9 +3706,9 @@ export function MyFiles({
                 disabled={deleteLoading}
                 className="px-3 py-2 rounded-xl text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: myFilesColors.buttonSoftBg,
+                  color: myFilesColors.text,
+                  border: `1px solid ${myFilesColors.border}`,
                   opacity: deleteLoading ? 0.6 : 1,
                 }}
               >
@@ -3252,8 +3722,8 @@ export function MyFiles({
                 className="px-3 py-2 rounded-xl text-xs font-semibold"
                 style={{
                   background: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#0b1121",
+                  border: `1px solid rgba(248,113,113,0.4)`,
+                  color: "#fff",
                   opacity: deleteLoading ? 0.75 : 1,
                 }}
                 aria-label="Delete"
@@ -3278,18 +3748,22 @@ export function MyFiles({
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="mb-3">
               <h2
                 className="text-sm font-semibold"
-                style={{ color: "#e2e8f0" }}
+                style={{ color: myFilesColors.title }}
               >
                 Delete File?
               </h2>
-              <p className="text-xs mt-2" style={{ color: "#64748b" }}>
+              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
                 Apakah kamu yakin ingin menghapus "
                 {selectedFileForDelete.original_name}"?
                 <br />
@@ -3317,9 +3791,9 @@ export function MyFiles({
                 }}
                 className="px-3 py-2 rounded-xl text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: myFilesColors.buttonSoftBg,
+                  color: myFilesColors.text,
+                  border: `1px solid ${myFilesColors.border}`,
                   opacity: deleteFileLoading ? 0.6 : 1,
                 }}
               >
@@ -3333,8 +3807,8 @@ export function MyFiles({
                 className="px-3 py-2 rounded-xl text-xs font-semibold"
                 style={{
                   background: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#0b1121",
+                  border: `1px solid rgba(248,113,113,0.4)`,
+                  color: "#fff",
                   opacity: deleteFileLoading ? 0.75 : 1,
                 }}
               >
@@ -3586,12 +4060,13 @@ export function MyFiles({
           <div
             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 px-4 py-3 rounded-xl"
             style={{
-              background: "#0f1729",
-              border: "1px solid #1a2540",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
             }}
           >
-            <div className="text-xs" style={{ color: "#94a3b8" }}>
-              <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+            <div className="text-xs" style={{ color: myFilesColors.muted }}>
+              <span style={{ color: myFilesColors.text, fontWeight: 700 }}>
                 {selectedFileIds.size}
               </span>{" "}
               file dipilih
@@ -3602,12 +4077,21 @@ export function MyFiles({
                 type="button"
                 className="px-3 py-2 rounded-lg text-xs font-semibold"
                 style={{
-                  background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                  background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
                   color: "#fff",
+                  border: `1px solid ${accentColor}55`,
                 }}
                 aria-label="Bulk Download"
                 disabled={bulkDownloadLoading}
                 onClick={() => void handleBulkDownload()}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.filter = "brightness(1.02)";
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.filter = "none";
+                }}
               >
                 {bulkDownloadLoading ? (
                   <>
@@ -3622,11 +4106,19 @@ export function MyFiles({
                 type="button"
                 className="px-3 py-2 rounded-lg text-xs font-semibold"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: myFilesColors.buttonSoftBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                  color: myFilesColors.text,
                 }}
                 aria-label="Bulk Share"
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = `${accentColor}10`;
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = myFilesColors.buttonSoftBg;
+                }}
                 onClick={() => {
                   void (async () => {
                     const ids = Array.from(selectedFileIds);
@@ -3889,6 +4381,14 @@ export function MyFiles({
                 }}
                 aria-label="Bulk Delete"
                 onClick={openBulkDeleteModal}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = "rgba(239,68,68,0.9)";
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = "#f87171";
+                }}
               >
                 Delete
               </button>
@@ -3897,11 +4397,19 @@ export function MyFiles({
                 type="button"
                 className="px-3 py-2 rounded-lg text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: myFilesColors.buttonSoftBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                  color: myFilesColors.text,
                 }}
                 aria-label="Batalkan pilihan"
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = `${accentColor}10`;
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = myFilesColors.buttonSoftBg;
+                }}
                 onClick={() => {
                   clearSelection();
                 }}
@@ -3921,7 +4429,7 @@ export function MyFiles({
         {loadingFiles && (
           <div
             className="flex items-center gap-2 text-xs mb-4"
-            style={{ color: "#64748b" }}
+            style={{ color: myFilesColors.muted }}
           >
             <LoadingSpinner size={12} />
             Memuat file...
@@ -3932,17 +4440,17 @@ export function MyFiles({
             {fileError}
           </div>
         )}
-        <div
-          className="rounded-xl"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
-        >
           <div
-            className="grid px-4 py-2.5 items-center"
-            style={{
-              gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
-              borderBottom: "1px solid #1a2540",
-            }}
+            className="rounded-xl"
+            style={{ background: myFilesColors.panelBg, border: `1px solid ${myFilesColors.border}` }}
           >
+            <div
+              className="grid px-4 py-2.5 items-center"
+              style={{
+                gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
+                borderBottom: `1px solid ${myFilesColors.border}`,
+              }}
+            >
             {/* Select all */}
             {(() => {
               const visibleIds = typedFiles.map((f) => f.id);
@@ -3990,42 +4498,42 @@ export function MyFiles({
 
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             >
               Name
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             >
               Type
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             >
               Modified
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             >
               Size
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             >
               Status
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: myFilesColors.muted }}
             ></span>
           </div>
 
           {showEmptySearchState && (
-            <div className="text-xs px-4 py-6" style={{ color: "#64748b" }}>
+            <div className="text-xs px-4 py-6" style={{ color: myFilesColors.muted }}>
               Tidak ada hasil untuk “{searchQuery.trim()}”.
             </div>
           )}
@@ -4049,15 +4557,15 @@ export function MyFiles({
                   }}
                   onDragEnd={clearDragMoveItem}
                   onClick={() => {}}
-                  className="grid px-4 py-2.5 items-center cursor-pointer hover:bg-[#0d1829] transition-colors group relative"
+                  className="grid px-4 py-2.5 items-center cursor-pointer hover:opacity-90 transition-colors group relative"
                   style={{
                     gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
-                    borderBottom: "1px solid #0a1020",
+                    borderBottom: `1px solid ${myFilesColors.border}`,
                     background: selectedFileIds.has(file.id)
                       ? "rgba(168, 85, 247, 0.08)"
                       : "transparent",
                     borderLeft: selectedFileIds.has(file.id)
-                      ? "3px solid rgba(168, 85, 247, 0.3)"
+                      ? `3px solid ${accentColor}55`
                       : "3px solid transparent",
                     paddingLeft: selectedFileIds.has(file.id) ? "calc(1rem - 3px)" : "1rem",
                   }}
@@ -4092,7 +4600,7 @@ export function MyFiles({
                       className="w-7 h-7"
                       size={14}
                     />
-                    <span className="text-sm" style={{ color: "#cbd5e1" }}>
+                    <span className="text-sm" style={{ color: myFilesColors.text }}>
                       {file.original_name}
                     </span>
                   </div>
@@ -4100,28 +4608,30 @@ export function MyFiles({
                   <span
                     className="text-[10px] px-2 py-0.5 rounded font-medium w-fit"
                     style={{
-                      background: "rgba(59,130,246,0.12)",
-                      color: "#60a5fa",
+                      background: `${myFilesColors.panelBg}`,
+                      color: accentColor,
+                      border: `1px solid ${myFilesColors.border}`,
                     }}
                   >
                     {typeLabel}
                   </span>
 
-                  <span className="text-xs" style={{ color: "#475569" }}>
+                  <span className="text-xs" style={{ color: myFilesColors.muted }}>
                     {file.created_at
                       ? new Date(file.created_at).toLocaleDateString()
                       : "—"}
                   </span>
 
-                  <span className="text-xs" style={{ color: "#475569" }}>
+                  <span className="text-xs" style={{ color: myFilesColors.muted }}>
                     {formatBytes(file.size)}
                   </span>
 
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded w-fit"
                     style={{
-                      background: "rgba(71,85,105,0.1)",
-                      color: "#94a3b8",
+                      background: myFilesColors.panelBg,
+                      color: myFilesColors.muted2,
+                      border: `1px solid ${myFilesColors.border}`,
                     }}
                   >
                     Private
@@ -4149,15 +4659,23 @@ export function MyFiles({
                         <div
                           className="absolute right-0 top-full mt-2 w-44 rounded-lg shadow-2xl z-50 overflow-hidden"
                           style={{
-                            background: "#0f1729",
-                            border: "1px solid #1a2540",
+                            background: myFilesColors.cardBg,
+                            border: `1px solid ${myFilesColors.border}`,
                           }}
                         >
                           {fileService.canPreviewFile(file) && (
                             <button
                               type="button"
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                              style={{ color: "#94a3b8" }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                              style={{ color: myFilesColors.text, background: "transparent" }}
+                              onMouseEnter={(e) => {
+                                const el = e.currentTarget;
+                                el.style.background = `${accentColor}10`;
+                              }}
+                              onMouseLeave={(e) => {
+                                const el = e.currentTarget;
+                                el.style.background = "transparent";
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setMenuOpen(null);
@@ -4167,7 +4685,7 @@ export function MyFiles({
                               aria-label={`Preview ${file.original_name}`}
                               title={`Preview ${file.original_name}`}
                             >
-                              <Eye size={12} />{" "}
+                              <Eye size={12} style={{ color: myFilesColors.muted }} />{" "}
                               {previewingFileId === file.id
                                 ? "Opening..."
                                 : "Preview"}
@@ -4176,8 +4694,16 @@ export function MyFiles({
 
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                            style={{ color: "#94a3b8" }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                            style={{ color: myFilesColors.text, background: "transparent" }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = `${accentColor}10`;
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "transparent";
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               fileService.downloadFile(
@@ -4189,13 +4715,21 @@ export function MyFiles({
                             aria-label={`Download ${file.original_name}`}
                             title={`Download ${file.original_name}`}
                           >
-                            <Download size={12} /> Download
+                            <Download size={12} style={{ color: myFilesColors.muted }} /> Download
                           </button>
 
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                            style={{ color: "#94a3b8" }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                            style={{ color: myFilesColors.text, background: "transparent" }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = `${accentColor}10`;
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "transparent";
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFileForShare(file);
@@ -4226,13 +4760,21 @@ export function MyFiles({
                             aria-label={`Share ${file.original_name}`}
                             title={`Share ${file.original_name}`}
                           >
-                            <Share2 size={12} /> Share
+                            <Share2 size={12} style={{ color: myFilesColors.muted }} /> Share
                           </button>
 
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                            style={{ color: "#94a3b8" }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                            style={{ color: myFilesColors.text, background: "transparent" }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = `${accentColor}10`;
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "transparent";
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFileForAction(file);
@@ -4244,13 +4786,21 @@ export function MyFiles({
                             aria-label={`Rename ${file.original_name}`}
                             title={`Rename ${file.original_name}`}
                           >
-                            <Edit3 size={12} /> Rename
+                            <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
                           </button>
 
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                            style={{ color: "#94a3b8" }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                            style={{ color: myFilesColors.text, background: "transparent" }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = `${accentColor}10`;
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "transparent";
+                            }}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -4258,13 +4808,21 @@ export function MyFiles({
                             }}
                             aria-label={`Move ${file.original_name}`}
                           >
-                            <Folder size={12} /> Move to...
+                            <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
                           </button>
 
                           <button
                             type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                            style={{ color: "#f87171" }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                            style={{ color: "#f87171", background: "transparent" }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "rgba(239,68,68,0.12)";
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.style.background = "transparent";
+                            }}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -4277,7 +4835,7 @@ export function MyFiles({
                             aria-label={`Delete ${file.original_name}`}
                             title={`Delete ${file.original_name}`}
                           >
-                            <Trash2 size={12} /> Delete
+                            <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
                           </button>
 
                         </div>
