@@ -277,7 +277,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
 
 import {
   Folder,
-  MoreHorizontal,
+
   Upload,
   FolderPlus,
   Grid,
@@ -398,6 +398,52 @@ export function MyFiles({
     x: number;
     y: number;
   } | null>(null);
+
+  const [folderActionMenuPosition, setFolderActionMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // folder action menu helpers
+  function openFolderMenuAtCursor(
+    event: React.MouseEvent,
+    folderId: string,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setOpenFileActionId(null);
+    setFileActionMenuPosition(null);
+
+    if (openFolderActionId === folderId) {
+      setOpenFolderActionId(null);
+      setFolderActionMenuPosition(null);
+      return;
+    }
+
+    const menuWidth = 180;
+    const menuHeight = 180;
+    const rawX = event.clientX;
+    const rawY = event.clientY;
+
+    const x =
+      typeof window !== "undefined"
+        ? Math.min(rawX, window.innerWidth - menuWidth)
+        : rawX;
+
+    const y =
+      typeof window !== "undefined"
+        ? Math.min(rawY, window.innerHeight - menuHeight)
+        : rawY;
+
+    setOpenFolderActionId(folderId);
+    setFolderActionMenuPosition({
+      x: Math.max(8, x),
+      y: Math.max(8, y),
+    });
+  }
+
+
 
 
   // click-outside untuk menu aksi file
@@ -1511,16 +1557,19 @@ export function MyFiles({
     const onPointerDown = (e: PointerEvent) => {
       if (openFileActionId === null) return;
 
-      const wrap = fileMenuWrapRef.current;
-      const menu = fileActionMenuRef.current;
+        const wrap = fileMenuWrapRef.current;
+        if (!wrap) {
+          setOpenFileActionId(null);
+          setFileActionMenuPosition(null);
+          return;
+        }
+
 
       const target = e.target as Node | null;
       if (!target) return;
 
-      const clickedInsideWrap = wrap?.contains(target) ?? false;
-      const clickedInsideMenu = menu?.contains(target) ?? false;
 
-      if (!clickedInsideWrap && !clickedInsideMenu) {
+        if (!wrap.contains(target)) {
         setOpenFileActionId(null);
         setFileActionMenuPosition(null);
       }
@@ -2551,7 +2600,10 @@ export function MyFiles({
                 moveDraggedItemToFolder(folder.id);
               }}
               onClick={() => handleOpenFolder(folder)}
+              onContextMenu={(e) => openFolderMenuAtCursor(e, folder.id)}
               className="rounded-xl p-3 cursor-pointer hover:scale-[1.03] transition-all group"
+
+
               style={{
                 background: selectedFolderIds.has(folder.id)
                   ? "rgba(168, 85, 247, 0.08)"
@@ -2589,37 +2641,30 @@ export function MyFiles({
 
                 <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="relative">
-                    <button
-                      type="button"
-                      aria-label={`Open actions for ${folder.name}`}
-                      title="Folder actions"
-                      className="flex items-center justify-center w-7 h-7 rounded-md transition-colors z-50 opacity-100 pointer-events-auto"
-                      style={{
-                        color: myFilesColors.muted,
-                        background: "transparent",
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setOpenFolderActionId((current) =>
-                          current === folder.id ? null : folder.id,
-                        );
-                      }}
-                    >
-                      <MoreHorizontal size={13} />
-                    </button>
+
 
                     {openFolderActionId === folder.id && (
                       <div
                         className="absolute right-0 top-full mt-2 w-28 rounded-lg shadow-2xl z-50 overflow-visible pointer-events-auto"
                         style={{
-                          background: myFilesColors.cardBg,
+                          position: "fixed",
+                          top: folderActionMenuPosition?.y ?? 0,
+                          left: folderActionMenuPosition?.x ?? 0,
+                          width: 176,
+                          zIndex: 9999,
+                          background:
+                            resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
                           border: `1px solid ${myFilesColors.border}`,
+                          backgroundClip: "padding-box",
+                          isolation: "isolate",
                         }}
                         role="menu"
                         aria-label={`Folder menu ${folder.name}`}
+                        onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                       >
+
+
                         <button
                           type="button"
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
@@ -2633,13 +2678,15 @@ export function MyFiles({
                             const el = e.currentTarget;
                             el.style.background = "transparent";
                           }}
-                          onClick={(e) => {
+onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             setOpenFolderActionId(null);
+                            setFolderActionMenuPosition(null);
                             setSelectedFolderForAction(folder);
                             openRenameFolderModal(folder);
                           }}
+
                           aria-label={`Rename ${folder.name}`}
                         >
                           <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
@@ -2661,8 +2708,11 @@ export function MyFiles({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            setOpenFolderActionId(null);
+                            setFolderActionMenuPosition(null);
                             openMoveFolderModal(folder);
                           }}
+
                           aria-label={`Move ${folder.name}`}
                         >
                           <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
@@ -2687,9 +2737,11 @@ export function MyFiles({
                             e.preventDefault();
                             e.stopPropagation();
                             setOpenFolderActionId(null);
+                            setFolderActionMenuPosition(null);
                             setSelectedFolderForDelete(folder);
                             openDeleteFolderModal(folder);
                           }}
+
                           aria-label={`Delete ${folder.name}`}
                         >
                           <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
@@ -4615,7 +4667,7 @@ export function MyFiles({
                   }}
                   onDragEnd={clearDragMoveItem}
                   onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
-                  className="grid px-4 py-2.5 items-center cursor-pointer hover:opacity-90 transition-colors group relative"
+className="grid px-4 py-2.5 items-center cursor-pointer transition-colors group relative"
 
 
                   style={{
@@ -4698,8 +4750,8 @@ export function MyFiles({
                   </span>
 
                   <div className="relative">
-                    <div>
-                      {openFileActionId === file.id && fileActionMenuPosition ? (
+                        <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
+                          {openFileActionId === file.id && fileActionMenuPosition ? (
                         <div
                           style={{
                             position: "fixed",
@@ -4707,10 +4759,12 @@ export function MyFiles({
                             left: fileActionMenuPosition.x,
                             width: 176,
                             zIndex: 9999,
-                            background: myFilesColors.cardBg,
+background: resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
                             border: `1px solid ${myFilesColors.border}`,
                             borderRadius: 10,
-                            overflow: "hidden",
+overflow: "hidden",
+                            backgroundClip: "padding-box",
+                            isolation: "isolate",
                             boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
                           }}
                           role="menu"
@@ -4912,7 +4966,7 @@ export function MyFiles({
                           </button>
 
                         </div>
-                      ) : null
+                          ) : null}
                     </div>
                   </div>
                 </div>
