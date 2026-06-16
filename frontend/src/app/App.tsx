@@ -174,19 +174,8 @@ export default function App() {
         />
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-center border-b border-[#1a2540] bg-[#0b1121]">
-            <div className="flex-1">
-              <Topbar activePage={currentActivePage} />
-            </div>
+          <Topbar activePage={currentActivePage} onLogout={handleLogout} />
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="mr-6 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
-            >
-              Logout
-            </button>
-          </div>
 
           {currentActivePage === "my-files" ? (
             <MyFiles

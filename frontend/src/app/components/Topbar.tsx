@@ -6,7 +6,10 @@ type ResolvedTheme = "dark" | "light";
 
 interface TopbarProps {
   activePage: string;
+  onLogout?: (() => void | Promise<void>) | undefined;
 }
+
+
 
 const pageTitles: Record<string, string> = {
   dashboard: "Dashboard",
@@ -56,8 +59,9 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-export function Topbar({ activePage }: TopbarProps) {
+export function Topbar({ activePage, onLogout }: TopbarProps) {
   const [searchValue, setSearchValue] = useState("");
+
   const [notifOpen, setNotifOpen] = useState(false);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>("dark");
@@ -138,16 +142,22 @@ export function Topbar({ activePage }: TopbarProps) {
           placeholder: "#94a3b8",
           shortcutBg: "#e2e8f0",
           shortcutText: "#64748b",
+          buttonBg: "#f8fafc",
           buttonBorder: "#dbe3ef",
           buttonHover: "#f1f5f9",
-          icon: "#64748b",
+          icon: "#475569",
           dropdownBg: "#ffffff",
+
           dropdownBorder: "#dbe3ef",
           dropdownItemBorder: "#e2e8f0",
           dropdownText: "#0f172a",
           dropdownMuted: "#64748b",
           dropdownTime: "#94a3b8",
           userText: "#334155",
+          logoutBg: "#fff1f2",
+          logoutBorder: "#fecdd3",
+          logoutText: "#be123c",
+          logoutHover: "#ffe4e6",
         }
       : {
           topbarBg: "#0b1121",
@@ -159,6 +169,7 @@ export function Topbar({ activePage }: TopbarProps) {
           placeholder: "#64748b",
           shortcutBg: "#1e2d45",
           shortcutText: "#475569",
+          buttonBg: "#0d1829",
           buttonBorder: "#1a2540",
           buttonHover: "#1a2540",
           icon: "#64748b",
@@ -169,17 +180,25 @@ export function Topbar({ activePage }: TopbarProps) {
           dropdownMuted: "#64748b",
           dropdownTime: "#475569",
           userText: "#94a3b8",
+          logoutBg: "rgba(239, 68, 68, 0.10)",
+          logoutBorder: "rgba(248, 113, 113, 0.35)",
+          logoutText: "#fca5a5",
+          logoutHover: "rgba(239, 68, 68, 0.18)",
         };
 
   const systemModeAccentCaret = accentColor;
 
   return (
     <header
-      className="flex items-center gap-4 px-6 py-3 shrink-0"
+      className="flex items-center gap-4 px-6 py-0 shrink-0"
       style={{
         background: topbarColors.topbarBg,
         borderBottom: `1px solid ${topbarColors.border}`,
-        height: "60px",
+        height: "76px",
+
+
+
+
       }}
     >
       {/* Page title */}
@@ -250,7 +269,7 @@ export function Topbar({ activePage }: TopbarProps) {
               e.currentTarget.style.background = topbarColors.buttonHover;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.background = topbarColors.buttonBg;
             }}
           >
             <Bell size={15} style={{ color: topbarColors.icon }} />
@@ -308,13 +327,17 @@ export function Topbar({ activePage }: TopbarProps) {
 
         {/* User Avatar */}
         <button
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors"
-          style={{ border: `1px solid ${topbarColors.buttonBorder}`, background: "transparent" }}
+          className="flex items-center gap-2 px-3.5 h-10 rounded-lg transition-colors"
+          style={{
+            border: `1px solid ${topbarColors.buttonBorder}`,
+            background: topbarColors.buttonBg,
+            minWidth: "96px",
+          }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = topbarColors.buttonHover;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.background = topbarColors.buttonBg;
           }}
         >
           <div
@@ -328,6 +351,30 @@ export function Topbar({ activePage }: TopbarProps) {
           </span>
           <ChevronDown size={12} style={{ color: topbarColors.icon }} />
         </button>
+
+        {/* Logout */}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={() => onLogout()}
+
+            className="flex h-10 min-w-[88px] items-center justify-center rounded-lg px-3.5 text-xs font-semibold transition-colors"
+            style={{
+              background: topbarColors.logoutBg,
+              border: `1px solid ${topbarColors.logoutBorder}`,
+              color: topbarColors.logoutText,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = topbarColors.logoutHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = topbarColors.logoutBg;
+            }}
+          >
+            Logout
+          </button>
+        )}
+
       </div>
     </header>
   );

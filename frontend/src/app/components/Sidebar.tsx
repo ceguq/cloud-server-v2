@@ -180,7 +180,8 @@ export function Sidebar({
           subtitle: "#64748b",
           navText: "#64748b",
           navTextActive: "#0f172a",
-          navIcon: "#94a3b8",
+          navIcon: "#64748b",
+
           cardBg: "#f8fafc",
           panelBg: "#e2e8f0",
           storageText: "#0f172a",
