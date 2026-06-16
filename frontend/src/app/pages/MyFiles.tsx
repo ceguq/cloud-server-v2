@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+
+
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
 
@@ -400,6 +402,8 @@ export function MyFiles({
 
   // click-outside untuk menu aksi file
   const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
+
+
 
 
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -1180,13 +1184,14 @@ export function MyFiles({
     event: React.MouseEvent,
     fileId: string,
   ) {
+    event.preventDefault();
     event.stopPropagation();
     setOpenFolderActionId(null);
 
     if (openFileActionId === fileId) {
                     setOpenFileActionId(null);
-                      setFileActionMenuPosition(null);
-                      return;
+                    setFileActionMenuPosition(null);
+                    return;
                     }
 
                     const menuWidth = 180;
@@ -1505,13 +1510,17 @@ export function MyFiles({
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
       if (openFileActionId === null) return;
+
       const wrap = fileMenuWrapRef.current;
-      if (!wrap) return;
+      const menu = fileActionMenuRef.current;
+
       const target = e.target as Node | null;
       if (!target) return;
 
-      // jika klik terjadi di luar wrapper menu, tutup
-      if (!wrap.contains(target)) {
+      const clickedInsideWrap = wrap?.contains(target) ?? false;
+      const clickedInsideMenu = menu?.contains(target) ?? false;
+
+      if (!clickedInsideWrap && !clickedInsideMenu) {
         setOpenFileActionId(null);
         setFileActionMenuPosition(null);
       }
@@ -1522,6 +1531,7 @@ export function MyFiles({
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [openFileActionId]);
+
 
 
   const uploadInputRef = useMemo(
@@ -4604,7 +4614,7 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  onClick={(e) => openFileMenuAtCursor(e, file.id)}
+                  onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
                   className="grid px-4 py-2.5 items-center cursor-pointer hover:opacity-90 transition-colors group relative"
 
 
@@ -4688,19 +4698,28 @@ export function MyFiles({
                   </span>
 
                   <div className="relative">
-                    <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
-                      {openFileActionId === file.id && (
+                    <div>
+                      {openFileActionId === file.id && fileActionMenuPosition ? (
                         <div
-                          className="rounded-lg shadow-2xl z-50 overflow-hidden"
                           style={{
                             position: "fixed",
-                            top: fileActionMenuPosition?.y ?? 0,
-                            left: fileActionMenuPosition?.x ?? 0,
+                            top: fileActionMenuPosition.y,
+                            left: fileActionMenuPosition.x,
                             width: 176,
+                            zIndex: 9999,
                             background: myFilesColors.cardBg,
                             border: `1px solid ${myFilesColors.border}`,
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
                           }}
+                          role="menu"
+                          aria-label={`File actions ${file.original_name}`}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
+
+
+
 
 
 
@@ -4893,7 +4912,7 @@ export function MyFiles({
                           </button>
 
                         </div>
-                      )}
+                      ) : null
                     </div>
                   </div>
                 </div>
