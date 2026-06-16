@@ -393,8 +393,14 @@ export function MyFiles({
   const [openFileActionId, setOpenFileActionId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
 
-  // click-outside untuk menu aksi file (tombol titik tiga)
+  const [fileActionMenuPosition, setFileActionMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // click-outside untuk menu aksi file
   const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
+
 
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -1168,8 +1174,47 @@ export function MyFiles({
     setBulkDownloadLoading(false);
   };
 
+  // file action menu helpers
+  function openFileMenuAtCursor(
+    event: React.MouseEvent,
+    fileId: string,
+  ) {
+    event.stopPropagation();
+    setOpenFolderActionId(null);
+
+    if (openFileActionId === fileId) {
+                      setOpenFileActionId(null);
+                      setFileActionMenuPosition(null);
+                      setMenuOpen(null);
+                      return;
+                    }
+
+                    const menuWidth = 180;
+                    const menuHeight = 260;
+                    const rawX = event.clientX;
+                    const rawY = event.clientY;
+
+                    const x =
+                      typeof window !== "undefined"
+                        ? Math.min(rawX, window.innerWidth - menuWidth)
+                        : rawX;
+
+                    const y =
+                      typeof window !== "undefined"
+                        ? Math.min(rawY, window.innerHeight - menuHeight)
+                        : rawY;
+
+                    setOpenFileActionId(fileId);
+                    setFileActionMenuPosition({
+                      x: Math.max(8, x),
+                      y: Math.max(8, y),
+                    });
+                    setMenuOpen(null);
+                  }
+
   // Move modal helpers
   const closeMoveModal = () => {
+
     if (moveLoading) return;
     setMoveModalOpen(false);
     setMoveItemType(null);
@@ -1460,14 +1505,16 @@ export function MyFiles({
   // Click-outside handler untuk menu aksi file
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
-      if (menuOpen === null) return;
+      if (openFileActionId === null) return;
       const wrap = fileMenuWrapRef.current;
       if (!wrap) return;
       const target = e.target as Node | null;
       if (!target) return;
 
-      // jika klik terjadi di luar wrapper tombol + dropdown, tutup
+      // jika klik terjadi di luar wrapper menu, tutup
       if (!wrap.contains(target)) {
+        setOpenFileActionId(null);
+        setFileActionMenuPosition(null);
         setMenuOpen(null);
       }
     };
@@ -1476,7 +1523,8 @@ export function MyFiles({
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [menuOpen]);
+  }, [openFileActionId]);
+
 
   const uploadInputRef = useMemo(
     () => ({ current: null as HTMLInputElement | null }),
@@ -2668,107 +2716,108 @@ export function MyFiles({
           role="dialog"
           aria-modal="true"
         >
-            <div
-              className="w-full max-w-md rounded-2xl border p-6"
-              style={{
-                boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-                background: myFilesColors.cardBg,
-                border: `1px solid ${myFilesColors.border}`,
+          <div
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+            }}
+          >
+            <div className="mb-4">
+              <h2
+                className="text-sm font-semibold"
+                style={{ color: myFilesColors.title }}
+              >
+                {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
+              </h2>
+              <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
+                {folderModalMode === "create"
+                  ? "Buat folder baru di dalam folder saat ini."
+                  : "Perbarui nama folder."}
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitFolderModal();
               }}
+              className="space-y-3"
             >
-              <div className="mb-4">
-                <h2
-                  className="text-sm font-semibold"
-                  style={{ color: myFilesColors.title }}
-                >
-                  {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
-                </h2>
-                <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
-                  {folderModalMode === "create"
-                    ? "Buat folder baru di dalam folder saat ini."
-                    : "Perbarui nama folder."}
-                </p>
+              <div>
+                <label className="text-xs" style={{ color: myFilesColors.muted }}>
+                  Folder name
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="Nama folder"
+                  value={folderModalName}
+                  onChange={(e) => {
+                    setFolderModalName(e.target.value);
+                    if (folderModalError) setFolderModalError("");
+                  }}
+                  aria-label="Nama folder"
+                  style={{
+                    background: myFilesColors.inputBg,
+                    border: `1px solid ${myFilesColors.inputBorder}`,
+                    color: myFilesColors.inputText,
+                    caretColor: accentColor,
+                  }}
+                />
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submitFolderModal();
-                }}
-                className="space-y-3"
-              >
-                <div>
-                  <label className="text-xs" style={{ color: myFilesColors.muted }}>
-                    Folder name
-                  </label>
-                  <input
-                    autoFocus
-                    type="text"
-                    className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
-                    placeholder="Nama folder"
-                    value={folderModalName}
-                    onChange={(e) => {
-                      setFolderModalName(e.target.value);
-                      if (folderModalError) setFolderModalError("");
-                    }}
-                    aria-label="Nama folder"
-                    style={{
-                      background: myFilesColors.inputBg,
-                      border: `1px solid ${myFilesColors.inputBorder}`,
-                      color: myFilesColors.inputText,
-                      caretColor: accentColor,
-                    }}
-                  />
+              {folderModalError && (
+                <div
+                  className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
+                  style={{ color: "#f87171" }}
+                >
+                  {folderModalError}
                 </div>
+              )}
 
-                {folderModalError && (
-                  <div
-                    className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
-                    style={{ color: "#f87171" }}
-                  >
-                    {folderModalError}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={closeFolderModal}
-                    disabled={folderActionLoading}
-                    className="px-3 py-2 rounded-xl text-xs font-medium"
-                    style={{
-                      background: myFilesColors.buttonSoftBg,
-                      border: `1px solid ${myFilesColors.border}`,
-                      color: myFilesColors.text,
-                      opacity: folderActionLoading ? 0.6 : 1,
-                    }}
-                    aria-label="Cancel"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={folderActionLoading}
-                    className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                    style={{
-                      background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                      opacity: folderActionLoading ? 0.7 : 1,
-                    }}
-                    aria-label={folderModalMode === "create" ? "Create" : "Save"}
-                  >
-                    {folderActionLoading
-                      ? folderModalMode === "create"
-                        ? "Creating..."
-                        : "Saving..."
-                      : folderModalMode === "create"
-                        ? "Create"
-                        : "Save"}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeFolderModal}
+                  disabled={folderActionLoading}
+                  className="px-3 py-2 rounded-xl text-xs font-medium"
+                  style={{
+                    background: myFilesColors.buttonSoftBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.text,
+                    opacity: folderActionLoading ? 0.6 : 1,
+                  }}
+                  aria-label="Cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={folderActionLoading}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
+                  style={{
+                    background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                    opacity: folderActionLoading ? 0.7 : 1,
+                  }}
+                  aria-label={folderModalMode === "create" ? "Create" : "Save"}
+                >
+                  {folderActionLoading
+                    ? folderModalMode === "create"
+                      ? "Creating..."
+                      : "Saving..."
+                    : folderModalMode === "create"
+                      ? "Create"
+                      : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+
 
       {previewModalOpen && (
         <div
@@ -4556,8 +4605,10 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  onClick={() => {}}
+                  onClick={(e) => openFileMenuAtCursor(e, file.id)}
                   className="grid px-4 py-2.5 items-center cursor-pointer hover:opacity-90 transition-colors group relative"
+
+
                   style={{
                     gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
                     borderBottom: `1px solid ${myFilesColors.border}`,
@@ -4638,33 +4689,25 @@ export function MyFiles({
                   </span>
 
                   <div className="relative">
-                    <div ref={menuOpen === i ? fileMenuWrapRef : null}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuOpen(menuOpen === i ? null : i);
-                        }}
-                        className="w-7 h-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#1e2d45] z-50"
-                        aria-label={`File actions for ${file.original_name}`}
-                        title="File actions"
-                      >
-                        <MoreHorizontal
-                          size={14}
-                          style={{ color: "#64748b" }}
-                        />
-                      </button>
-
-                      {menuOpen === i && (
+                    <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
+                      {openFileActionId === file.id && (
                         <div
-                          className="absolute right-0 top-full mt-2 w-44 rounded-lg shadow-2xl z-50 overflow-hidden"
+                          className="rounded-lg shadow-2xl z-50 overflow-hidden"
                           style={{
+                            position: "fixed",
+                            top: fileActionMenuPosition?.y ?? 0,
+                            left: fileActionMenuPosition?.x ?? 0,
+                            width: 176,
                             background: myFilesColors.cardBg,
                             border: `1px solid ${myFilesColors.border}`,
                           }}
                         >
+
+
+
                           {fileService.canPreviewFile(file) && (
                             <button
+
                               type="button"
                               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
                               style={{ color: myFilesColors.text, background: "transparent" }}
@@ -4676,11 +4719,13 @@ export function MyFiles({
                                 const el = e.currentTarget;
                                 el.style.background = "transparent";
                               }}
-                              onClick={(e) => {
+                          onClick={(e) => {
                                 e.stopPropagation();
-                                setMenuOpen(null);
+                                setOpenFileActionId(null);
+                                setFileActionMenuPosition(null);
                                 void handlePreviewFile(file);
                               }}
+
                               disabled={previewingFileId === file.id}
                               aria-label={`Preview ${file.original_name}`}
                               title={`Preview ${file.original_name}`}
@@ -4704,14 +4749,16 @@ export function MyFiles({
                               const el = e.currentTarget;
                               el.style.background = "transparent";
                             }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileService.downloadFile(
-                                file.id,
-                                file.original_name,
-                              );
-                              setMenuOpen(null);
-                            }}
+                          onClick={(e) => {
+                                e.stopPropagation();
+                                void fileService.downloadFile(
+                                  file.id,
+                                  file.original_name,
+                                );
+                                setOpenFileActionId(null);
+                                setFileActionMenuPosition(null);
+                              }}
+
                             aria-label={`Download ${file.original_name}`}
                             title={`Download ${file.original_name}`}
                           >
@@ -4737,7 +4784,9 @@ export function MyFiles({
                               setCopySuccess("");
                               setActiveShareLink(null);
                               setIsShareModalOpen(true);
-                              setMenuOpen(null);
+                              setOpenFileActionId(null);
+                              setFileActionMenuPosition(null);
+
 
                               (async () => {
                                 try {
@@ -4781,7 +4830,9 @@ export function MyFiles({
                               setFileRenameName(file.original_name);
                               setFileModalError("");
                               setIsFileRenameModalOpen(true);
-                              setMenuOpen(null);
+                              setOpenFileActionId(null);
+                              setFileActionMenuPosition(null);
+
                             }}
                             aria-label={`Rename ${file.original_name}`}
                             title={`Rename ${file.original_name}`}
@@ -4804,8 +4855,11 @@ export function MyFiles({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
+                              setOpenFileActionId(null);
+                              setFileActionMenuPosition(null);
                               openMoveFileModal(file);
                             }}
+
                             aria-label={`Move ${file.original_name}`}
                           >
                             <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
@@ -4830,8 +4884,9 @@ export function MyFiles({
                               setDeleteFileError("");
                               setIsFileDeleteModalOpen(true);
                               setOpenFileActionId(null);
-                              setMenuOpen(null);
+                              setFileActionMenuPosition(null);
                             }}
+
                             aria-label={`Delete ${file.original_name}`}
                             title={`Delete ${file.original_name}`}
                           >

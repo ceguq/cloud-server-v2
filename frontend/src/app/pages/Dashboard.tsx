@@ -244,10 +244,7 @@ export function Dashboard() {
 
 
   useEffect(() => {
-    let cancelled = false;
-
     const syncThemeFromStorage = () => {
-
       const nextTheme = safeReadAppearanceTheme();
       const nextAccent = safeReadAccentColor();
       setAppearanceTheme(nextTheme);
@@ -255,46 +252,55 @@ export function Dashboard() {
       setResolvedTheme(resolveAppearanceTheme(nextTheme));
     };
 
+    // initial sync
     try {
       syncThemeFromStorage();
     } catch {
       // ignore
     }
 
-    if (typeof window !== "undefined") {
-      const onNimbusAppearanceChange = () => syncThemeFromStorage();
-      window.addEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
-      window.addEventListener("storage", onNimbusAppearanceChange);
-      window.addEventListener("focus", onNimbusAppearanceChange);
+    if (typeof window === "undefined") return;
 
-      let mq: MediaQueryList | null = null;
-      try {
-        mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
-        const onMqChange = () => syncThemeFromStorage();
-        mq?.addEventListener?.("change", onMqChange);
+    const onNimbusAppearanceChange = () => syncThemeFromStorage();
 
-        return () => {
-          cancelled = true;
-          mq?.removeEventListener?.("change", onMqChange);
-          window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
-          window.removeEventListener("storage", onNimbusAppearanceChange);
-          window.removeEventListener("focus", onNimbusAppearanceChange);
-        };
-      } catch {
-        // ignore
-      }
+    window.addEventListener(
+      "nimbus-appearance-change",
+      onNimbusAppearanceChange
+    );
+    window.addEventListener("storage", onNimbusAppearanceChange);
+    window.addEventListener("focus", onNimbusAppearanceChange);
+
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      const onMqChange = () => syncThemeFromStorage();
+      mq?.addEventListener?.("change", onMqChange);
 
       return () => {
-        cancelled = true;
-        window.removeEventListener("nimbus-appearance-change", onNimbusAppearanceChange);
+        mq?.removeEventListener?.("change", onMqChange);
+        window.removeEventListener(
+          "nimbus-appearance-change",
+          onNimbusAppearanceChange
+        );
+        window.removeEventListener("storage", onNimbusAppearanceChange);
+        window.removeEventListener("focus", onNimbusAppearanceChange);
+      };
+    } catch {
+      return () => {
+        window.removeEventListener(
+          "nimbus-appearance-change",
+          onNimbusAppearanceChange
+        );
         window.removeEventListener("storage", onNimbusAppearanceChange);
         window.removeEventListener("focus", onNimbusAppearanceChange);
       };
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
 
     const runStorage = async () => {
-
-
       try {
         setLoading(true);
         setError("");
@@ -335,11 +341,8 @@ export function Dashboard() {
         setSharedLinksLoading(true);
         setSharedLinksError(false);
 
-
         const payload = await getShareLinks();
 
-        // getShareLinks() currently unwraps to ShareLink[]
-        // but we still guard for wrapped/unknown shapes.
         let count = 0;
         if (Array.isArray(payload)) {
           count = payload.length;
@@ -361,18 +364,11 @@ export function Dashboard() {
 
     const runActiveDevicesCount = async () => {
       try {
-
-
-
         setActiveDevicesLoading(true);
-
-
         setActiveDevicesError(false);
-
 
         const payload = await getDevices();
 
-        // getDevices() currently unwraps to Device[]
         let count = 0;
         let items: Device[] = [];
         if (Array.isArray(payload)) {
@@ -389,17 +385,13 @@ export function Dashboard() {
         if (!cancelled) {
           setActiveDevicesCount(count);
           setDevices(items);
-
         }
-
       } catch (e) {
         if (!cancelled) {
           setActiveDevicesError(true);
           setActiveDevicesCount(0);
           setDevices([]);
-
         }
-
       } finally {
         if (!cancelled) setActiveDevicesLoading(false);
       }
@@ -411,7 +403,6 @@ export function Dashboard() {
         setRecentActivityError(false);
 
         const response = await getActivityLogs();
-
         const items = Array.isArray(response?.data)
           ? response.data.slice(0, 5)
           : [];
@@ -463,23 +454,19 @@ export function Dashboard() {
       }
     };
 
-
     runStorage();
     runStorageBreakdown();
-
     runRecent();
     runSharedLinksCount();
     runActiveDevicesCount();
     runRecentActivity();
     runServerMonitor();
 
-
-
     return () => {
-
       cancelled = true;
     };
   }, []);
+
 
 
   const serverStatusLabel = serverMonitorLoading
@@ -764,18 +751,21 @@ export function Dashboard() {
             </div>
 
             {recentFilesLoading ? (
-              <div className="flex items-center gap-2 px-4 py-3 text-xs" style={{ color: "#94a3b8" }}>
+                <div className="flex items-center gap-2 px-4 py-3 text-xs" style={{ color: dashboardColors.muted }}>
                 <LoadingSpinner size={12} />
                 Loading recent files...
               </div>
+
             ) : recentFilesError ? (
               <div className="px-4 py-3 text-xs" style={{ color: "#f87171" }}>
                 Recent files unavailable
               </div>
+
             ) : recentFiles.length === 0 ? (
-              <div className="px-4 py-3 text-xs" style={{ color: "#94a3b8" }}>
+              <div className="px-4 py-3 text-xs" style={{ color: dashboardColors.muted }}>
                 Belum ada file terbaru.
               </div>
+
             ) : (
               recentFiles.map((file, i) => (
                   <div
@@ -794,16 +784,19 @@ export function Dashboard() {
                       className="w-7 h-7"
                       size={14}
                     />
-                    <span className="text-sm" style={{ color: "#cbd5e1" }}>
+                    <span className="text-sm" style={{ color: dashboardColors.text }}>
                       {file.original_name}
                     </span>
-                  </div>
-                  <span className="text-xs" style={{ color: "#475569" }}>
+
+                   </div>
+                  <span className="text-xs" style={{ color: dashboardColors.text }}>
+
                     {file.display_date}
                   </span>
-                  <span className="text-xs" style={{ color: "#475569" }}>
+                  <span className="text-xs" style={{ color: dashboardColors.text }}>
                     {file.size_human}
                   </span>
+
                   <div className="relative">
                     <button
                       title="More"
