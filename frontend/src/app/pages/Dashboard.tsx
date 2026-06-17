@@ -1,6 +1,6 @@
 
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -45,7 +45,6 @@ import {
   Monitor,
   TrendingUp,
   TrendingDown,
-  MoreHorizontal,
   Film,
   Archive,
   Music,
@@ -193,11 +192,25 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function Dashboard() {
-  const [fileMenu, setFileMenu] = useState<number | null>(null);
-
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(resolveAppearanceTheme(safeReadAppearanceTheme()));
+
+  const [openDashboardMenuId, setOpenDashboardMenuId] = useState<string | null>(null);
+  const [dashboardMenuPosition, setDashboardMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const dashboardMenuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const navigateToMyFiles = () => {
+    const nextPath = "/my-files";
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  };
+
 
 
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
@@ -296,6 +309,29 @@ export function Dashboard() {
       };
     }
   }, []);
+
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (!openDashboardMenuId) return;
+      const wrap = dashboardMenuWrapRef.current;
+      const target = e.target as Node | null;
+      if (!wrap) {
+        setOpenDashboardMenuId(null);
+        setDashboardMenuPosition(null);
+        return;
+      }
+      if (!target) return;
+      if (!wrap.contains(target)) {
+        setOpenDashboardMenuId(null);
+        setDashboardMenuPosition(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [openDashboardMenuId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -725,8 +761,10 @@ export function Dashboard() {
                 My Files
               </span>
             <button
+              type="button"
               className="text-xs hover:underline"
               style={{ color: accentColor }}
+              onClick={() => navigateToMyFiles()}
             >
               View All
             </button>
@@ -776,6 +814,28 @@ export function Dashboard() {
                       borderBottom: `1px solid ${themeUI.rowDivider}`,
                       backgroundColor: resolvedTheme === "light" ? "#ffffff" : "transparent",
                     }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const rawX = e.clientX;
+                      const rawY = e.clientY;
+                      const menuWidth = 176;
+                      const menuHeight = 220;
+                      const x =
+                        typeof window !== "undefined"
+                          ? Math.min(rawX, window.innerWidth - menuWidth)
+                          : rawX;
+                      const y =
+                        typeof window !== "undefined"
+                          ? Math.min(rawY, window.innerHeight - menuHeight)
+                          : rawY;
+
+                      setOpenDashboardMenuId(file.id);
+                      setDashboardMenuPosition({
+                        x: Math.max(8, x),
+                        y: Math.max(8, y),
+                      });
+                    }}
                   >
                   <div className="flex items-center gap-2.5">
                     <FileTypeIcon
@@ -798,53 +858,7 @@ export function Dashboard() {
                   </span>
 
                   <div className="relative">
-                    <button
-                      title="More"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFileMenu(fileMenu === i ? null : i);
-                      }}
-                      className="w-7 h-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#1e2d45]"
-                    >
-                      <MoreHorizontal size={14} style={{ color: "#64748b" }} />
-                    </button>
-                    {fileMenu === i && (
-                      <div
-                        className="absolute right-0 top-8 w-40 rounded-lg shadow-2xl z-50 overflow-hidden"
-                        style={{
-                          background: themeUI.subtleBg2,
-                          border: `1px solid ${themeUI.divider}`,
-                        }}
-                      >
-                        {[
-                          { icon: Eye, label: "Preview" },
-                          { icon: Download, label: "Download" },
-                          { icon: Share2, label: "Share" },
-                          { icon: Edit3, label: "Rename" },
-                          {
-                            icon: Trash2,
-                            label: "Delete",
-                            danger: true,
-                          },
-                        ].map((action) => {
-                          const AIcon = action.icon;
-                          return (
-                            <button
-                              key={action.label}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[#1a2540] transition-colors"
-                              style={{
-                                color: (action as any).danger
-                                  ? "#f87171"
-                                  : "#94a3b8",
-                              }}
-                            >
-                              <AIcon size={12} />
-                              {action.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                  
                   </div>
                 </div>
               ))
@@ -854,7 +868,12 @@ export function Dashboard() {
                 className="flex justify-center py-2.5"
                 style={{ borderTop: `1px solid ${themeUI.divider}` }}
               >
-            <button className="text-xs" style={{ color: themeUI.textMutedSoft }}>
+            <button
+              type="button"
+              className="text-xs"
+              style={{ color: themeUI.textMutedSoft }}
+              onClick={() => navigateToMyFiles()}
+            >
               Showing recent uploads —{" "}
               <span style={{ color: accentColor }}>View All</span>
             </button>
@@ -1115,8 +1134,83 @@ export function Dashboard() {
         </div>
       </div>
 
+      {openDashboardMenuId && dashboardMenuPosition ? (
+        <div
+          ref={dashboardMenuWrapRef}
+          className="rounded-lg shadow-2xl overflow-hidden"
+          style={{
+            position: "fixed",
+            top: dashboardMenuPosition.y,
+            left: dashboardMenuPosition.x,
+            width: 176,
+            zIndex: 9999,
+            background:
+              resolvedTheme === "light" ? "#ffffff" : themeUI.subtleBg2,
+            border: `1px solid ${themeUI.divider}`,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.22)",
+            backgroundClip: "padding-box",
+            isolation: "isolate",
+          }}
+          role="menu"
+          aria-label="Dashboard item menu"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          {([
+            { icon: Eye, label: "Preview", danger: false },
+            { icon: Download, label: "Download", danger: false },
+            { icon: Share2, label: "Share", danger: false },
+            { icon: Edit3, label: "Rename", danger: false },
+            { icon: Trash2, label: "Delete", danger: true },
+          ] as const).map((action) => {
+            const AIcon = action.icon;
+            return (
+                <button
+                  key={action.label}
+                  type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                  style={{
+                    color: action.danger ? "#f87171" : dashboardColors.muted2,
+                    background: "transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = action.danger
+                      ? "rgba(248,113,113,0.12)"
+                      : `${accentColor}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.background = "transparent";
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpenDashboardMenuId(null);
+                    setDashboardMenuPosition(null);
+                    navigateToMyFiles();
+                  }}
+                role="menuitem"
+                aria-label={action.label}
+              >
+                <AIcon size={12} />
+                {action.label}
+                </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {/* Bottom Row */}
       <div className="grid grid-cols-3 gap-4">
+
         {/* Server Status */}
           <div
             className="col-span-2 rounded-xl p-4"

@@ -261,7 +261,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
               {formatTime(duration)}
             </div>
           </div>
-        </div>
+          </div>
       </div>
 
       <style>{`
@@ -404,6 +404,7 @@ export function MyFiles({
     y: number;
   } | null>(null);
 
+
   // folder action menu helpers
   function openFolderMenuAtCursor(
     event: React.MouseEvent,
@@ -415,13 +416,8 @@ export function MyFiles({
     setOpenFileActionId(null);
     setFileActionMenuPosition(null);
 
-    if (openFolderActionId === folderId) {
-      setOpenFolderActionId(null);
-      setFolderActionMenuPosition(null);
-      return;
-    }
-
     const menuWidth = 180;
+
     const menuHeight = 180;
     const rawX = event.clientX;
     const rawY = event.clientY;
@@ -448,6 +444,10 @@ export function MyFiles({
 
   // click-outside untuk menu aksi file
   const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // click-outside untuk menu aksi folder (global)
+  const folderMenuWrapRef = useRef<HTMLDivElement | null>(null);
+
 
 
 
@@ -564,6 +564,8 @@ export function MyFiles({
   );
   const [moveItemId, setMoveItemId] = useState<string | null>(null);
   const [moveItemName, setMoveItemName] = useState("");
+  // Bulk move files (used only when moveItemType === "file")
+  const [moveFileIds, setMoveFileIds] = useState<string[]>([]);
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(
     null,
   );
@@ -744,7 +746,6 @@ export function MyFiles({
   const openCreateFolderModal = () => {
     setFolderModalMode("create");
     setFolderModalName("");
-    setSelectedFolderForAction(null);
     setFolderModalError("");
     setIsFolderModalOpen(true);
   };
@@ -752,7 +753,6 @@ export function MyFiles({
   const openRenameFolderModal = (folder: FolderModel) => {
     setFolderModalMode("rename");
     setFolderModalName(folder.name);
-    setSelectedFolderForAction(folder);
     setFolderModalError("");
     setIsFolderModalOpen(true);
   };
@@ -1270,15 +1270,25 @@ export function MyFiles({
     setMoveItemType(null);
     setMoveItemId(null);
     setMoveItemName("");
+    setMoveFileIds([]);
     setMoveTargetFolderId(null);
     setMoveError("");
   };
 
   const openMoveFileModal = (file: FileModel) => {
     setOpenFileActionId(null);
+
+    const isBulkEligible =
+      selectedFileIds.size > 1 && selectedFileIds.has(file.id);
+
     setMoveItemType("file");
     setMoveItemId(file.id);
-    setMoveItemName(file.original_name ?? "Untitled file");
+    setMoveFileIds(isBulkEligible ? Array.from(selectedFileIds) : [file.id]);
+    setMoveItemName(
+      isBulkEligible
+        ? `${selectedFileIds.size} files selected`
+        : file.original_name ?? "Untitled file",
+    );
     setMoveTargetFolderId(null);
     setMoveError("");
     setMoveModalOpen(true);
@@ -1289,44 +1299,77 @@ export function MyFiles({
     setMoveItemType("folder");
     setMoveItemId(folder.id);
     setMoveItemName(folder.name ?? "Untitled folder");
+    setMoveFileIds([]);
     setMoveTargetFolderId(null);
     setMoveError("");
     setMoveModalOpen(true);
   };
 
   const submitMove = async () => {
-    if (!moveItemId || !moveItemType || moveLoading) return;
+    if (!moveItemType || moveLoading) return;
 
     setMoveLoading(true);
     setMoveError("");
 
     try {
       if (moveItemType === "file") {
-        await fileService.moveFile(moveItemId, moveTargetFolderId);
-        setSelectedFileIds((prev) => {
-          const next = new Set(prev);
-          next.delete(moveItemId);
-          return next;
-        });
+        // Bulk move (selection-aware)
+        if (moveFileIds.length > 1) {
+          let okCount = 0;
+          let failCount = 0;
+
+          for (const id of moveFileIds) {
+            try {
+              await fileService.moveFile(id, moveTargetFolderId);
+              okCount++;
+            } catch {
+              failCount++;
+            }
+          }
+
+          // after bulk move, just refresh + clear selection
+          await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
+          if (okCount > 0) {
+            // keep storage refreshed behavior consistent with delete
+            onStorageChanged?.();
+          }
+
+          clearSelection();
+        } else {
+          // Single file move (keep existing behavior)
+          const singleId = moveFileIds.length === 1 ? moveFileIds[0] : moveItemId;
+          if (singleId) {
+            await fileService.moveFile(singleId, moveTargetFolderId);
+            setSelectedFileIds((prev) => {
+              const next = new Set(prev);
+              next.delete(singleId);
+              return next;
+            });
+          }
+
+          await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
+        }
       }
 
       if (moveItemType === "folder") {
+        if (!moveItemId) return;
         await folderService.moveFolder(moveItemId, moveTargetFolderId);
         setSelectedFolderIds((prev) => {
           const next = new Set(prev);
           next.delete(moveItemId);
           return next;
         });
+
+        await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
       }
 
       setMoveModalOpen(false);
       setMoveItemType(null);
       setMoveItemId(null);
+      setMoveFileIds([]);
       setMoveItemName("");
       setMoveTargetFolderId(null);
       setMoveError("");
-
-      await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
     } catch (error: unknown) {
       const message =
         typeof error === "object" &&
@@ -1552,26 +1595,34 @@ export function MyFiles({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
-  // Click-outside handler untuk menu aksi file
+  // Click-outside handler untuk menu aksi file & folder
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
-      if (openFileActionId === null) return;
+      const target = e.target as Node | null;
+      if (!target) return;
 
+      // File menu
+      if (openFileActionId !== null) {
         const wrap = fileMenuWrapRef.current;
         if (!wrap) {
           setOpenFileActionId(null);
           setFileActionMenuPosition(null);
-          return;
+        } else if (!wrap.contains(target)) {
+          setOpenFileActionId(null);
+          setFileActionMenuPosition(null);
         }
+      }
 
-
-      const target = e.target as Node | null;
-      if (!target) return;
-
-
-        if (!wrap.contains(target)) {
-        setOpenFileActionId(null);
-        setFileActionMenuPosition(null);
+      // Folder menu
+      if (openFolderActionId !== null) {
+        const wrap = folderMenuWrapRef.current;
+        if (!wrap) {
+          setOpenFolderActionId(null);
+          setFolderActionMenuPosition(null);
+        } else if (!wrap.contains(target)) {
+          setOpenFolderActionId(null);
+          setFolderActionMenuPosition(null);
+        }
       }
     };
 
@@ -1579,7 +1630,8 @@ export function MyFiles({
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [openFileActionId]);
+  }, [openFileActionId, openFolderActionId]);
+
 
 
 
@@ -1825,6 +1877,214 @@ export function MyFiles({
           inputText: "#94a3b8",
           buttonSoftBg: "#1a2540",
         };
+
+  const activeFolderAction = useMemo(
+    () => folders.find((folder) => folder.id === openFolderActionId) ?? null,
+    [folders, openFolderActionId],
+  );
+
+  const renderFileActionMenu = (file: FileModel) => (
+    <div className="relative">
+      <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
+        {openFileActionId === file.id && fileActionMenuPosition ? (
+          <div
+            style={{
+              position: "fixed",
+              top: fileActionMenuPosition.y,
+              left: fileActionMenuPosition.x,
+              width: 176,
+              zIndex: 9999,
+              background:
+                resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
+              border: `1px solid ${myFilesColors.border}`,
+              borderRadius: 10,
+              overflow: "hidden",
+              backgroundClip: "padding-box",
+              isolation: "isolate",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            }}
+            role="menu"
+            aria-label={`File actions ${file.original_name}`}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {fileService.canPreviewFile(file) && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+                style={{ color: myFilesColors.text, background: "transparent" }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = `${accentColor}10`;
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = "transparent";
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenFileActionId(null);
+                  setFileActionMenuPosition(null);
+                  void handlePreviewFile(file);
+                }}
+                disabled={previewingFileId === file.id}
+                aria-label={`Preview ${file.original_name}`}
+                title={`Preview ${file.original_name}`}
+              >
+                <Eye size={12} style={{ color: myFilesColors.muted }} />{" "}
+                {previewingFileId === file.id ? "Opening..." : "Preview"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+              style={{ color: myFilesColors.text, background: "transparent" }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = `${accentColor}10`;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "transparent";
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                void fileService.downloadFile(file.id, file.original_name);
+                setOpenFileActionId(null);
+                setFileActionMenuPosition(null);
+              }}
+              aria-label={`Download ${file.original_name}`}
+              title={`Download ${file.original_name}`}
+            >
+              <Download size={12} style={{ color: myFilesColors.muted }} /> Download
+            </button>
+
+            <button
+              type="button"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+              style={{ color: myFilesColors.text, background: "transparent" }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = `${accentColor}10`;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "transparent";
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedFileForShare(file);
+                setShareError("");
+                setCopySuccess("");
+                setActiveShareLink(null);
+                setIsShareModalOpen(true);
+                setOpenFileActionId(null);
+                setFileActionMenuPosition(null);
+
+                (async () => {
+                  try {
+                    setShareLoading(true);
+                    const created = await createShareLink(file.id);
+                    setActiveShareLink(created);
+                  } catch (err: any) {
+                    setShareError(
+                      err?.response?.data?.message ||
+                        err?.message ||
+                        "Gagal membuat share link",
+                    );
+                  } finally {
+                    setShareLoading(false);
+                  }
+                })();
+              }}
+              aria-label={`Share ${file.original_name}`}
+              title={`Share ${file.original_name}`}
+            >
+              <Share2 size={12} style={{ color: myFilesColors.muted }} /> Share
+            </button>
+
+            <button
+              type="button"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+              style={{ color: myFilesColors.text, background: "transparent" }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = `${accentColor}10`;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "transparent";
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedFileForAction(file);
+                setFileRenameName(file.original_name);
+                setFileModalError("");
+                setIsFileRenameModalOpen(true);
+                setOpenFileActionId(null);
+                setFileActionMenuPosition(null);
+              }}
+              aria-label={`Rename ${file.original_name}`}
+              title={`Rename ${file.original_name}`}
+            >
+              <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
+            </button>
+
+            <button
+              type="button"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+              style={{ color: myFilesColors.text, background: "transparent" }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = `${accentColor}10`;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "transparent";
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenFileActionId(null);
+                setFileActionMenuPosition(null);
+                openMoveFileModal(file);
+              }}
+              aria-label={`Move ${file.original_name}`}
+            >
+              <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
+            </button>
+
+            <button
+              type="button"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+              style={{ color: "#f87171", background: "transparent" }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "rgba(239,68,68,0.12)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "transparent";
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSelectedFileForDelete(file);
+                setDeleteFileError("");
+                setIsFileDeleteModalOpen(true);
+                setOpenFileActionId(null);
+                setFileActionMenuPosition(null);
+              }}
+              aria-label={`Delete ${file.original_name}`}
+              title={`Delete ${file.original_name}`}
+            >
+              <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -2398,7 +2658,10 @@ export function MyFiles({
 
         <div
           className="flex items-center rounded-lg overflow-hidden ml-auto"
-          style={{ border: "1px solid #1a2540" }}
+          style={{
+            border: `1px solid ${myFilesColors.border}`,
+            background: myFilesColors.buttonSoftBg,
+          }}
         >
           {(["list", "grid"] as const).map((mode) => (
             <button
@@ -2406,23 +2669,78 @@ export function MyFiles({
               onClick={() => setViewMode(mode)}
               className="w-8 h-8 flex items-center justify-center transition-colors"
               style={{
-                background: viewMode === mode ? "#1a2540" : "#0d1829",
-                color: viewMode === mode ? "#e2e8f0" : "#475569",
+                background:
+                  viewMode === mode
+                    ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
+                    : "transparent",
+                color: viewMode === mode ? "#ffffff" : myFilesColors.muted,
+                boxShadow:
+                  viewMode === mode
+                    ? `0 8px 18px ${accentColor}22`
+                    : "none",
+              }}
+              onMouseEnter={(e) => {
+                if (viewMode === mode) return;
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  `${accentColor}10`;
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  myFilesColors.text;
+              }}
+              onMouseLeave={(e) => {
+                if (viewMode === mode) return;
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  myFilesColors.muted;
               }}
             >
               {mode === "list" ? <List size={14} /> : <Grid size={14} />}
             </button>
-          ))}
-        </div>
+            ))}
+          </div>
 
         <button
           type="button"
-          onClick={() => setMoveDragDropEnabled((value) => !value)}
-          className="rounded-xl border border-[#24314f] px-3 py-2 text-xs font-medium text-[#cbd5e1] transition hover:bg-[#1a2540] hover:text-white"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setMoveDragDropEnabled((value) => !value);
+          }}
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
           aria-pressed={moveDragDropEnabled}
           aria-label="Toggle drag move"
+          title={moveDragDropEnabled ? "Drag move aktif" : "Drag move mati"}
+          style={{
+            background: moveDragDropEnabled
+              ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
+              : myFilesColors.buttonSoftBg,
+            border: moveDragDropEnabled
+              ? `1px solid ${accentColor}66`
+              : `1px solid ${myFilesColors.border}`,
+            color: moveDragDropEnabled ? "#ffffff" : myFilesColors.text,
+            boxShadow: moveDragDropEnabled
+              ? `0 10px 24px ${accentColor}22`
+              : "none",
+          } as React.CSSProperties}
         >
-          Drag Move: {moveDragDropEnabled ? "On" : "Off"}
+          <span
+            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background: moveDragDropEnabled ? "#22c55e" : myFilesColors.muted,
+              boxShadow: moveDragDropEnabled
+                ? "0 0 0 4px rgba(34,197,94,0.16)"
+                : "none",
+              opacity: moveDragDropEnabled ? 1 : 0.75,
+              transition: "background 160ms ease, box-shadow 160ms ease, opacity 160ms ease",
+              flex: "0 0 auto",
+            }}
+          />
+          <span>
+            Drag Move: {moveDragDropEnabled ? "ON" : "OFF"}
+          </span>
         </button>
       </div>
 
@@ -2435,34 +2753,31 @@ export function MyFiles({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: "#334155" }}
-          >
-            Folders
-          </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <h3
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ color: myFilesColors.text }}
+              >
+                Folders
+              </h3>
 
-          {(() => {
-            const visibleFolderIds = sortedFolders.map((f) => f.id);
-            const selectedVisibleCount = visibleFolderIds.reduce(
-              (acc, id) => acc + (selectedFolderIds.has(id) ? 1 : 0),
-              0,
-            );
-            const allVisibleChecked =
-              visibleFolderIds.length > 0 &&
-              selectedVisibleCount === visibleFolderIds.length;
-            const someVisibleChecked =
-              selectedVisibleCount > 0 &&
-              selectedVisibleCount < visibleFolderIds.length;
+              {(() => {
+                const visibleFolderIds = sortedFolders.map((f) => f.id);
+                const selectedVisibleCount = visibleFolderIds.reduce(
+                  (acc, id) => acc + (selectedFolderIds.has(id) ? 1 : 0),
+                  0,
+                );
+                const allVisibleChecked =
+                  visibleFolderIds.length > 0 &&
+                  selectedVisibleCount === visibleFolderIds.length;
+                const someVisibleChecked =
+                  selectedVisibleCount > 0 &&
+                  selectedVisibleCount < visibleFolderIds.length;
 
-            return (
-              <>
-                {visibleFolderIds.length > 0 && (
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ color: "#94a3b8" }}
-                  >
+                return visibleFolderIds.length > 0 ? (
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       aria-label="Pilih semua folder yang tampil"
@@ -2489,53 +2804,52 @@ export function MyFiles({
                       }}
                       style={{ width: 14, height: 14, accentColor: "#ef4444" }}
                     />
-                    <div className="text-xs" style={{ color: "#e2e8f0" }}>
+                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
                       Pilih semua (tampil)
                     </div>
                   </div>
-                )}
+                ) : null;
+              })()}
+            </div>
+          </div>
 
-                {selectedFolderIds.size > 0 && (
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ color: "#94a3b8" }}
-                  >
-                    <div className="text-xs" style={{ color: "#e2e8f0" }}>
-                      {selectedFolderIds.size} folder dipilih
-                    </div>
+          {(() => {
+            return selectedFolderIds.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                  {selectedFolderIds.size} folder dipilih
+                </div>
 
-                    <button
-                      type="button"
-                      onClick={openBulkFolderDeleteModal}
-                      disabled={bulkFolderDeleteLoading}
-                      className="px-3 py-1 rounded-lg text-[11px] font-semibold"
-                      style={{
-                        background: "#f87171",
-                        border: "1px solid rgba(248,113,113,0.4)",
-                        color: "#0b1121",
-                        opacity: bulkFolderDeleteLoading ? 0.75 : 1,
-                      }}
-                      aria-label="Pindahkan folder ke Trash"
-                    >
-                      {bulkFolderDeleteLoading ? "Memproses..." : "Delete"}
-                    </button>
+                <button
+                  type="button"
+                  onClick={openBulkFolderDeleteModal}
+                  disabled={bulkFolderDeleteLoading}
+                  className="px-3 py-1 rounded-lg text-[11px] font-semibold"
+                  style={{
+                    background: "#f87171",
+                    border: "1px solid rgba(248,113,113,0.4)",
+                    color: "#0b1121",
+                    opacity: bulkFolderDeleteLoading ? 0.75 : 1,
+                  }}
+                  aria-label="Pindahkan folder ke Trash"
+                >
+                  {bulkFolderDeleteLoading ? "Memproses..." : "Delete"}
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => clearFolderSelection()}
-                      className="px-2 py-1 rounded-lg text-[11px] font-medium"
-                      style={{
-                        background: "#0d1829",
-                        border: "1px solid #1a2540",
-                        color: "#94a3b8",
-                      }}
-                    >
-                      Batalkan pilihan
-                    </button>
-                  </div>
-                )}
-              </>
-            );
+                <button
+                  type="button"
+                  onClick={() => clearFolderSelection()}
+                  className="px-2 py-1 rounded-lg text-[11px] font-medium"
+                  style={{
+                    background: myFilesColors.buttonSoftBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.muted,
+                  }}
+                >
+                  Batalkan pilihan
+                </button>
+              </div>
+            ) : null;
           })()}
         </div>
 
@@ -2559,8 +2873,119 @@ export function MyFiles({
           </div>
         )}
 
-        <div className="grid grid-cols-6 gap-3">
-          {sortedFolders.map((folder) => (
+        {viewMode === "list" ? (
+          <div className="flex flex-col gap-2">
+            {sortedFolders.map((folder) => {
+              const folderDate = folder.updated_at ?? folder.created_at;
+
+              return (
+                <div
+                  key={folder.id}
+                  draggable={moveDragDropEnabled}
+                  onDragStart={(e) => {
+                    if (!moveDragDropEnabled) {
+                      e.preventDefault();
+                      return;
+                    }
+
+                    e.dataTransfer.effectAllowed = "move";
+                    setCompactDragImage(
+                      e,
+                      folder.name ?? "Untitled folder",
+                      "folder",
+                    );
+                    startFolderDragMove(folder);
+                  }}
+                  onDragEnd={clearDragMoveItem}
+                  onDragOver={(e) => {
+                    if (!moveDragDropEnabled || !dragMoveItem) return;
+
+                    if (
+                      dragMoveItem.type === "folder" &&
+                      dragMoveItem.id === folder.id
+                    ) {
+                      return;
+                    }
+
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (!moveDragDropEnabled || !dragMoveItem) return;
+
+                    if (
+                      dragMoveItem.type === "folder" &&
+                      dragMoveItem.id === folder.id
+                    ) {
+                      clearDragMoveItem();
+                      return;
+                    }
+
+                    moveDraggedItemToFolder(folder.id);
+                  }}
+                  onClick={() => handleOpenFolder(folder)}
+                  onContextMenu={(e) => openFolderMenuAtCursor(e, folder.id)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-all group"
+                  style={{
+                    background: selectedFolderIds.has(folder.id)
+                      ? "rgba(168, 85, 247, 0.08)"
+                      : myFilesColors.cardBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    borderLeft: selectedFolderIds.has(folder.id)
+                      ? `3px solid ${accentColor}55`
+                      : "3px solid transparent",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Pilih folder ${folder.name}`}
+                    checked={selectedFolderIds.has(folder.id)}
+                    onChange={() => toggleFolderSelection(folder.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      accentColor: "#ef4444",
+                    }}
+                  />
+
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: myFilesColors.panelBg }}
+                  >
+                    <Folder size={22} style={{ color: accentColor }} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="text-sm font-medium truncate"
+                      style={{ color: myFilesColors.text }}
+                    >
+                      {folder.name}
+                    </div>
+                    <div
+                      className="text-[11px] mt-0.5"
+                      style={{ color: myFilesColors.muted }}
+                    >
+                      {folderDate
+                        ? `Modified ${new Date(folderDate).toLocaleDateString()}`
+                        : "-"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {sortedFolders.map((folder) => (
+
+
                 <div
                   key={folder.id}
                   draggable={moveDragDropEnabled}
@@ -2601,7 +3026,8 @@ export function MyFiles({
               }}
               onClick={() => handleOpenFolder(folder)}
               onContextMenu={(e) => openFolderMenuAtCursor(e, folder.id)}
-              className="rounded-xl p-3 cursor-pointer hover:scale-[1.03] transition-all group"
+              className="rounded-xl p-3 cursor-pointer transition-all group"
+
 
 
               style={{
@@ -2614,8 +3040,8 @@ export function MyFiles({
                   : "3px solid transparent",
               }}
             >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center">
+              <div className="flex items-start justify-between mb-2 relative pl-6">
+                <div className="absolute left-0 top-1 z-10">
                   <input
                     type="checkbox"
                     aria-label={`Pilih folder ${folder.name}`}
@@ -2636,119 +3062,14 @@ export function MyFiles({
                   className="w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{ background: myFilesColors.panelBg }}
                 >
-                  <Folder size={18} style={{ color: accentColor }} />
+                  <Folder size={25} style={{ color: accentColor }} />
                 </div>
 
                 <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="relative">
 
 
-                    {openFolderActionId === folder.id && (
-                      <div
-                        className="absolute right-0 top-full mt-2 w-28 rounded-lg shadow-2xl z-50 overflow-visible pointer-events-auto"
-                        style={{
-                          position: "fixed",
-                          top: folderActionMenuPosition?.y ?? 0,
-                          left: folderActionMenuPosition?.x ?? 0,
-                          width: 176,
-                          zIndex: 9999,
-                          background:
-                            resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
-                          border: `1px solid ${myFilesColors.border}`,
-                          backgroundClip: "padding-box",
-                          isolation: "isolate",
-                        }}
-                        role="menu"
-                        aria-label={`Folder menu ${folder.name}`}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                      >
 
-
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                          style={{ color: myFilesColors.text, background: "transparent" }}
-                          onMouseEnter={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = `${accentColor}10`;
-                            el.style.color = myFilesColors.text;
-                          }}
-                          onMouseLeave={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = "transparent";
-                          }}
-onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOpenFolderActionId(null);
-                            setFolderActionMenuPosition(null);
-                            setSelectedFolderForAction(folder);
-                            openRenameFolderModal(folder);
-                          }}
-
-                          aria-label={`Rename ${folder.name}`}
-                        >
-                          <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
-                        </button>
-
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                          style={{ color: myFilesColors.text, background: "transparent" }}
-                          onMouseEnter={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = `${accentColor}10`;
-                            el.style.color = myFilesColors.text;
-                          }}
-                          onMouseLeave={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = "transparent";
-                          }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOpenFolderActionId(null);
-                            setFolderActionMenuPosition(null);
-                            openMoveFolderModal(folder);
-                          }}
-
-                          aria-label={`Move ${folder.name}`}
-                        >
-                          <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
-                        </button>
-
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                          style={{
-                            color: "#f87171",
-                            background: "transparent",
-                          }}
-                          onMouseEnter={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = "rgba(239,68,68,0.12)";
-                          }}
-                          onMouseLeave={(e) => {
-                            const el = e.currentTarget;
-                            el.style.background = "transparent";
-                          }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOpenFolderActionId(null);
-                            setFolderActionMenuPosition(null);
-                            setSelectedFolderForDelete(folder);
-                            openDeleteFolderModal(folder);
-                          }}
-
-                          aria-label={`Delete ${folder.name}`}
-                        >
-                          <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
-                        </button>
-
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -2766,12 +3087,86 @@ onClick={(e) => {
                 —
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Global Folder Action Menu */}
+      {activeFolderAction && folderActionMenuPosition ? (
+        <div
+          ref={folderMenuWrapRef}
+          className="rounded-xl shadow-2xl overflow-hidden"
+
+          style={{
+            position: "fixed",
+            top: folderActionMenuPosition.y,
+            left: folderActionMenuPosition.x,
+            width: 176,
+            zIndex: 9999,
+            background:
+              resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
+            border: `1px solid ${myFilesColors.border}`,
+            backgroundClip: "padding-box",
+            isolation: "isolate",
+          }}
+          role="menu"
+          aria-label={`Folder menu ${activeFolderAction.name}`}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            style={{ color: myFilesColors.text, background: "transparent" }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpenFolderActionId(null);
+              setFolderActionMenuPosition(null);
+            }}
+            aria-label={`Rename ${activeFolderAction.name}`}
+          >
+            <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
+          </button>
+
+          <button
+            type="button"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            style={{ color: myFilesColors.text, background: "transparent" }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpenFolderActionId(null);
+              setFolderActionMenuPosition(null);
+            }}
+            aria-label={`Move ${activeFolderAction.name}`}
+          >
+            <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
+          </button>
+
+          <button
+            type="button"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            style={{ color: "#f87171", background: "transparent" }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpenFolderActionId(null);
+              setFolderActionMenuPosition(null);
+              setSelectedFolderForDelete(activeFolderAction);
+            }}
+            aria-label={`Delete ${activeFolderAction.name}`}
+          >
+            <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
+          </button>
+        </div>
+      ) : null}
+
 
       {/* Folder/Create/Rename Modal */}
       {isFolderModalOpen && (
+
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           role="dialog"
@@ -3539,7 +3934,9 @@ onClick={(e) => {
                 Item
               </p>
               <p className="mt-1 truncate text-sm font-medium" style={{ color: myFilesColors.text }}>
-                {moveItemName}
+                {moveItemType === "file" && moveFileIds.length > 1
+                  ? `${moveFileIds.length} files selected`
+                  : moveItemName}
               </p>
             </div>
 
@@ -4550,15 +4947,13 @@ onClick={(e) => {
             {fileError}
           </div>
         )}
-          <div
-            className="rounded-xl"
-            style={{ background: myFilesColors.panelBg, border: `1px solid ${myFilesColors.border}` }}
-          >
+        {viewMode === "list" ? (
+          <div className="flex flex-col gap-2">
             <div
-              className="grid px-4 py-2.5 items-center"
+              className="flex items-center gap-3 rounded-xl px-3 py-2"
               style={{
-                gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
-                borderBottom: `1px solid ${myFilesColors.border}`,
+                background: myFilesColors.panelBg,
+                border: `1px solid ${myFilesColors.border}`,
               }}
             >
             {/* Select all */}
@@ -4667,19 +5062,15 @@ onClick={(e) => {
                   }}
                   onDragEnd={clearDragMoveItem}
                   onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
-className="grid px-4 py-2.5 items-center cursor-pointer transition-colors group relative"
-
-
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
                   style={{
-                    gridTemplateColumns: "28px 1fr 80px 120px 80px 60px 36px",
-                    borderBottom: `1px solid ${myFilesColors.border}`,
+                    border: `1px solid ${myFilesColors.border}`,
                     background: selectedFileIds.has(file.id)
                       ? "rgba(168, 85, 247, 0.08)"
-                      : "transparent",
+                      : myFilesColors.cardBg,
                     borderLeft: selectedFileIds.has(file.id)
                       ? `3px solid ${accentColor}55`
                       : "3px solid transparent",
-                    paddingLeft: selectedFileIds.has(file.id) ? "calc(1rem - 3px)" : "1rem",
                   }}
                 >
                   <div className="flex items-center">
@@ -4705,14 +5096,17 @@ className="grid px-4 py-2.5 items-center cursor-pointer transition-colors group 
                     />
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <FileTypeIcon
                       originalName={file.original_name}
                       mimeType={file.mime_type}
                       className="w-7 h-7"
                       size={14}
                     />
-                    <span className="text-sm" style={{ color: myFilesColors.text }}>
+                    <span
+                      className="text-sm truncate"
+                      style={{ color: myFilesColors.text }}
+                    >
                       {file.original_name}
                     </span>
                   </div>
@@ -4749,230 +5143,138 @@ className="grid px-4 py-2.5 items-center cursor-pointer transition-colors group 
                     Private
                   </span>
 
-                  <div className="relative">
-                        <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
-                          {openFileActionId === file.id && fileActionMenuPosition ? (
-                        <div
-                          style={{
-                            position: "fixed",
-                            top: fileActionMenuPosition.y,
-                            left: fileActionMenuPosition.x,
-                            width: 176,
-                            zIndex: 9999,
-background: resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
-                            border: `1px solid ${myFilesColors.border}`,
-                            borderRadius: 10,
-overflow: "hidden",
-                            backgroundClip: "padding-box",
-                            isolation: "isolate",
-                            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-                          }}
-                          role="menu"
-                          aria-label={`File actions ${file.original_name}`}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-
-
-
-
-
-
-                          {fileService.canPreviewFile(file) && (
-                            <button
-
-                              type="button"
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                              style={{ color: myFilesColors.text, background: "transparent" }}
-                              onMouseEnter={(e) => {
-                                const el = e.currentTarget;
-                                el.style.background = `${accentColor}10`;
-                              }}
-                              onMouseLeave={(e) => {
-                                const el = e.currentTarget;
-                                el.style.background = "transparent";
-                              }}
-                          onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenFileActionId(null);
-                                setFileActionMenuPosition(null);
-                                void handlePreviewFile(file);
-                              }}
-
-                              disabled={previewingFileId === file.id}
-                              aria-label={`Preview ${file.original_name}`}
-                              title={`Preview ${file.original_name}`}
-                            >
-                              <Eye size={12} style={{ color: myFilesColors.muted }} />{" "}
-                              {previewingFileId === file.id
-                                ? "Opening..."
-                                : "Preview"}
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                            style={{ color: myFilesColors.text, background: "transparent" }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = `${accentColor}10`;
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "transparent";
-                            }}
-                          onClick={(e) => {
-                                e.stopPropagation();
-                                void fileService.downloadFile(
-                                  file.id,
-                                  file.original_name,
-                                );
-                                setOpenFileActionId(null);
-                                setFileActionMenuPosition(null);
-                              }}
-
-                            aria-label={`Download ${file.original_name}`}
-                            title={`Download ${file.original_name}`}
-                          >
-                            <Download size={12} style={{ color: myFilesColors.muted }} /> Download
-                          </button>
-
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                            style={{ color: myFilesColors.text, background: "transparent" }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = `${accentColor}10`;
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "transparent";
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFileForShare(file);
-                              setShareError("");
-                              setCopySuccess("");
-                              setActiveShareLink(null);
-                              setIsShareModalOpen(true);
-                              setOpenFileActionId(null);
-                              setFileActionMenuPosition(null);
-
-
-                              (async () => {
-                                try {
-                                  setShareLoading(true);
-                                  const created = await createShareLink(
-                                    file.id,
-                                  );
-                                  setActiveShareLink(created);
-                                } catch (err: any) {
-                                  setShareError(
-                                    err?.response?.data?.message ||
-                                      err?.message ||
-                                      "Gagal membuat share link",
-                                  );
-                                } finally {
-                                  setShareLoading(false);
-                                }
-                              })();
-                            }}
-                            aria-label={`Share ${file.original_name}`}
-                            title={`Share ${file.original_name}`}
-                          >
-                            <Share2 size={12} style={{ color: myFilesColors.muted }} /> Share
-                          </button>
-
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                            style={{ color: myFilesColors.text, background: "transparent" }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = `${accentColor}10`;
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "transparent";
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFileForAction(file);
-                              setFileRenameName(file.original_name);
-                              setFileModalError("");
-                              setIsFileRenameModalOpen(true);
-                              setOpenFileActionId(null);
-                              setFileActionMenuPosition(null);
-
-                            }}
-                            aria-label={`Rename ${file.original_name}`}
-                            title={`Rename ${file.original_name}`}
-                          >
-                            <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
-                          </button>
-
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                            style={{ color: myFilesColors.text, background: "transparent" }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = `${accentColor}10`;
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "transparent";
-                            }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setOpenFileActionId(null);
-                              setFileActionMenuPosition(null);
-                              openMoveFileModal(file);
-                            }}
-
-                            aria-label={`Move ${file.original_name}`}
-                          >
-                            <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
-                          </button>
-
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                            style={{ color: "#f87171", background: "transparent" }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "rgba(239,68,68,0.12)";
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget;
-                              el.style.background = "transparent";
-                            }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setSelectedFileForDelete(file);
-                              setDeleteFileError("");
-                              setIsFileDeleteModalOpen(true);
-                              setOpenFileActionId(null);
-                              setFileActionMenuPosition(null);
-                            }}
-
-                            aria-label={`Delete ${file.original_name}`}
-                            title={`Delete ${file.original_name}`}
-                          >
-                            <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
-                          </button>
-
-                        </div>
-                          ) : null}
-                    </div>
-                  </div>
+                  {renderFileActionMenu(file)}
                 </div>
               );
             })}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {showEmptySearchState && (
+              <div
+                className="col-span-full text-xs px-4 py-6"
+                style={{ color: myFilesColors.muted }}
+              >
+                Tidak ada hasil untuk "{searchQuery.trim()}".
+              </div>
+            )}
+            {!showEmptySearchState &&
+              typedFiles.map((file) => {
+                const typeLabel = getTypeLabel(file.mime_type ?? null);
+
+                return (
+                  <div
+                    key={file.id}
+                    draggable={moveDragDropEnabled}
+                    onDragStart={(e) => {
+                      if (!moveDragDropEnabled) {
+                        e.preventDefault();
+                        return;
+                      }
+
+                      e.dataTransfer.effectAllowed = "move";
+                      setCompactDragImage(
+                        e,
+                        file.original_name ?? "Untitled file",
+                        "file",
+                      );
+                      startFileDragMove(file);
+                    }}
+                    onDragEnd={clearDragMoveItem}
+                    onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
+                    className="rounded-xl p-3 cursor-pointer transition-colors group relative"
+                    style={{
+                      border: `1px solid ${myFilesColors.border}`,
+                      background: selectedFileIds.has(file.id)
+                        ? "rgba(168, 85, 247, 0.08)"
+                        : myFilesColors.cardBg,
+                      borderLeft: selectedFileIds.has(file.id)
+                        ? `3px solid ${accentColor}55`
+                        : "3px solid transparent",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <input
+                          type="checkbox"
+                          aria-label={`Pilih file ${file.original_name}`}
+                          checked={selectedFileIds.has(file.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedFileIds((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(file.id);
+                              else next.delete(file.id);
+                              return next;
+                            });
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: 14,
+                            height: 14,
+                            accentColor: "#ef4444",
+                          }}
+                        />
+
+                        <FileTypeIcon
+                          originalName={file.original_name}
+                          mimeType={file.mime_type}
+                          className="w-9 h-9 shrink-0"
+                          size={16}
+                        />
+                      </div>
+
+                      {renderFileActionMenu(file)}
+                    </div>
+
+                    <div
+                      className="text-sm font-medium truncate"
+                      style={{ color: myFilesColors.text }}
+                    >
+                      {file.original_name}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded font-medium w-fit"
+                        style={{
+                          background: `${myFilesColors.panelBg}`,
+                          color: accentColor,
+                          border: `1px solid ${myFilesColors.border}`,
+                        }}
+                      >
+                        {typeLabel}
+                      </span>
+                      <span
+                        className="text-xs"
+                        style={{ color: myFilesColors.muted }}
+                      >
+                        {file.created_at
+                          ? new Date(file.created_at).toLocaleDateString()
+                          : "-"}
+                      </span>
+                      <span
+                        className="text-xs"
+                        style={{ color: myFilesColors.muted }}
+                      >
+                        {formatBytes(file.size)}
+                      </span>
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded w-fit"
+                        style={{
+                          background: myFilesColors.panelBg,
+                          color: myFilesColors.muted2,
+                          border: `1px solid ${myFilesColors.border}`,
+                        }}
+                      >
+                        Private
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
     </div>
   );
