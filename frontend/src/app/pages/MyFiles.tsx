@@ -160,7 +160,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
               }}
               aria-hidden="true"
             >
-              â™ª
+              {"\u266A"}
             </div>
 
             <button
@@ -181,7 +181,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
                 fontSize: 20,
               }}
             >
-              {isPlaying ? "âšâš" : "â–¶"}
+              {isPlaying ? "\u23F8" : "\u25B6"}
             </button>
 
             <div
@@ -461,8 +461,13 @@ export function MyFiles({
     trimmedSearchQuery.length > 0 && (loadingFiles || loadingFolders);
 
 
+
   const [filterMenuOpen, setFilterMenuOpen] = useState<boolean>(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
+
   const [fileTypeFilter, setFileTypeFilter] = useState<
+
     | "all"
     | "folders"
     | "images"
@@ -1437,7 +1442,7 @@ export function MyFiles({
     type: "file" | "folder",
   ) => {
     const dragPreview = document.createElement("div");
-    const icon = type === "folder" ? "ðŸ“" : "ðŸ“„";
+    const icon = type === "folder" ? "Ã°Å¸â€œÂ" : "Ã°Å¸â€œâ€ž";
 
     dragPreview.textContent = `${icon} ${label}`;
     dragPreview.style.position = "fixed";
@@ -1638,6 +1643,44 @@ export function MyFiles({
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [openFileActionId, openFolderActionId]);
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      if (
+        filterMenuOpen &&
+        filterMenuRef.current &&
+        !filterMenuRef.current.contains(target)
+      ) {
+        setFilterMenuOpen(false);
+      }
+
+      if (
+        sortMenuOpen &&
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(target)
+      ) {
+        setSortMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFilterMenuOpen(false);
+        setSortMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [filterMenuOpen, sortMenuOpen]);
 
 
 
@@ -2453,7 +2496,7 @@ export function MyFiles({
           )}
         </div>
 
-        <div className="relative">
+        <div ref={filterMenuRef} className="relative">
           <button
             type="button"
             aria-label="Filter"
@@ -2528,7 +2571,7 @@ export function MyFiles({
                       {label}
                     </span>
                     {isActive ? (
-                      <span style={{ color: accentColor, fontWeight: 600 }}>âœ“</span>
+                      <span style={{ color: accentColor, fontWeight: 600 }}>{"\u2713"}</span>
                     ) : (
                       <span style={{ color: myFilesColors.muted }}> </span>
                     )}
@@ -2544,7 +2587,7 @@ export function MyFiles({
             </div>
           )}
         </div>
-        <div className="relative">
+        <div ref={sortMenuRef} className="relative">
           <button
             type="button"
             aria-label="Sort"
@@ -3123,8 +3166,8 @@ export function MyFiles({
                     moveDraggedItemToFolder(folder.id);
                   }}
                   onClick={() => handleOpenFolder(folder)}
-                  onContextMenu={(e) => openFolderMenuAtCursor(e, folder.id)}
                   className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-all group"
+
                   style={{
                     background: selectedFolderIds.has(folder.id)
                       ? "rgba(59, 130, 246, 0.08)"
@@ -3221,7 +3264,6 @@ export function MyFiles({
                 moveDraggedItemToFolder(folder.id);
               }}
               onClick={() => handleOpenFolder(folder)}
-              onContextMenu={(e) => openFolderMenuAtCursor(e, folder.id)}
               className="rounded-xl p-3 cursor-pointer transition-all group"
 
 
@@ -3277,10 +3319,10 @@ export function MyFiles({
                 {folder.name}
               </div>
               <div className="text-[10px] mt-0.5" style={{ color: myFilesColors.muted }}>
-                â€”
+                -
               </div>
               <div className="text-[10px]" style={{ color: myFilesColors.muted2 }}>
-                â€”
+                -
               </div>
             </div>
             ))}
@@ -3552,7 +3594,7 @@ export function MyFiles({
                   aria-label="Minimize preview"
                   title="Minimize preview"
                 >
-                  â€”
+                  -
                 </button>
 
                 <button
@@ -3571,7 +3613,7 @@ export function MyFiles({
                   aria-label="Toggle full page preview"
                   title="Full page preview"
                 >
-                  â–¡
+                  {"\u25A1"}
                 </button>
 
                 {(() => {
@@ -3678,7 +3720,7 @@ export function MyFiles({
                   aria-label="Close preview"
                   title="Close preview"
                 >
-                  Ã—
+                  &times;
                 </button>
               </div>
             </div>
@@ -4115,7 +4157,7 @@ export function MyFiles({
                 disabled={moveLoading}
                 aria-label="Close move modal"
               >
-                âœ•
+                &times;
               </button>
             </div>
 
@@ -4247,7 +4289,7 @@ export function MyFiles({
                   }}
                   aria-label="Tutup modal bulk delete folder"
                 >
-                  Ã—
+                  &times;
                 </button>
               </div>
             </div>
@@ -4562,7 +4604,7 @@ export function MyFiles({
                 }}
                 aria-label="Tutup modal bulk delete"
               >
-                Ã—
+                &times;
               </button>
             </div>
 
@@ -4704,7 +4746,7 @@ export function MyFiles({
                 }}
                 aria-label="Tutup hasil bulk download"
               >
-                Ã—
+                &times;
               </button>
             </div>
 
@@ -5235,7 +5277,7 @@ export function MyFiles({
 
           {showEmptySearchState && (
             <div className="text-xs px-4 py-6" style={{ color: myFilesColors.muted }}>
-              Tidak ada hasil untuk â€œ{searchQuery.trim()}â€.
+              Tidak ada hasil untuk "{searchQuery.trim()}"
             </div>
           )}
           {!showEmptySearchState &&
@@ -5257,7 +5299,6 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
                   className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
                   style={{
                     border: `1px solid ${myFilesColors.border}`,
@@ -5321,7 +5362,7 @@ export function MyFiles({
                   <span className="text-xs" style={{ color: myFilesColors.muted }}>
                     {file.created_at
                       ? new Date(file.created_at).toLocaleDateString()
-                      : "â€”"}
+                      : "-"}
                   </span>
 
                   <span className="text-xs" style={{ color: myFilesColors.muted }}>
@@ -5377,7 +5418,6 @@ export function MyFiles({
                       startFileDragMove(file);
                     }}
                     onDragEnd={clearDragMoveItem}
-                    onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
                     className="rounded-xl p-3 cursor-pointer transition-colors group relative"
                     style={{
                       border: `1px solid ${myFilesColors.border}`,

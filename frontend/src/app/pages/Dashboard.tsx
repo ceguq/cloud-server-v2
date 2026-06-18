@@ -361,7 +361,7 @@ export function Dashboard() {
             display_date:
               f.created_at || f.updated_at
                 ? new Date(f.created_at || f.updated_at || "").toLocaleString()
-                : "—",
+                : "Ã¢â‚¬â€",
           }));
           setRecentFiles(mapped);
         }
@@ -629,7 +629,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: dashboardColors.title }}>
-            Welcome back, Alex 👋
+            Welcome back, Alex Ã°Å¸â€˜â€¹
           </h1>
           <p className="text-sm mt-0.5" style={{ color: dashboardColors.muted }}>
             Here's what's happening with your cloud today.
@@ -706,7 +706,7 @@ export function Dashboard() {
                   {Icon ? (
                     <Icon size={18} style={{ color: card.color }} />
                   ) : (
-                    <span style={{ color: card.color }}>•</span>
+                    <span style={{ color: card.color }}>Ã¢â‚¬Â¢</span>
                   )}
                 </div>
                 <span
@@ -815,28 +815,6 @@ export function Dashboard() {
                       borderBottom: `1px solid ${themeUI.rowDivider}`,
                       backgroundColor: resolvedTheme === "light" ? "#ffffff" : "transparent",
                     }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const rawX = e.clientX;
-                      const rawY = e.clientY;
-                      const menuWidth = 176;
-                      const menuHeight = 220;
-                      const x =
-                        typeof window !== "undefined"
-                          ? Math.min(rawX, window.innerWidth - menuWidth)
-                          : rawX;
-                      const y =
-                        typeof window !== "undefined"
-                          ? Math.min(rawY, window.innerHeight - menuHeight)
-                          : rawY;
-
-                      setOpenDashboardMenuId(file.id);
-                      setDashboardMenuPosition({
-                        x: Math.max(8, x),
-                        y: Math.max(8, y),
-                      });
-                    }}
                   >
                   <div className="flex items-center gap-2.5">
                     <FileTypeIcon
@@ -869,15 +847,6 @@ export function Dashboard() {
                 className="flex justify-center py-2.5"
                 style={{ borderTop: `1px solid ${themeUI.divider}` }}
               >
-            <button
-              type="button"
-              className="text-xs"
-              style={{ color: themeUI.textMutedSoft }}
-              onClick={() => navigateToMyFiles()}
-            >
-              Showing recent uploads —{" "}
-              <span style={{ color: accentColor }}>View All</span>
-            </button>
           </div>
         </div>
 
@@ -1110,7 +1079,7 @@ export function Dashboard() {
                             : "1px solid rgba(59,130,246,0.22)",
                       }}
                     >
-                      •
+                      Ã¢â‚¬Â¢
                     </div>
                     <div>
                       <div className="text-xs" style={{ color: dashboardColors.text }}>
@@ -1124,7 +1093,7 @@ export function Dashboard() {
                       >
                         {item.created_at
                           ? new Date(item.created_at).toLocaleString()
-                          : "—"}
+                          : "Ã¢â‚¬â€"}
                       </div>
                     </div>
                   </div>
