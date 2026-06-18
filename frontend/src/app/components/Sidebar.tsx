@@ -191,19 +191,19 @@ export function Sidebar({
           error: "#dc2626",
         }
       : {
-          sidebarBg: "#0b1121",
-          border: "#1a2540",
+          sidebarBg: "#080d1a",
+          border: "rgba(148, 163, 184, 0.14)",
           logoText: "#ffffff",
-          subtitle: "#64748b",
-          navText: "#64748b",
+          subtitle: "rgba(148, 163, 184, 0.58)",
+          navText: "rgba(148, 163, 184, 0.62)",
           navTextActive: "#e2e8f0",
-          navIcon: "#475569",
-          cardBg: "#0d1829",
-          panelBg: "#1e2d45",
+          navIcon: "rgba(148, 163, 184, 0.48)",
+          cardBg: "#0f1729",
+          panelBg: "#0d1829",
           storageText: "#e2e8f0",
-          storageLabel: "#94a3b8",
-          muted: "#64748b",
-          muted2: "#475569",
+          storageLabel: "rgba(148, 163, 184, 0.72)",
+          muted: "rgba(148, 163, 184, 0.58)",
+          muted2: "rgba(148, 163, 184, 0.48)",
           error: "#f87171",
         };
 
@@ -293,7 +293,7 @@ export function Sidebar({
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group text-left"
                 style={{
                   background: isActive
-                    ? `linear-gradient(135deg, ${accentSoftBg} 0%, rgba(34,211,238,0.1) 100%)`
+                    ? `linear-gradient(135deg, ${accentSoftBg} 0%, rgba(34,211,238,0.14) 100%)`
                     : "transparent",
 
                   border: isActive
@@ -402,7 +402,7 @@ export function Sidebar({
         <button
           className="mt-3 w-full py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
           style={{
-            background: `linear-gradient(135deg, ${accentColor} 0%, #0891b2 100%)`,
+            background: `linear-gradient(135deg, ${accentColor} 0%, #22d3ee 100%)`,
             color: "#fff",
           }}
 

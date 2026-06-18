@@ -135,8 +135,8 @@ const statCards = [
     change: "Real API",
     up: true,
     icon: Share2,
-    color: "#a78bfa",
-    glow: "rgba(167,139,250,0.2)",
+    color: "#22d3ee",
+    glow: "rgba(34,211,238,0.2)",
     kind: "shared" as const,
   },
   {
@@ -546,7 +546,8 @@ export function Dashboard() {
       label: "Memory Usage",
       value: memoryUsage,
       suffix: "%",
-      color: "#a78bfa",
+      color: "#22d3ee",
+
       data: [
         { time: "15m", value: memoryUsage },
         { time: "5m", value: memoryUsage },
@@ -924,7 +925,7 @@ export function Dashboard() {
                   {
                     name: "Free",
                     value: safeFreePercent,
-                    color: "#1e293b",
+                    color: "#1e2d45",
                   },
                 ];
 

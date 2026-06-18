@@ -163,7 +163,8 @@ export default function App() {
       <div
         className="flex h-screen w-screen overflow-hidden"
         style={{
-          background: "#080d1a",
+          background:
+            "radial-gradient(circle at 18% 12%, rgba(59,130,246,0.14), transparent 30%), radial-gradient(circle at 78% 80%, rgba(34,211,238,0.10), transparent 35%), #080d1a",
           fontFamily: "'Inter', sans-serif",
         }}
       >
