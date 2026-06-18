@@ -1217,7 +1217,7 @@ export function Dashboard() {
             </span>
 
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             {serverMetrics.map((metric) => (
               <div key={metric.label}>
                 <div className="flex justify-between items-center mb-1.5">
@@ -1263,16 +1263,63 @@ export function Dashboard() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
-                    234 MB/s
-                  </span>
-                  <span className="text-[10px]" style={{ color: dashboardColors.muted }}>
-                    14h 30m
-                  </span>
-                </div>
               </div>
             ))}
+          </div>
+
+          {/* Server Details Grid */}
+          <div className="grid grid-cols-4 gap-3 text-xs">
+            <div className="p-3 rounded-lg" style={{ background: themeUI.subtleBg2, border: `1px solid ${themeUI.dividerSoft}` }}>
+              <div style={{ color: dashboardColors.muted }}>OS</div>
+              <div className="font-semibold mt-1" style={{ color: dashboardColors.text }}>
+                {serverMonitor?.server.os_name || "N/A"}
+              </div>
+              <div className="text-[10px] mt-0.5" style={{ color: dashboardColors.muted2 }}>
+                {serverMonitor?.server.os_version || ""}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg" style={{ background: themeUI.subtleBg2, border: `1px solid ${themeUI.dividerSoft}` }}>
+              <div style={{ color: dashboardColors.muted }}>CPU</div>
+              <div className="font-semibold mt-1" style={{ color: dashboardColors.text }}>
+                {serverMonitor?.cpu.logical_cores || 0} cores
+              </div>
+              <div className="text-[10px] mt-0.5 truncate" style={{ color: dashboardColors.muted2 }}>
+                {serverMonitor?.cpu.model || "Unknown"}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg" style={{ background: themeUI.subtleBg2, border: `1px solid ${themeUI.dividerSoft}` }}>
+              <div style={{ color: dashboardColors.muted }}>Memory</div>
+              <div className="font-semibold mt-1" style={{ color: dashboardColors.text }}>
+                {serverMonitor?.memory?.total_bytes
+                  ? `${(serverMonitor.memory.total_bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
+                  : "N/A"}
+              </div>
+              <div className="text-[10px] mt-0.5" style={{ color: dashboardColors.muted2 }}>
+                {serverMonitor?.memory?.used_bytes
+                  ? `${(serverMonitor.memory.used_bytes / 1024 / 1024 / 1024).toFixed(1)}GB used`
+                  : ""}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg" style={{ background: themeUI.subtleBg2, border: `1px solid ${themeUI.dividerSoft}` }}>
+              <div style={{ color: dashboardColors.muted }}>Uptime</div>
+              <div className="font-semibold mt-1" style={{ color: dashboardColors.text }}>
+                {serverMonitor?.server?.uptime_seconds
+                  ? (() => {
+                      const total = serverMonitor.server.uptime_seconds;
+                      const days = Math.floor(total / 86400);
+                      const hours = Math.floor((total % 86400) / 3600);
+                      if (days > 0) return `${days}d ${hours}h`;
+                      return `${hours}h`;
+                    })()
+                  : "N/A"}
+              </div>
+              <div className="text-[10px] mt-0.5" style={{ color: dashboardColors.muted2 }}>
+                System uptime
+              </div>
+            </div>
           </div>
         </div>
 

@@ -11,7 +11,8 @@ import {
   Globe, Clock, TrendingUp, Zap
 } from "lucide-react";
 import {
-  ResponsiveContainer
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from "recharts";
 
 
@@ -78,6 +79,40 @@ const clampPercent = (value: number | null | undefined) => {
 const formatLoad = (value: number | null | undefined) =>
   typeof value === "number" ? value.toFixed(2) : "N/A";
 
+const formatDuration = (seconds: number | null | undefined) => {
+  if (typeof seconds !== "number") return "N/A";
+
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
+};
+
+const formatCpuCores = (
+  physical: number | null | undefined,
+  logical: number | null | undefined,
+) => {
+  if (typeof physical !== "number" && typeof logical !== "number") return "N/A";
+  if (typeof physical === "number" && typeof logical === "number") {
+    return `${physical} physical / ${logical} logical`;
+  }
+  return typeof logical === "number" ? `${logical} logical` : `${physical} physical`;
+};
+
+const formatIpList = (ips: string[] | undefined) => {
+  if (!ips || ips.length === 0) return "N/A";
+  return ips.slice(0, 3).join(", ");
+};
+
 
 
 
@@ -100,6 +135,8 @@ export function ServerMonitor() {
   const [monitorData, setMonitorData] = useState<ServerMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cpuHistory, setCpuHistory] = useState<Array<{ time: string; usage: number; load_1m: number }>>([]);
+  const [memoryHistory, setMemoryHistory] = useState<Array<{ time: string; used: number; free: number }>>([]);
 
   const loadServerMonitor = async (options?: { silent?: boolean }) => {
     try {
@@ -112,6 +149,33 @@ export function ServerMonitor() {
       setError(null);
       const data = await getServerMonitor();
       setMonitorData(data);
+
+      // Add to history (keep last 30 data points)
+      const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      setCpuHistory(prev => {
+        const updated = [
+          ...prev,
+          {
+            time: now,
+            usage: typeof data.cpu.usage_percent === 'number' ? data.cpu.usage_percent : 0,
+            load_1m: data.cpu.load_1m || 0,
+          }
+        ];
+        return updated.slice(-30);
+      });
+
+      setMemoryHistory(prev => {
+        const updated = [
+          ...prev,
+          {
+            time: now,
+            used: data.memory.usage_percent || 0,
+            free: Math.max(0, 100 - (data.memory.usage_percent || 0)),
+          }
+        ];
+        return updated.slice(-30);
+      });
     } catch (err) {
       console.error("Failed to load server monitor:", err);
       setError("Gagal memuat data server monitor.");
@@ -127,6 +191,13 @@ export function ServerMonitor() {
 
   useEffect(() => {
     loadServerMonitor();
+
+    // Auto-refresh every 5 seconds after initial load
+    const interval = setInterval(() => {
+      loadServerMonitor({ silent: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -233,22 +304,116 @@ export function ServerMonitor() {
         </div>
       )}
 
-      {/* (removed) API info block: Host/OS/Last checked/Services/Warnings */}
+      {monitorData && (
+        <div
+          className="mb-6 rounded-xl p-4"
+          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+        >
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Server size={16} style={{ color: "#60a5fa" }} />
+              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>
+                Current PC
+              </span>
+            </div>
+            <span className="text-[11px]" style={{ color: "#64748b" }}>
+              Last checked {formatDateTime(monitorData.server.checked_at)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: "Hostname",
+                value: monitorData.server.hostname ?? "N/A",
+                icon: Server,
+              },
+              {
+                label: "Operating System",
+                value:
+                  monitorData.server.os_name ??
+                  monitorData.server.os ??
+                  "N/A",
+                icon: Globe,
+              },
+              {
+                label: "Architecture",
+                value: monitorData.server.architecture ?? "N/A",
+                icon: Activity,
+              },
+              {
+                label: "CPU",
+                value: monitorData.cpu.model ?? "N/A",
+                icon: Cpu,
+              },
+              {
+                label: "CPU Cores",
+                value: formatCpuCores(
+                  monitorData.cpu.physical_cores,
+                  monitorData.cpu.logical_cores,
+                ),
+                icon: Zap,
+              },
+              {
+                label: "Local IP",
+                value: formatIpList(monitorData.network?.local_ips),
+                icon: Wifi,
+              },
+              {
+                label: "Uptime",
+                value: formatDuration(monitorData.server.uptime_seconds),
+                icon: Clock,
+              },
+              {
+                label: "Runtime",
+                value: `PHP ${monitorData.server.php_version ?? "N/A"} / Laravel ${monitorData.server.laravel_version ?? "N/A"}`,
+                icon: CheckCircle,
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="min-w-0 rounded-lg px-3 py-2"
+                  style={{ background: "#0d1829", border: "1px solid #1a2540" }}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <Icon size={12} style={{ color: "#64748b" }} />
+                    <span className="text-[11px]" style={{ color: "#64748b" }}>
+                      {item.label}
+                    </span>
+                  </div>
+                  <div
+                    className="truncate text-xs font-medium"
+                    title={item.value}
+                    style={{ color: "#cbd5e1" }}
+                  >
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
 
       {/* Key Metrics */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           {
-            label: "CPU Load",
-            value: formatLoad(monitorData?.cpu.load_1m),
+            label: "CPU Usage",
+            value:
+              typeof monitorData?.cpu.usage_percent === "number"
+                ? formatPercent(monitorData.cpu.usage_percent)
+                : formatLoad(monitorData?.cpu.load_1m),
             icon: Cpu,
             color: "#3b82f6",
             sub:
               monitorData?.cpu.load_1m == null
-                ? "Load average unavailable"
+                ? "CPU usage unavailable"
                 : `5m ${formatLoad(monitorData?.cpu.load_5m)} · 15m ${formatLoad(monitorData?.cpu.load_15m)}`,
-            progress: 0,
+            progress: clampPercent(monitorData?.cpu.usage_percent),
           },
           {
             label: "Memory",
@@ -268,10 +433,13 @@ export function ServerMonitor() {
           },
           {
             label: "Network",
-            value: "N/A",
+            value: monitorData?.network?.primary_ip ?? "N/A",
             icon: Wifi,
             color: "#f97316",
-            sub: "Not provided by backend API",
+            sub:
+              (monitorData?.network?.local_ips?.length ?? 0) > 0
+                ? `${monitorData?.network?.local_ips?.length ?? 0} local IP detected`
+                : "Local IP unavailable",
             progress: 0,
           },
         ].map((m) => {
@@ -304,11 +472,44 @@ export function ServerMonitor() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Cpu size={13} style={{ color: "#3b82f6" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>CPU Usage</span>
+              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>CPU Usage (Real-time)</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#3b82f6" }}>N/A</span>
+            <span className="text-sm font-bold" style={{ color: "#3b82f6" }}>
+              {typeof monitorData?.cpu.usage_percent === "number"
+                ? formatPercent(monitorData.cpu.usage_percent)
+                : formatLoad(monitorData?.cpu.load_1m)}
+            </span>
           </div>
-          <ChartUnavailable title="CPU Load chart unavailable" />
+          <ResponsiveContainer width="100%" height={200}>
+            {cpuHistory.length > 0 ? (
+              <LineChart data={cpuHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1a2540" vertical={false} />
+                <XAxis 
+                  dataKey="time" 
+                  stroke="#64748b" 
+                  style={{ fontSize: "11px" }}
+                  tick={{ angle: -45, textAnchor: 'end', height: 60 }}
+                />
+                <YAxis stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, 100]} />
+                <Tooltip
+                  contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
+                  labelStyle={{ color: "#94a3b8" }}
+                  formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="usage" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={false}
+                  name="CPU Usage %"
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            ) : (
+              <ChartUnavailable title="Waiting for data..." />
+            )}
+          </ResponsiveContainer>
         </div>
 
         {/* Memory Chart */}
@@ -316,11 +517,42 @@ export function ServerMonitor() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <MemoryStick size={13} style={{ color: "#a78bfa" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Memory Usage</span>
+              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Memory Usage (Real-time)</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#a78bfa" }}>N/A</span>
+            <span className="text-sm font-bold" style={{ color: "#a78bfa" }}>
+              {formatPercent(monitorData?.memory.usage_percent)}
+            </span>
           </div>
-          <ChartUnavailable title="Memory Usage chart unavailable" />
+          <ResponsiveContainer width="100%" height={200}>
+            {memoryHistory.length > 0 ? (
+              <LineChart data={memoryHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1a2540" vertical={false} />
+                <XAxis 
+                  dataKey="time" 
+                  stroke="#64748b" 
+                  style={{ fontSize: "11px" }}
+                  tick={{ angle: -45, textAnchor: 'end', height: 60 }}
+                />
+                <YAxis stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, 100]} />
+                <Tooltip
+                  contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
+                  labelStyle={{ color: "#94a3b8" }}
+                  formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="used" 
+                  stroke="#a78bfa" 
+                  strokeWidth={2}
+                  dot={false}
+                  name="Used %"
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            ) : (
+              <ChartUnavailable title="Waiting for data..." />
+            )}
+          </ResponsiveContainer>
         </div>
 
         {/* Network Chart */}
@@ -328,26 +560,81 @@ export function ServerMonitor() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Wifi size={13} style={{ color: "#34d399" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Network I/O</span>
+              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Network Info</span>
             </div>
-            <div className="flex items-center gap-3 text-xs">
-              <span style={{ color: "#34d399" }}>↑ Upload</span>
-              <span style={{ color: "#22d3ee" }}>↓ Download</span>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: "rgba(52, 211, 153, 0.1)", border: "1px solid rgba(52, 211, 153, 0.2)" }}>
+              <span className="text-[10px] font-mono" style={{ color: "#34d399" }}>
+                {(monitorData?.network?.local_ips?.length ?? 0)} IPs
+              </span>
             </div>
           </div>
-          <ChartUnavailable title="Network chart unavailable" />
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg" style={{ background: "#1e2d45", border: "1px solid rgba(52, 211, 153, 0.2)" }}>
+              <div className="text-[10px]" style={{ color: "#64748b" }}>Primary IP</div>
+              <div className="text-sm font-mono font-semibold mt-1" style={{ color: "#34d399" }}>
+                {monitorData?.network?.primary_ip ?? "N/A"}
+              </div>
+            </div>
+            {(monitorData?.network?.local_ips ?? []).length > 1 && (
+              <div className="p-3 rounded-lg" style={{ background: "#1e2d45" }}>
+                <div className="text-[10px]" style={{ color: "#64748b" }}>All Local IPs</div>
+                <div className="mt-2 space-y-1">
+                  {monitorData?.network?.local_ips?.map((ip, i) => (
+                    <div key={i} className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "rgba(52, 211, 153, 0.1)", color: "#34d399" }}>
+                      {ip}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Disk I/O */}
+        {/* Disk Usage Chart */}
         <div className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <HardDrive size={13} style={{ color: "#22d3ee" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Disk I/O</span>
+              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Disk Usage</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#22d3ee" }}>N/A</span>
+            <span className="text-sm font-bold" style={{ color: "#22d3ee" }}>
+              {formatPercent(monitorData?.disk.usage_percent)}
+            </span>
           </div>
-          <ChartUnavailable title="Disk I/O chart unavailable" />
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: "Used", value: Math.round(monitorData?.disk.usage_percent || 0), fill: "#22d3ee" },
+                  { name: "Free", value: Math.round(100 - (monitorData?.disk.usage_percent || 0)), fill: "rgba(34, 211, 238, 0.2)" }
+                ]}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={2}
+                dataKey="value"
+              >
+                <Cell fill="#22d3ee" />
+                <Cell fill="rgba(34, 211, 238, 0.2)" />
+              </Pie>
+              <Tooltip
+                contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
+                labelStyle={{ color: "#94a3b8" }}
+                formatter={(value) => `${value}%`}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2 rounded-lg" style={{ background: "#1e2d45" }}>
+              <div style={{ color: "#64748b" }}>Used</div>
+              <div className="font-semibold" style={{ color: "#22d3ee" }}>{formatBytes(monitorData?.disk.used_bytes)}</div>
+            </div>
+            <div className="p-2 rounded-lg" style={{ background: "#1e2d45" }}>
+              <div style={{ color: "#64748b" }}>Free</div>
+              <div className="font-semibold" style={{ color: "#22d3ee" }}>{formatBytes(monitorData?.disk.free_bytes)}</div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -441,18 +728,6 @@ export function ServerMonitor() {
           {/* Server info */}
           <div className="px-4 pb-3 pt-1 space-y-2" style={{ borderTop: "1px solid #1a2540" }}>
             {(() => {
-              const formatDuration = (seconds: number | null | undefined) => {
-                if (typeof seconds !== "number") return "N/A";
-
-                const days = Math.floor(seconds / 86400);
-                const hours = Math.floor((seconds % 86400) / 3600);
-                const minutes = Math.floor((seconds % 3600) / 60);
-
-                if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-                if (hours > 0) return `${hours}h ${minutes}m`;
-                return `${minutes}m`;
-              };
-
               const uptimeValue = formatDuration(monitorData?.server.uptime_seconds);
               const cpuLoad1m = monitorData?.cpu.load_1m;
               const cpuLoad5m = monitorData?.cpu.load_5m;
@@ -485,4 +760,3 @@ export function ServerMonitor() {
     </div>
   );
 }
-
