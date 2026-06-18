@@ -1934,7 +1934,7 @@ export function MyFiles({
     [folders, openFolderActionId],
   );
   const fileListColumnTemplate =
-    "24px minmax(0, 1fr) 74px 74px 66px 52px 0px";
+    "24px minmax(0, 1fr) 100px 72px 62px 54px 0px";
 
   const renderFileActionMenu = (file: FileModel) => (
     <div className="relative">
@@ -5191,7 +5191,7 @@ export function MyFiles({
         {viewMode === "list" ? (
           <div className="flex flex-col gap-2">
             <div
-              className="grid items-center gap-3 rounded-xl px-3 py-2"
+              className="grid items-center gap-2 rounded-xl px-3 py-2"
               style={{
                 gridTemplateColumns: fileListColumnTemplate,
                 background: myFilesColors.panelBg,
@@ -5249,9 +5249,17 @@ export function MyFiles({
             >
               Name
             </span>
-<span
+            <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: myFilesColors.muted, justifySelf: "start", paddingLeft: 4 }}
+              style={{
+                color: myFilesColors.muted,
+                justifySelf: "start",
+                paddingLeft: 4,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                marginLeft: -4,
+              }}
             >
               Type
             </span>
@@ -5307,7 +5315,7 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  className="grid items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
+                  className="grid items-center gap-2 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
                   style={{
                     gridTemplateColumns: fileListColumnTemplate,
                     border: `1px solid ${myFilesColors.border}`,
