@@ -361,7 +361,7 @@ export function Dashboard() {
             display_date:
               f.created_at || f.updated_at
                 ? new Date(f.created_at || f.updated_at || "").toLocaleString()
-                : "Ã¢â‚¬â€",
+                : "-",
           }));
           setRecentFiles(mapped);
         }
@@ -629,7 +629,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: dashboardColors.title }}>
-            Welcome back, Alex Ã°Å¸â€˜â€¹
+            Welcome back, Alex
           </h1>
           <p className="text-sm mt-0.5" style={{ color: dashboardColors.muted }}>
             Here's what's happening with your cloud today.
@@ -706,7 +706,7 @@ export function Dashboard() {
                   {Icon ? (
                     <Icon size={18} style={{ color: card.color }} />
                   ) : (
-                    <span style={{ color: card.color }}>Ã¢â‚¬Â¢</span>
+                    <span style={{ color: card.color }}>{"\u2022"}</span>
                   )}
                 </div>
                 <span
@@ -1079,7 +1079,7 @@ export function Dashboard() {
                             : "1px solid rgba(59,130,246,0.22)",
                       }}
                     >
-                      Ã¢â‚¬Â¢
+                      {"\u2022"}
                     </div>
                     <div>
                       <div className="text-xs" style={{ color: dashboardColors.text }}>
@@ -1093,7 +1093,7 @@ export function Dashboard() {
                       >
                         {item.created_at
                           ? new Date(item.created_at).toLocaleString()
-                          : "Ã¢â‚¬â€"}
+                          : "-"}
                       </div>
                     </div>
                   </div>

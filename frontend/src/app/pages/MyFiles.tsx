@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 
 
@@ -457,8 +457,7 @@ export function MyFiles({
 
   const trimmedSearchQuery = searchQuery.trim();
   const isSearchActive = searchFocused || trimmedSearchQuery.length > 0;
-  const isSearchLoading =
-    trimmedSearchQuery.length > 0 && (loadingFiles || loadingFolders);
+
 
 
 
@@ -646,6 +645,8 @@ export function MyFiles({
   const [breadcrumbs, setBreadcrumbs] = useState<FolderModel[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [folderError, setFolderError] = useState<string>("");
+  const isSearchLoading =
+    trimmedSearchQuery.length > 0 && (loadingFiles || loadingFolders);
 
   const loadFolders = async (
     parentId: string | null,
@@ -1247,32 +1248,32 @@ export function MyFiles({
     setOpenFolderActionId(null);
 
     if (openFileActionId === fileId) {
-                    setOpenFileActionId(null);
-                    setFileActionMenuPosition(null);
-                    return;
-                    }
+      setOpenFileActionId(null);
+      setFileActionMenuPosition(null);
+      return;
+    }
 
-                    const menuWidth = 180;
-                    const menuHeight = 260;
-                    const rawX = event.clientX;
-                    const rawY = event.clientY;
+    const menuWidth = 180;
+    const menuHeight = 260;
+    const rawX = event.clientX;
+    const rawY = event.clientY;
 
-                    const x =
-                      typeof window !== "undefined"
-                        ? Math.min(rawX, window.innerWidth - menuWidth)
-                        : rawX;
+    const x =
+      typeof window !== "undefined"
+        ? Math.min(rawX, window.innerWidth - menuWidth)
+        : rawX;
 
-                    const y =
-                      typeof window !== "undefined"
-                        ? Math.min(rawY, window.innerHeight - menuHeight)
-                        : rawY;
+    const y =
+      typeof window !== "undefined"
+        ? Math.min(rawY, window.innerHeight - menuHeight)
+        : rawY;
 
-                    setOpenFileActionId(fileId);
-                    setFileActionMenuPosition({
-                      x: Math.max(8, x),
-                      y: Math.max(8, y),
-                    });
-                  }
+    setOpenFileActionId(fileId);
+    setFileActionMenuPosition({
+      x: Math.max(8, x),
+      y: Math.max(8, y),
+    });
+  }
 
   // Move modal helpers
   const closeMoveModal = () => {
@@ -1442,7 +1443,7 @@ export function MyFiles({
     type: "file" | "folder",
   ) => {
     const dragPreview = document.createElement("div");
-    const icon = type === "folder" ? "Ã°Å¸â€œÂ" : "Ã°Å¸â€œâ€ž";
+    const icon = type === "folder" ? "\uD83D\uDCC1" : "\uD83D\uDCC4";
 
     dragPreview.textContent = `${icon} ${label}`;
     dragPreview.style.position = "fixed";
@@ -1932,6 +1933,8 @@ export function MyFiles({
     () => folders.find((folder) => folder.id === openFolderActionId) ?? null,
     [folders, openFolderActionId],
   );
+  const fileListColumnTemplate =
+    "24px minmax(0, 1fr) 74px 74px 66px 52px 0px";
 
   const renderFileActionMenu = (file: FileModel) => (
     <div className="relative">
@@ -5188,8 +5191,9 @@ export function MyFiles({
         {viewMode === "list" ? (
           <div className="flex flex-col gap-2">
             <div
-              className="flex items-center gap-3 rounded-xl px-3 py-2"
+              className="grid items-center gap-3 rounded-xl px-3 py-2"
               style={{
+                gridTemplateColumns: fileListColumnTemplate,
                 background: myFilesColors.panelBg,
                 border: `1px solid ${myFilesColors.border}`,
               }}
@@ -5241,13 +5245,13 @@ export function MyFiles({
 
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: myFilesColors.muted }}
+              style={{ color: myFilesColors.muted, paddingLeft: 38 }}
             >
               Name
             </span>
-            <span
+<span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: myFilesColors.muted }}
+              style={{ color: myFilesColors.muted, justifySelf: "start", paddingLeft: 4 }}
             >
               Type
             </span>
@@ -5288,6 +5292,10 @@ export function MyFiles({
                 <div
                   key={file.id}
                   draggable={moveDragDropEnabled}
+                  onContextMenu={(e) => {
+                    if (!currentFolderId) return;
+                    openFileMenuAtCursor(e, file.id);
+                  }}
                   onDragStart={(e) => {
                     if (!moveDragDropEnabled) {
                       e.preventDefault();
@@ -5299,8 +5307,9 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
+                  className="grid items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
                   style={{
+                    gridTemplateColumns: fileListColumnTemplate,
                     border: `1px solid ${myFilesColors.border}`,
                     background: selectedFileIds.has(file.id)
                       ? "rgba(59, 130, 246, 0.08)"
@@ -5333,7 +5342,7 @@ export function MyFiles({
                     />
                   </div>
 
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <FileTypeIcon
                       originalName={file.original_name}
                       mimeType={file.mime_type}
@@ -5354,6 +5363,7 @@ export function MyFiles({
                       background: `${myFilesColors.panelBg}`,
                       color: accentColor,
                       border: `1px solid ${myFilesColors.border}`,
+                      justifySelf: "start",
                     }}
                   >
                     {typeLabel}
