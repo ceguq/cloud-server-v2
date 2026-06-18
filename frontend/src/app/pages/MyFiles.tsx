@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 
 
@@ -160,7 +160,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
               }}
               aria-hidden="true"
             >
-              ♪
+              â™ª
             </div>
 
             <button
@@ -181,7 +181,7 @@ function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
                 fontSize: 20,
               }}
             >
-              {isPlaying ? "❚❚" : "▶"}
+              {isPlaying ? "âšâš" : "â–¶"}
             </button>
 
             <div
@@ -453,6 +453,13 @@ export function MyFiles({
 
 
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchFocused, setSearchFocused] = useState<boolean>(false);
+
+  const trimmedSearchQuery = searchQuery.trim();
+  const isSearchActive = searchFocused || trimmedSearchQuery.length > 0;
+  const isSearchLoading =
+    trimmedSearchQuery.length > 0 && (loadingFiles || loadingFolders);
+
 
   const [filterMenuOpen, setFilterMenuOpen] = useState<boolean>(false);
   const [fileTypeFilter, setFileTypeFilter] = useState<
@@ -1430,7 +1437,7 @@ export function MyFiles({
     type: "file" | "folder",
   ) => {
     const dragPreview = document.createElement("div");
-    const icon = type === "folder" ? "📁" : "📄";
+    const icon = type === "folder" ? "ðŸ“" : "ðŸ“„";
 
     dragPreview.textContent = `${icon} ${label}`;
     dragPreview.style.position = "fixed";
@@ -2236,27 +2243,216 @@ export function MyFiles({
         </div>
       </div>
 
+      <style>{`
+        @keyframes bb-myfiles-search-shimmer {
+          0% { transform: translateX(-60%); opacity: 0.0; }
+          15% { opacity: 1; }
+          100% { transform: translateX(60%); opacity: 0.0; }
+        }
+
+        @keyframes bb-myfiles-search-pulse {
+          0% { transform: scale(1) rotate(0deg); }
+          50% { transform: scale(1.08) rotate(-8deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes bb-myfiles-search-dot {
+          0%, 100% { transform: translateY(0); opacity: 0.55; }
+          50% { transform: translateY(-3px); opacity: 1; }
+        }
+
+        @keyframes bb-myfiles-search-glow {
+          0% { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 0 rgba(0,0,0,0); }
+          50% { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 18px rgba(59,130,246,0.25); }
+          100% { box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 0 rgba(0,0,0,0); }
+        }
+      `}</style>
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="relative flex-1 max-w-xs">
+        <div className={"relative flex-1 max-w-xs " + (isSearchActive ? "max-w-sm" : "")}
+          style={{
+            transition: "max-width 220ms ease",
+          }}
+        >
+          {/* Search icon */}
           <Search
             size={13}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: myFilesColors.muted }}
-          />
-          <input
-            placeholder="Search files..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 transition-transform"
             style={{
-              background: myFilesColors.inputBg,
-              border: `1px solid ${myFilesColors.inputBorder}`,
-              color: myFilesColors.inputText,
-              caretColor: accentColor,
+              color: myFilesColors.muted,
+              transform:
+                isSearchLoading && !isSearchActive
+                  ? undefined
+                  : isSearchActive
+                    ? "scale(1.08) rotate(-8deg)"
+                    : undefined,
+              animation:
+                isSearchLoading && trimmedSearchQuery.length > 0
+                  ? "bb-myfiles-search-pulse 1.15s infinite ease-in-out"
+                  : undefined,
+              transformOrigin: "center",
             }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-hidden="true"
           />
+
+          {/* Input wrapper: no layout shift */}
+          <div
+            className="relative"
+            style={{
+              borderRadius: 10,
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 10,
+                pointerEvents: "none",
+                opacity: isSearchActive ? 1 : 0,
+                transition: "opacity 160ms ease",
+                background:
+                  resolvedTheme === "light"
+                    ? `${accentColor}10`
+                    : `${accentColor}22`,
+                filter: "saturate(1.05)",
+              }}
+            />
+
+            {/* Scanner shimmer */}
+            {isSearchActive && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  left: "12%",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: "22%",
+                  height: "68%",
+                  pointerEvents: "none",
+                  borderRadius: 999,
+                  background:
+                    resolvedTheme === "light"
+                      ? "linear-gradient(90deg, transparent, rgba(59,130,246,0.35), transparent)"
+                      : "linear-gradient(90deg, transparent, rgba(56,189,248,0.28), transparent)",
+                  animation: "bb-myfiles-search-shimmer 1.35s infinite ease-in-out",
+                  mixBlendMode: resolvedTheme === "light" ? "multiply" : "screen",
+                }}
+              />
+            )}
+
+            <input
+              placeholder="Search files..."
+              className="w-full pl-8 py-1.5 rounded-lg text-xs outline-none transition-[border-color,box-shadow,background]"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              style={{
+                background: myFilesColors.inputBg,
+                border: `1px solid ${isSearchActive ? `${accentColor}77` : myFilesColors.inputBorder}`,
+                color: myFilesColors.inputText,
+                caretColor: accentColor,
+                paddingRight: isSearchLoading ? 34 : 46,
+                boxShadow:
+                  isSearchActive
+                    ? `0 0 0 3px ${accentColor}18`
+                    : "none",
+                transition:
+                  "box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease",
+                transform: isSearchActive ? "translateY(-0.5px)" : undefined,
+                animation:
+                  isSearchActive && !isSearchLoading
+                    ? "bb-myfiles-search-glow 1.8s infinite ease-in-out"
+                    : undefined,
+              }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+
+            {/* Loader dots */}
+            {isSearchLoading && trimmedSearchQuery.length > 0 && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  gap: 4,
+                  alignItems: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: 999,
+                      background: accentColor,
+                      opacity: 0.7,
+                      animation: `bb-myfiles-search-dot 0.9s infinite ease-in-out`,
+                      animationDelay: `${i * 120}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Clear button */}
+            {!isSearchLoading && trimmedSearchQuery.length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  width: 22,
+                  height: 22,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: myFilesColors.muted,
+                  background: resolvedTheme === "light" ? "#f1f5f9" : "rgba(148,163,184,0.15)",
+                  border: `1px solid ${myFilesColors.border}`,
+                  transition: "transform 160ms ease, background 160ms ease, color 160ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.05)";
+                  e.currentTarget.style.color = myFilesColors.text;
+                  e.currentTarget.style.background = `${accentColor}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.color = myFilesColors.muted;
+                  e.currentTarget.style.background = resolvedTheme === "light" ? "#f1f5f9" : "rgba(148,163,184,0.15)";
+                }}
+              >
+                &times;
+              </button>
+            )}
+          </div>
+
+          {/* Searching helper text */}
+          {trimmedSearchQuery.length > 0 && (
+            <div
+              className="mt-2 text-[11px] leading-tight"
+              style={{
+                color: myFilesColors.muted,
+                fontStyle: "normal",
+              }}
+            >
+              <span style={{ color: myFilesColors.muted2 }}>
+                Searching for:
+              </span>{" "}
+              <span style={{ color: accentColor }}>"{trimmedSearchQuery}"</span>
+            </div>
+          )}
         </div>
+
         <div className="relative">
           <button
             type="button"
@@ -2332,7 +2528,7 @@ export function MyFiles({
                       {label}
                     </span>
                     {isActive ? (
-                      <span style={{ color: accentColor, fontWeight: 600 }}>✓</span>
+                      <span style={{ color: accentColor, fontWeight: 600 }}>âœ“</span>
                     ) : (
                       <span style={{ color: myFilesColors.muted }}> </span>
                     )}
@@ -2828,7 +3024,7 @@ export function MyFiles({
                   style={{
                     background: "#f87171",
                     border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#0b1121",
+                    color: "#080d1a",
                     opacity: bulkFolderDeleteLoading ? 0.75 : 1,
                   }}
                   aria-label="Pindahkan folder ke Trash"
@@ -2931,7 +3127,7 @@ export function MyFiles({
                   className="flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-all group"
                   style={{
                     background: selectedFolderIds.has(folder.id)
-                      ? "rgba(168, 85, 247, 0.08)"
+                      ? "rgba(59, 130, 246, 0.08)"
                       : myFilesColors.cardBg,
                     border: `1px solid ${myFilesColors.border}`,
                     borderLeft: selectedFolderIds.has(folder.id)
@@ -3032,7 +3228,7 @@ export function MyFiles({
 
               style={{
                 background: selectedFolderIds.has(folder.id)
-                  ? "rgba(168, 85, 247, 0.08)"
+                  ? "rgba(59, 130, 246, 0.08)"
                   : myFilesColors.cardBg,
                 border: `1px solid ${myFilesColors.border}`,
                 borderLeft: selectedFolderIds.has(folder.id)
@@ -3081,10 +3277,10 @@ export function MyFiles({
                 {folder.name}
               </div>
               <div className="text-[10px] mt-0.5" style={{ color: myFilesColors.muted }}>
-                —
+                â€”
               </div>
               <div className="text-[10px]" style={{ color: myFilesColors.muted2 }}>
-                —
+                â€”
               </div>
             </div>
             ))}
@@ -3356,7 +3552,7 @@ export function MyFiles({
                   aria-label="Minimize preview"
                   title="Minimize preview"
                 >
-                  —
+                  â€”
                 </button>
 
                 <button
@@ -3375,7 +3571,7 @@ export function MyFiles({
                   aria-label="Toggle full page preview"
                   title="Full page preview"
                 >
-                  □
+                  â–¡
                 </button>
 
                 {(() => {
@@ -3482,7 +3678,7 @@ export function MyFiles({
                   aria-label="Close preview"
                   title="Close preview"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
             </div>
@@ -3919,7 +4115,7 @@ export function MyFiles({
                 disabled={moveLoading}
                 aria-label="Close move modal"
               >
-                ✕
+                âœ•
               </button>
             </div>
 
@@ -4051,7 +4247,7 @@ export function MyFiles({
                   }}
                   aria-label="Tutup modal bulk delete folder"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
             </div>
@@ -4069,7 +4265,7 @@ export function MyFiles({
             {bulkFolderDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
                   role="status"
                 >
                   <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -4137,7 +4333,7 @@ export function MyFiles({
                   style={{
                     background: "#f87171",
                     border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#0b1121",
+                    color: "#080d1a",
                     opacity: bulkFolderDeleteLoading ? 0.75 : 1,
                   }}
                 >
@@ -4366,7 +4562,7 @@ export function MyFiles({
                 }}
                 aria-label="Tutup modal bulk delete"
               >
-                ×
+                Ã—
               </button>
             </div>
 
@@ -4384,7 +4580,7 @@ export function MyFiles({
             {bulkDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
                   role="status"
                 >
                   <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -4452,7 +4648,7 @@ export function MyFiles({
                   style={{
                     background: "#f87171",
                     border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#0b1121",
+                    color: "#080d1a",
                     opacity: bulkDeleteLoading ? 0.75 : 1,
                   }}
                 >
@@ -4508,12 +4704,12 @@ export function MyFiles({
                 }}
                 aria-label="Tutup hasil bulk download"
               >
-                ×
+                Ã—
               </button>
             </div>
 
             <div
-              className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+              className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
               role="status"
             >
               <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -4707,7 +4903,7 @@ export function MyFiles({
                     const listWrap = document.createElement("div");
                     listWrap.className =
                       "mt-4 rounded-xl overflow-hidden border border-[#1a2540]";
-                    listWrap.style.background = "#0b1121";
+                    listWrap.style.background = "#080d1a";
 
                     shareResults.forEach((r, idx) => {
                       const row = document.createElement("div");
@@ -4884,7 +5080,7 @@ export function MyFiles({
                 style={{
                   background: "#f87171",
                   border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#0b1121",
+                  color: "#080d1a",
                 }}
                 aria-label="Bulk Delete"
                 onClick={openBulkDeleteModal}
@@ -5039,7 +5235,7 @@ export function MyFiles({
 
           {showEmptySearchState && (
             <div className="text-xs px-4 py-6" style={{ color: myFilesColors.muted }}>
-              Tidak ada hasil untuk “{searchQuery.trim()}”.
+              Tidak ada hasil untuk â€œ{searchQuery.trim()}â€.
             </div>
           )}
           {!showEmptySearchState &&
@@ -5066,7 +5262,7 @@ export function MyFiles({
                   style={{
                     border: `1px solid ${myFilesColors.border}`,
                     background: selectedFileIds.has(file.id)
-                      ? "rgba(168, 85, 247, 0.08)"
+                      ? "rgba(59, 130, 246, 0.08)"
                       : myFilesColors.cardBg,
                     borderLeft: selectedFileIds.has(file.id)
                       ? `3px solid ${accentColor}55`
@@ -5125,7 +5321,7 @@ export function MyFiles({
                   <span className="text-xs" style={{ color: myFilesColors.muted }}>
                     {file.created_at
                       ? new Date(file.created_at).toLocaleDateString()
-                      : "—"}
+                      : "â€”"}
                   </span>
 
                   <span className="text-xs" style={{ color: myFilesColors.muted }}>
@@ -5186,7 +5382,7 @@ export function MyFiles({
                     style={{
                       border: `1px solid ${myFilesColors.border}`,
                       background: selectedFileIds.has(file.id)
-                        ? "rgba(168, 85, 247, 0.08)"
+                        ? "rgba(59, 130, 246, 0.08)"
                         : myFilesColors.cardBg,
                       borderLeft: selectedFileIds.has(file.id)
                         ? `3px solid ${accentColor}55`
