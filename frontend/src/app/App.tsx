@@ -7,6 +7,7 @@ import { UploadTray } from "./upload/UploadTray";
 
 import { Dashboard } from "./pages/Dashboard";
 import { MyFiles } from "./pages/MyFiles";
+import { GDrive } from "./pages/GDrive";
 import { Shared } from "./pages/Shared";
 import { Uploads } from "./pages/Uploads";
 import { Devices } from "./pages/Devices";
@@ -26,6 +27,7 @@ import { AdminUsers } from "./pages/AdminUsers";
 const pages: Record<string, React.ComponentType<any>> = {
   dashboard: Dashboard,
   "my-files": MyFiles,
+  gdrive: GDrive,
   shared: Shared,
   uploads: Uploads,
   devices: Devices,
@@ -82,6 +84,7 @@ const pathToActivePage: Record<string, string> = {
   "/": "dashboard",
   "/dashboard": "dashboard",
   "/my-files": "my-files",
+  "/gdrive": "gdrive",
   "/shared": "shared",
   "/uploads": "uploads",
   "/devices": "devices",
@@ -209,8 +212,9 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const PageComponent = routePages[pathname] || pages[activePage] || Dashboard;
-  const currentActivePage = routeActivePages[pathname] || activePage;
+  const PageComponent =
+    routePages[pathname] || pages[pathToActivePage[pathname] || activePage] || Dashboard;
+  const currentActivePage = routeActivePages[pathname] || pathToActivePage[pathname] || activePage;
   const shellBackground =
     resolvedTheme === "light"
       ? "#f8fafc"

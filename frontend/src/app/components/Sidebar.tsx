@@ -20,28 +20,32 @@ import storageService, {
   type StorageInfo,
 } from "../../services/storageService";
 import { LoadingSpinner } from "./LoadingSpinner";
+import { GDriveIcon } from "./GDriveIcon";
 
 const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { id: "my-files", label: "My Files", icon: FolderOpen, path: "/my-files" },
-  { id: "shared", label: "Shared", icon: Share2, path: "/shared" },
-  { id: "uploads", label: "Uploads", icon: Upload, path: "/uploads" },
-  { id: "devices", label: "Devices", icon: Monitor, path: "/devices" },
-  { id: "activity", label: "Activity", icon: Activity, path: "/activity-feed" },
-  { id: "trash", label: "Trash", icon: Trash2, path: "/trash" },
+{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/", iconColor: "#60a5fa" },
+{ id: "my-files", label: "My Files", icon: FolderOpen, path: "/my-files", iconColor: "#fbbf24" },
+{ id: "gdrive", label: "GDrive", icon: GDriveIcon, path: "/gdrive", iconColor: "multicolor" },
+{ id: "shared", label: "Shared", icon: Share2, path: "/shared", iconColor: "#22d3ee" },
+{ id: "uploads", label: "Uploads", icon: Upload, path: "/uploads", iconColor: "#34d399" },
+{ id: "devices", label: "Devices", icon: Monitor, path: "/devices", iconColor: "#818cf8" },
+{ id: "activity", label: "Activity", icon: Activity, path: "/activity-feed", iconColor: "#c084fc" },
+{ id: "trash", label: "Trash", icon: Trash2, path: "/trash", iconColor: "#fb7185" },
   {
     id: "activity-log",
     label: "Activity Log",
     icon: History,
     path: "/activity",
+    iconColor: "#a78bfa",
   },
   {
     id: "server-monitor",
     label: "Server Monitor",
     icon: Server,
     path: "/server-monitor",
+    iconColor: "#10b981",
   },
-  { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
+{ id: "settings", label: "Settings", icon: Settings, path: "/settings", iconColor: "#94a3b8" },
 ];
 
 interface SidebarProps {
@@ -80,10 +84,11 @@ export function Sidebar({
         // Admin: Admin Users
         {
           id: "admin-users",
-          label: "Admin Users",
-          icon: ShieldCheck,
-          path: "/admin/users",
-        },
+        label: "Admin Users",
+        icon: ShieldCheck,
+        path: "/admin/users",
+        iconColor: "#f59e0b",
+      },
         // Admin: rest of items (including Settings)
         ...navItems.slice(navItems.findIndex((i) => i.id === "server-monitor")),
       ]
@@ -304,7 +309,17 @@ export function Sidebar({
                 <Icon
                   size={16}
                   style={{ color: isActive ? accentColor : sidebarColors.navIcon }}
-                  className="shrink-0 transition-colors group-hover:text-blue-400"
+                  stroke={
+                    item.id === "gdrive"
+                      ? undefined
+                      : item.iconColor && item.iconColor !== "multicolor"
+                        ? item.iconColor
+                        : isActive
+                          ? accentColor
+                          : sidebarColors.navIcon
+                  }
+                  opacity={item.id === "gdrive" ? undefined : isActive ? 1 : 0.9}
+                  className="shrink-0 transition-colors"
 
                 />
                 <span

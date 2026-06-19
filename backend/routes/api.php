@@ -10,9 +10,12 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ServerMonitorController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\GDriveController;
+
 
 
 use Illuminate\Support\Facades\Route;
+
 
 
 
@@ -93,7 +96,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/trash/folders', [TrashController::class, 'folders']);
     Route::post('/trash/folders/{id}/restore', [TrashController::class, 'restoreFolder']);
     Route::delete('/trash/folders/{id}/force', [TrashController::class, 'forceDeleteFolder']);
+
+    // Google Drive connector (read-only MVP skeleton)
+    Route::get('/gdrive/accounts', [GDriveController::class, 'index']);
+    Route::get('/gdrive/connect', [GDriveController::class, 'connect']);
+    Route::delete('/gdrive/accounts/{account}', [GDriveController::class, 'destroy']);
 });
+
+Route::get('/gdrive/callback', [GDriveController::class, 'callback']);
+
+
 
 
 
