@@ -12,6 +12,7 @@ class GoogleDriveService
 {
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
     private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
+    private const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 
 
     private function config(): array
@@ -31,6 +32,29 @@ class GoogleDriveService
             'redirect_uri' => $redirectUri,
             'scopes' => $scopes,
         ];
+    }
+
+    public function listFiles(GDriveAccount $account, ?string $pageToken = null, int $pageSize = 50): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $query = [
+            'pageSize' => min(max($pageSize, 1), 100),
+            'fields' => 'nextPageToken,files(id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared)',
+            'orderBy' => 'modifiedTime desc',
+            'q' => 'trashed = false',
+        ];
+
+        if (! empty($pageToken)) {
+            $query['pageToken'] = $pageToken;
+        }
+
+        $response = Http::withToken($account->access_token)
+            ->get(self::DRIVE_FILES_ENDPOINT, $query)
+            ->throw()
+            ->json();
+
+        return is_array($response) ? $response : [];
     }
 
     public function exchangeAuthorizationCode(string $code): array
