@@ -49,6 +49,33 @@ const routeActivePages: Record<string, string> = {
   "/activity": "activity-log",
 };
 
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+
+  return "dark";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  if (theme === "dark" || theme === "light") return theme;
+
+  try {
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
 
 // Pathname to activePage mapping
 const pathToActivePage: Record<string, string> = {
@@ -71,6 +98,9 @@ const pathToActivePage: Record<string, string> = {
 export default function App() {
   const [storageRefreshKey, setStorageRefreshKey] = useState(0);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    resolveAppearanceTheme(safeReadAppearanceTheme())
+  );
 
   const [pathname, setPathname] = useState(() => window.location.pathname);
 
@@ -98,6 +128,30 @@ export default function App() {
       pathToActivePage[pathname] || routeActivePages[pathname] || "dashboard";
     setActivePage(mappedPage);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncThemeFromStorage = () => {
+      setResolvedTheme(resolveAppearanceTheme(safeReadAppearanceTheme()));
+    };
+
+    syncThemeFromStorage();
+
+    window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+    window.addEventListener("storage", syncThemeFromStorage);
+    window.addEventListener("focus", syncThemeFromStorage);
+
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    mq?.addEventListener?.("change", syncThemeFromStorage);
+
+    return () => {
+      window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
+      window.removeEventListener("storage", syncThemeFromStorage);
+      window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
+    };
+  }, []);
 
   const handleUploadCompleted = useCallback((didCompleteAny: boolean) => {
     if (!didCompleteAny) return;
@@ -157,14 +211,17 @@ export default function App() {
 
   const PageComponent = routePages[pathname] || pages[activePage] || Dashboard;
   const currentActivePage = routeActivePages[pathname] || activePage;
+  const shellBackground =
+    resolvedTheme === "light"
+      ? "#f8fafc"
+      : "linear-gradient(135deg, #142033 0%, #182640 52%, #10213a 100%)";
 
   return (
     <UploadManagerProvider onUploadCompleted={handleUploadCompleted}>
       <div
-        className="flex h-screen w-screen overflow-hidden"
+        className="flex h-screen w-screen gap-4 overflow-hidden p-4"
         style={{
-          background:
-            "radial-gradient(circle at 18% 12%, rgba(59,130,246,0.14), transparent 30%), radial-gradient(circle at 78% 80%, rgba(34,211,238,0.10), transparent 35%), #080d1a",
+          background: shellBackground,
           fontFamily: "'Inter', sans-serif",
         }}
       >
@@ -174,7 +231,7 @@ export default function App() {
           storageRefreshKey={storageRefreshKey}
         />
 
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 gap-4 overflow-hidden">
           <Topbar activePage={currentActivePage} onLogout={handleLogout} />
 
 

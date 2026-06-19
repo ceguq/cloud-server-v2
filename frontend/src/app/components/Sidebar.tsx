@@ -191,7 +191,7 @@ export function Sidebar({
           error: "#dc2626",
         }
       : {
-          sidebarBg: "#080d1a",
+          sidebarBg: "#101a2d",
           border: "rgba(148, 163, 184, 0.14)",
           logoText: "#ffffff",
           subtitle: "rgba(148, 163, 184, 0.58)",
@@ -246,14 +246,13 @@ export function Sidebar({
 
   return (
     <aside
-      className="flex flex-col h-full w-[220px] shrink-0"
-      style={{ background: sidebarColors.sidebarBg, borderRight: `1px solid ${sidebarColors.border}` }}
+      className="flex flex-col h-full w-[220px] shrink-0 overflow-hidden rounded-2xl"
+      style={{ background: sidebarColors.sidebarBg, border: `1px solid ${sidebarColors.border}` }}
     >
 
       {/* Logo */}
       <div
         className="flex items-center gap-2.5 px-5 py-5"
-        style={{ borderBottom: `1px solid ${sidebarColors.border}` }}
       >
 
         <div

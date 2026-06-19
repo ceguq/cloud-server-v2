@@ -90,7 +90,7 @@ export function AdminUsers() {
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: "#080d1a" }}
+      style={{ background: "#111c2f" }}
     >
       <div className="mb-5">
         <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>

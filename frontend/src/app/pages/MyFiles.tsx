@@ -519,6 +519,15 @@ export function MyFiles({
     });
   };
 
+  const toggleFileSelection = (fileId: string) => {
+    setSelectedFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  };
+
   // Files state
 
   const [files, setFiles] = useState<FileModel[]>([]);
@@ -1917,7 +1926,7 @@ export function MyFiles({
           buttonSoftBg: "#f1f5f9",
         }
       : {
-          pageBg: "#080d1a",
+          pageBg: "#111c2f",
           cardBg: "#0f1729",
           panelBg: "#0d1829",
           border: "#1a2540",
@@ -3201,6 +3210,10 @@ export function MyFiles({
                   if (isInteractiveItemTarget(event.target)) return;
                   handleOpenFolder(folder);
                 }}
+                onClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  toggleFolderSelection(folder.id);
+                }}
                 className="grid px-4 py-2.5 items-center cursor-pointer hover:bg-[#0d1829] transition-colors group relative rounded-xl"
                 style={{
                   gridTemplateColumns: folderListColumnTemplate,
@@ -3373,6 +3386,10 @@ export function MyFiles({
               onDoubleClick={(event) => {
                 if (isInteractiveItemTarget(event.target)) return;
                 handleOpenFolder(folder);
+              }}
+              onClick={(event) => {
+                if (isInteractiveItemTarget(event.target)) return;
+                toggleFolderSelection(folder.id);
               }}
               className="rounded-xl p-3 cursor-pointer transition-all group"
 
@@ -4444,7 +4461,7 @@ export function MyFiles({
             {bulkFolderDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
+                  className="rounded-xl border border-[#1a2540] bg-[#111c2f] p-4"
                   role="status"
                 >
                   <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -4759,7 +4776,7 @@ export function MyFiles({
             {bulkDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
+                  className="rounded-xl border border-[#1a2540] bg-[#111c2f] p-4"
                   role="status"
                 >
                   <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -4888,7 +4905,7 @@ export function MyFiles({
             </div>
 
             <div
-              className="rounded-xl border border-[#1a2540] bg-[#080d1a] p-4"
+              className="rounded-xl border border-[#1a2540] bg-[#111c2f] p-4"
               role="status"
             >
               <div className="text-xs" style={{ color: "#94a3b8" }}>
@@ -5082,7 +5099,7 @@ export function MyFiles({
                     const listWrap = document.createElement("div");
                     listWrap.className =
                       "mt-4 rounded-xl overflow-hidden border border-[#1a2540]";
-                    listWrap.style.background = "#080d1a";
+                    listWrap.style.background = "#111c2f";
 
                     shareResults.forEach((r, idx) => {
                       const row = document.createElement("div");
@@ -5445,6 +5462,10 @@ export function MyFiles({
                     if (isInteractiveItemTarget(event.target)) return;
                     void handlePreviewFile(file);
                   }}
+                  onClick={(event) => {
+                    if (isInteractiveItemTarget(event.target)) return;
+                    toggleFileSelection(file.id);
+                  }}
                   onDragStart={(e) => {
                     if (!moveDragDropEnabled) {
                       e.preventDefault();
@@ -5570,6 +5591,10 @@ export function MyFiles({
                     onDoubleClick={(event) => {
                       if (isInteractiveItemTarget(event.target)) return;
                       void handlePreviewFile(file);
+                    }}
+                    onClick={(event) => {
+                      if (isInteractiveItemTarget(event.target)) return;
+                      toggleFileSelection(file.id);
                     }}
                     onDragStart={(e) => {
                       if (!moveDragDropEnabled) {

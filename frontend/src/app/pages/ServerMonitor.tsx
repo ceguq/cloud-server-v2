@@ -201,7 +201,7 @@ export function ServerMonitor() {
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#080d1a" }}>
+    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#111c2f" }}>
       <div className="flex items-center justify-between mb-5">
         <div>
           <div className="flex items-center gap-2.5">

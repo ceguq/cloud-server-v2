@@ -221,7 +221,7 @@ export function Settings() {
           panelBorder: "#dbe3ef",
         }
       : {
-          pageBg: "#080d1a",
+          pageBg: "#111c2f",
           sidebarBg: "#0b1121",
           border: "#1a2540",
           title: "#e2e8f0",
@@ -660,9 +660,9 @@ export function Settings() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { id: "dark", label: "Dark", preview: "#080d1a" },
+                    { id: "dark", label: "Dark", preview: "#111c2f" },
                     { id: "light", label: "Light", preview: "#f8fafc" },
-                    { id: "system", label: "System", preview: "linear-gradient(135deg, #080d1a 50%, #f8fafc 50%)" },
+                    { id: "system", label: "System", preview: "linear-gradient(135deg, #111c2f 50%, #f8fafc 50%)" },
                   ].map((t) => (
                     <button
                       key={t.id}

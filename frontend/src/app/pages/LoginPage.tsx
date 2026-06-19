@@ -333,8 +333,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden overflow-y-auto bg-[#080d1a] px-4 py-6 text-slate-100 sm:py-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(59,130,246,0.22),transparent_30%),radial-gradient(circle_at_78%_80%,rgba(34,211,238,0.14),transparent_35%),linear-gradient(145deg,#080d1a_0%,#0b1121_58%,#080d1a_100%)]" />
+    <main className="relative min-h-screen overflow-x-hidden overflow-y-auto bg-[#111c2f] px-4 py-6 text-slate-100 sm:py-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(59,130,246,0.22),transparent_30%),radial-gradient(circle_at_78%_80%,rgba(34,211,238,0.14),transparent_35%),linear-gradient(145deg,#142033_0%,#182640_58%,#10213a_100%)]" />
 
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-[860px] flex-col items-center justify-center sm:min-h-[calc(100vh-4rem)]">
         <style>{`

@@ -208,9 +208,19 @@ export function Shared() {
           inputBorder: "#dbe3ef",
           inputText: "#334155",
           buttonSoftBg: "#f1f5f9",
+          headerText: "#64748b",
+          rowBorder: "#e5eaf1",
+          rowHoverBg: "#f8fafc",
+          checkboxBg: "#ffffff",
+          selectedBg: `${accentColor}12`,
+          selectedBorder: `${accentColor}55`,
+          modalBackdrop: "rgba(15, 23, 42, 0.45)",
+          modalShadow: "0 20px 60px rgba(15,23,42,0.18)",
+          errorText: "#b91c1c",
+          dangerButtonText: "#ffffff",
         }
       : {
-          pageBg: "#080d1a",
+          pageBg: "#111c2f",
           cardBg: "#0f1729",
           panelBg: "#0d1829",
           border: "#1a2540",
@@ -222,6 +232,16 @@ export function Shared() {
           inputBorder: "#1a2540",
           inputText: "#94a3b8",
           buttonSoftBg: "#1a2540",
+          headerText: "#475569",
+          rowBorder: "#0a1020",
+          rowHoverBg: "#0d1829",
+          checkboxBg: "#0d1829",
+          selectedBg: "rgba(168, 85, 247, 0.08)",
+          selectedBorder: "rgba(168, 85, 247, 0.3)",
+          modalBackdrop: "rgba(0, 0, 0, 0.70)",
+          modalShadow: "0 20px 60px rgba(0,0,0,0.6)",
+          errorText: "#f87171",
+          dangerButtonText: "#0b1121",
         };
 
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
@@ -418,7 +438,7 @@ export function Shared() {
           style={{
             background: "rgba(248,113,113,0.08)",
             border: "1px solid rgba(248,113,113,0.25)",
-            color: "#f87171",
+            color: sharedColors.errorText,
           }}
           role="alert"
         >
@@ -431,9 +451,9 @@ export function Shared() {
         <div
           className="rounded-xl px-4 py-6 text-xs"
           style={{
-            background: "#0f1729",
-            border: "1px solid #1a2540",
-            color: "#475569",
+            background: sharedColors.cardBg,
+            border: `1px solid ${sharedColors.border}`,
+            color: sharedColors.muted,
           }}
         >
           <div className="flex items-center gap-2">
@@ -447,7 +467,10 @@ export function Shared() {
       {!loading && !error && shareLinks.length === 0 && (
         <div
           className="rounded-xl px-4 py-10 flex flex-col items-center gap-3"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{
+            background: sharedColors.cardBg,
+            border: `1px solid ${sharedColors.border}`,
+          }}
         >
           <div
             style={{
@@ -462,10 +485,10 @@ export function Shared() {
           >
             <Link2 size={22} style={{ color: "#3b82f6" }} />
           </div>
-          <div style={{ color: "#64748b", fontSize: 13 }}>
+          <div style={{ color: sharedColors.muted, fontSize: 13 }}>
             Belum ada link share.
           </div>
-          <div style={{ color: "#334155", fontSize: 11 }}>
+          <div style={{ color: sharedColors.muted2, fontSize: 11 }}>
             Buka MyFiles → klik ⋯ pada file → Share untuk membuat link.
           </div>
         </div>
@@ -478,10 +501,13 @@ export function Shared() {
         selectedShareIds.size > 0 && (
           <div
             className="mb-4 flex flex-col gap-3 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{
+              background: sharedColors.cardBg,
+              border: `1px solid ${sharedColors.border}`,
+            }}
           >
-            <div className="text-xs" style={{ color: "#94a3b8" }}>
-              <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+            <div className="text-xs" style={{ color: sharedColors.muted }}>
+              <span style={{ color: sharedColors.title, fontWeight: 700 }}>
                 {selectedShareIds.size}
               </span>{" "}
               share link dipilih
@@ -496,7 +522,7 @@ export function Shared() {
                 style={{
                   background: "#f87171",
                   border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#0b1121",
+                  color: sharedColors.dangerButtonText,
                   opacity: bulkDeleteLoading ? 0.75 : 1,
                 }}
                 aria-label="Hapus share link terpilih"
@@ -510,9 +536,9 @@ export function Shared() {
                 disabled={bulkDeleteLoading}
                 className="rounded-lg px-3 py-2 text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: sharedColors.buttonSoftBg,
+                  border: `1px solid ${sharedColors.border}`,
+                  color: sharedColors.muted,
                   opacity: bulkDeleteLoading ? 0.6 : 1,
                 }}
                 aria-label="Batalkan pilihan share link"
@@ -526,25 +552,30 @@ export function Shared() {
       {/* Bulk delete modal */}
       {isBulkDeleteModalOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+          className="fixed inset-0 z-[120] flex items-center justify-center px-4"
+          style={{ background: sharedColors.modalBackdrop }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="shared-bulk-delete-title"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl p-6"
+            style={{
+              background: sharedColors.cardBg,
+              border: `1px solid ${sharedColors.border}`,
+              boxShadow: sharedColors.modalShadow,
+            }}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2
                   id="shared-bulk-delete-title"
                   className="text-sm font-semibold"
-                  style={{ color: "#e2e8f0" }}
+                  style={{ color: sharedColors.title }}
                 >
                   Hapus share link?
                 </h2>
-                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                <p className="mt-2 text-xs" style={{ color: sharedColors.muted }}>
                   {bulkDeleteIds.length} share link terpilih akan dihapus. Akses
                   publik untuk file tersebut akan dicabut.
                 </p>
@@ -556,9 +587,9 @@ export function Shared() {
                 disabled={bulkDeleteLoading}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: sharedColors.buttonSoftBg,
+                  border: `1px solid ${sharedColors.border}`,
+                  color: sharedColors.muted,
                   opacity: bulkDeleteLoading ? 0.55 : 1,
                 }}
                 aria-label="Tutup modal hapus share link"
@@ -580,10 +611,14 @@ export function Shared() {
             {bulkDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  className="rounded-xl p-4"
+                  style={{
+                    background: sharedColors.panelBg,
+                    border: `1px solid ${sharedColors.border}`,
+                  }}
                   role="status"
                 >
-                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  <div className="text-xs" style={{ color: sharedColors.muted }}>
                     Hasil proses
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
@@ -614,9 +649,9 @@ export function Shared() {
                     onClick={closeBulkDeleteModal}
                     className="rounded-xl px-3 py-2 text-xs font-medium"
                     style={{
-                      background: "#0d1829",
-                      border: "1px solid #1a2540",
-                      color: "#94a3b8",
+                      background: sharedColors.buttonSoftBg,
+                      border: `1px solid ${sharedColors.border}`,
+                      color: sharedColors.muted,
                     }}
                   >
                     Tutup
@@ -631,9 +666,9 @@ export function Shared() {
                   disabled={bulkDeleteLoading}
                   className="rounded-xl px-3 py-2 text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: sharedColors.buttonSoftBg,
+                    border: `1px solid ${sharedColors.border}`,
+                    color: sharedColors.muted,
                     opacity: bulkDeleteLoading ? 0.6 : 1,
                   }}
                 >
@@ -648,7 +683,7 @@ export function Shared() {
                   style={{
                     background: "#f87171",
                     border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#0b1121",
+                    color: sharedColors.dangerButtonText,
                     opacity: bulkDeleteLoading ? 0.75 : 1,
                   }}
                 >
@@ -664,14 +699,17 @@ export function Shared() {
       {!loading && !error && shareLinks.length > 0 && (
         <div
           className="rounded-xl overflow-hidden"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{
+            background: sharedColors.cardBg,
+            border: `1px solid ${sharedColors.border}`,
+          }}
         >
           {/* Table head */}
           <div
             className="grid px-4 py-2.5"
             style={{
               gridTemplateColumns: "42px 1fr 90px 90px 80px 130px 120px 136px",
-              borderBottom: "1px solid #1a2540",
+              borderBottom: `1px solid ${sharedColors.border}`,
             }}
           >
             <span className="flex items-center">
@@ -688,8 +726,12 @@ export function Shared() {
                     clearSelection();
                   }
                 }}
-                className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-                style={{ accentColor: "#ef4444" }}
+                className="h-4 w-4 rounded"
+                style={{
+                  accentColor: "#ef4444",
+                  background: sharedColors.checkboxBg,
+                  border: `1px solid ${sharedColors.border}`,
+                }}
                 aria-label="Pilih semua share link"
               />
             </span>
@@ -706,7 +748,7 @@ export function Shared() {
               <span
                 key={h}
                 className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "#334155" }}
+                style={{ color: sharedColors.headerText }}
               >
                 {h}
               </span>
@@ -725,25 +767,34 @@ export function Shared() {
             const expiresText = share.expires_at
               ? formatDate(share.expires_at)
               : "No expiry";
-            const expiresColor = share.expires_at ? "#94a3b8" : "#34d399";
+            const expiresColor = share.expires_at ? sharedColors.muted : "#34d399";
 
             return (
               <div
                 key={share.id}
-                className="grid px-4 py-3 items-center hover:bg-[#0d1829] transition-colors group"
+                className="grid px-4 py-3 items-center transition-colors group"
                 style={{
                   gridTemplateColumns:
                     "42px 1fr 90px 90px 80px 130px 120px 136px",
-                  borderBottom: "1px solid #0a1020",
+                  borderBottom: `1px solid ${sharedColors.rowBorder}`,
                   opacity: isDeleting ? 0.5 : 1,
                   transition: "opacity 0.2s",
                   background: isSelected && !isDeleting
-                    ? "rgba(168, 85, 247, 0.08)"
+                    ? sharedColors.selectedBg
                     : "transparent",
                   borderLeft: isSelected && !isDeleting
-                    ? "3px solid rgba(168, 85, 247, 0.3)"
+                    ? `3px solid ${sharedColors.selectedBorder}`
                     : "3px solid transparent",
                   paddingLeft: isSelected && !isDeleting ? "calc(1rem - 3px)" : "1rem",
+                }}
+                onMouseEnter={(event) => {
+                  if (!isSelected && !isDeleting) {
+                    event.currentTarget.style.background = sharedColors.rowHoverBg;
+                  }
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background =
+                    isSelected && !isDeleting ? sharedColors.selectedBg : "transparent";
                 }}
               >
                 <div className="flex items-center">
@@ -759,8 +810,12 @@ export function Shared() {
                         return next;
                       });
                     }}
-                    className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-                    style={{ accentColor: "#ef4444" }}
+                    className="h-4 w-4 rounded"
+                    style={{
+                      accentColor: "#ef4444",
+                      background: sharedColors.checkboxBg,
+                      border: `1px solid ${sharedColors.border}`,
+                    }}
                     aria-label={`Pilih share link ${share.file?.original_name ?? share.id}`}
                   />
                 </div>
@@ -776,7 +831,7 @@ export function Shared() {
                   <div className="min-w-0">
                     <div
                       className="text-sm truncate"
-                      style={{ color: "#cbd5e1" }}
+                      style={{ color: sharedColors.text }}
                       title={share.file?.original_name ?? "—"}
                     >
                       {share.file?.original_name ?? "—"}
@@ -784,7 +839,7 @@ export function Shared() {
                     {/* token sub-line */}
                     <div
                       className="text-[10px] truncate mt-0.5 font-mono"
-                      style={{ color: "#334155" }}
+                      style={{ color: sharedColors.muted2 }}
                       title={publicUrl}
                     >
                       {publicUrl}
@@ -807,28 +862,28 @@ export function Shared() {
                 </span>
 
                 {/* Size */}
-                <span className="text-xs" style={{ color: "#64748b" }}>
+                <span className="text-xs" style={{ color: sharedColors.muted }}>
                   {formatBytes(share.file?.size)}
                 </span>
 
                 {/* Download count */}
                 <div className="flex items-center gap-1">
-                  <Download size={10} style={{ color: "#475569" }} />
-                  <span className="text-xs" style={{ color: "#64748b" }}>
+                  <Download size={10} style={{ color: sharedColors.muted2 }} />
+                  <span className="text-xs" style={{ color: sharedColors.muted }}>
                     {share.download_count ?? 0}
                   </span>
                 </div>
 
                 {/* Expires */}
                 <div className="flex items-center gap-1">
-                  <Clock size={10} style={{ color: "#475569" }} />
+                  <Clock size={10} style={{ color: sharedColors.muted2 }} />
                   <span className="text-xs" style={{ color: expiresColor }}>
                     {expiresText}
                   </span>
                 </div>
 
                 {/* Created */}
-                <span className="text-xs" style={{ color: "#475569" }}>
+                <span className="text-xs" style={{ color: sharedColors.muted2 }}>
                   {formatDate(share.created_at)}
                 </span>
 
@@ -917,8 +972,8 @@ export function Shared() {
       {/* Info note */}
       {!loading && !error && shareLinks.length > 0 && (
         <div className="mt-4 flex items-center gap-1.5">
-          <Globe size={11} style={{ color: "#334155" }} />
-          <p className="text-[11px]" style={{ color: "#334155" }}>
+          <Globe size={11} style={{ color: sharedColors.muted2 }} />
+          <p className="text-[11px]" style={{ color: sharedColors.muted2 }}>
             Semua link bersifat publik — siapa saja dengan link bisa mengakses
             file. Hapus link untuk mencabut akses.
           </p>

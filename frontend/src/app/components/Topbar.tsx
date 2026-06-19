@@ -160,7 +160,7 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
           logoutHover: "#ffe4e6",
         }
       : {
-          topbarBg: "#0b1121",
+          topbarBg: "#101a2d",
           border: "#1a2540",
           title: "#e2e8f0",
           inputBg: "#0d1829",
@@ -190,10 +190,10 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
 
   return (
     <header
-      className="flex items-center gap-4 px-6 py-0 shrink-0"
+      className="flex items-center gap-4 px-6 py-0 shrink-0 rounded-2xl"
       style={{
         background: topbarColors.topbarBg,
-        borderBottom: `1px solid ${topbarColors.border}`,
+        border: `1px solid ${topbarColors.border}`,
         height: "76px",
 
 

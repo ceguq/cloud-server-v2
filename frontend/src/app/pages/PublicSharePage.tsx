@@ -183,7 +183,7 @@ export function PublicSharePage() {
         alignItems: "center",
         justifyContent: "center",
         padding: "24px",
-        background: "linear-gradient(135deg, #080d1a 0%, #0b1121 60%, #080d1a 100%)",
+        background: "linear-gradient(135deg, #142033 0%, #182640 60%, #10213a 100%)",
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
       }}
     >

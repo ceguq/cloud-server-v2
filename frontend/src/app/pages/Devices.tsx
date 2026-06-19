@@ -76,7 +76,7 @@ export function Devices() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#080d1a" }}>
+    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#111c2f" }}>
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
@@ -252,4 +252,3 @@ export function Devices() {
     </div>
   );
 }
-
