@@ -58,7 +58,7 @@
 - [x] Add Google Drive files list helper.
 - [x] Implement `GET /api/gdrive/files` (aggregate across accounts).
 - [x] Implement `GET /api/gdrive/accounts/{account}/files`.
-- [ ] Pastikan perilaku read-only dan mendukung paging sederhana bila diperlukan.
+- [x] Pastikan perilaku read-only dan mendukung paging sederhana bila diperlukan.
 
 ## 7. Connect React GDrive UI to API
 - [ ] Hubungkan halaman `/gdrive` dengan API internal:
