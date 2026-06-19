@@ -38,8 +38,9 @@
 
 
 ## 5. Add account list API
-- [ ] Implement `GET /api/gdrive/accounts`.
-- [ ] Return daftar akun (tanpa token) dan status koneksi.
+- [x] Implement `GET /api/gdrive/accounts`.
+- [x] Return daftar akun (tanpa token) dan status koneksi.
+
 
 ## 6. Add file list API read-only
 - [ ] Implement `GET /api/gdrive/files` (aggregate across accounts).

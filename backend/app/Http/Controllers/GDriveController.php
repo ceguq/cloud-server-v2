@@ -39,7 +39,30 @@ class GDriveController extends Controller
                 'updated_at',
             ]);
 
-        return response()->json(['data' => $accounts]);
+        $data = $accounts->map(function (GDriveAccount $account) {
+            $isRevoked = $account->revoked_at !== null;
+
+            return [
+                'id' => $account->id,
+                'label' => $account->label,
+                'email' => $account->email,
+                'google_account_id' => $account->google_account_id,
+                'avatar_url' => $account->avatar_url,
+                'scopes' => $account->scopes,
+                'token_expires_at' => $account->token_expires_at?->toISOString(),
+                'connected_at' => $account->connected_at?->toISOString(),
+                'last_synced_at' => $account->last_synced_at?->toISOString(),
+                'revoked_at' => $account->revoked_at?->toISOString(),
+                'created_at' => $account->created_at?->toISOString(),
+                'updated_at' => $account->updated_at?->toISOString(),
+                'status' => $isRevoked ? 'revoked' : 'connected',
+                'is_connected' => !$isRevoked,
+                'is_revoked' => $isRevoked,
+            ];
+        });
+
+        return response()->json(['data' => $data]);
+
     }
 
     public function connect(Request $request): RedirectResponse|JsonResponse
