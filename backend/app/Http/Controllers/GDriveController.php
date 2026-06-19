@@ -255,6 +255,81 @@ class GDriveController extends Controller
 
     }
 
+    public function allFiles(Request $request, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+
+        $accounts = GDriveAccount::query()
+            ->where('user_id', $user->id)
+            ->whereNull('revoked_at')
+            ->orderByDesc('connected_at')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $pageSize = (int) $request->query('page_size', 25);
+        $pageTokens = $request->query('page_tokens', []);
+
+        if (! is_array($pageTokens)) {
+            $pageTokens = [];
+        }
+
+        $files = collect();
+        $nextPageTokens = [];
+        $errors = [];
+
+        foreach ($accounts as $account) {
+            $pageToken = $pageTokens[$account->id] ?? null;
+
+            try {
+                $response = $googleDriveService->listFiles(
+                    $account,
+                    is_string($pageToken) ? $pageToken : null,
+                    $pageSize
+                );
+
+                $mappedFiles = collect($response['files'] ?? [])->map(function (array $file) use ($account) {
+                    $owner = $file['owners'][0] ?? [];
+
+                    return [
+                        'id' => $file['id'] ?? null,
+                        'account_id' => $account->id,
+                        'account_email' => $account->email,
+                        'name' => $file['name'] ?? null,
+                        'mime_type' => $file['mimeType'] ?? null,
+                        'icon_link' => $file['iconLink'] ?? null,
+                        'web_view_link' => $file['webViewLink'] ?? null,
+                        'web_content_link' => $file['webContentLink'] ?? null,
+                        'size' => $file['size'] ?? null,
+                        'created_time' => $file['createdTime'] ?? null,
+                        'modified_time' => $file['modifiedTime'] ?? null,
+                        'shared' => $file['shared'] ?? null,
+                        'owner_name' => $owner['displayName'] ?? null,
+                        'owner_email' => $owner['emailAddress'] ?? null,
+                        'source' => 'gdrive',
+                    ];
+                });
+
+                $files = $files->merge($mappedFiles);
+                $nextPageTokens[$account->id] = $response['nextPageToken'] ?? null;
+            } catch (Throwable $e) {
+                $errors[] = [
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'message' => 'Failed to load files for this Google Drive account.',
+                ];
+            }
+        }
+
+        return response()->json([
+            'data' => $files,
+            'meta' => [
+                'account_count' => $accounts->count(),
+                'next_page_tokens' => $nextPageTokens,
+                'errors' => $errors,
+            ],
+        ]);
+    }
+
     public function files(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
