@@ -87,24 +87,65 @@ export function AdminUsers() {
     );
   };
 
+  const theme = (() => {
+    try {
+      const raw = localStorage.getItem("nimbus_appearance_theme");
+      const resolved =
+        raw === "dark" || raw === "light"
+          ? raw
+          : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+
+      if (resolved === "light") {
+          return {
+          pageBg: "#f8fafc",
+          title: "#0f172a",
+          text: "#334155",
+          muted: "#475569",
+          panelBg: "#ffffff",
+          panelBorder: "#dbe3ef",
+        };
+      }
+
+      return {
+        pageBg: "#111c2f",
+        title: "#e2e8f0",
+        muted: "#475569",
+        panelBg: "#0f1729",
+        panelBorder: "#1a2540",
+      };
+    } catch {
+      return {
+        pageBg: "#111c2f",
+        title: "#e2e8f0",
+        muted: "#475569",
+        panelBg: "#0f1729",
+        panelBorder: "#1a2540",
+      };
+    }
+  })();
+
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: "#111c2f" }}
+      style={{ background: theme.pageBg }}
     >
       <div className="mb-5">
-        <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
+        <h1 className="text-xl font-semibold" style={{ color: theme.title }}>
           Admin Users
         </h1>
-        <p className="text-xs mt-1" style={{ color: "#475569" }}>
+        <p className="text-xs mt-1" style={{ color: theme.muted }}>
           Kelola dan pantau akun yang memiliki akses ke NimbusDrive.
         </p>
       </div>
 
+
       <div
         className="rounded-xl mb-5 p-4"
-        style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+        style={{ background: theme.panelBg, border: `1px solid ${theme.panelBorder}` }}
       >
+
         <div className="grid grid-cols-3 gap-3">
           <div
             className="rounded-lg border p-3"
@@ -113,12 +154,13 @@ export function AdminUsers() {
               background: "rgba(148,163,184,0.05)",
             }}
           >
-            <div className="text-xs" style={{ color: "#94a3b8" }}>
+            <div className="text-xs" style={{ color: theme.muted }}>
               Total Users
             </div>
-            <div className="text-lg font-semibold" style={{ color: "#e2e8f0" }}>
+            <div className="text-lg font-semibold" style={{ color: theme.title }}>
               {totalUsers}
             </div>
+
           </div>
 
           <div
@@ -128,12 +170,13 @@ export function AdminUsers() {
               background: "rgba(6,182,212,0.08)",
             }}
           >
-            <div className="text-xs" style={{ color: "#67e8f9" }}>
+            <div className="text-xs" style={{ color: theme.muted }}>
               Total Admin
             </div>
-            <div className="text-lg font-semibold" style={{ color: "#e2e8f0" }}>
+            <div className="text-lg font-semibold" style={{ color: theme.title }}>
               {totalAdmins}
             </div>
+
           </div>
 
           <div
@@ -143,18 +186,19 @@ export function AdminUsers() {
               background: "rgba(100,116,139,0.06)",
             }}
           >
-            <div className="text-xs" style={{ color: "#94a3b8" }}>
+            <div className="text-xs" style={{ color: theme.muted }}>
               Total Regular User
             </div>
-            <div className="text-lg font-semibold" style={{ color: "#e2e8f0" }}>
+            <div className="text-lg font-semibold" style={{ color: theme.title }}>
               {totalRegularUsers}
             </div>
+
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="text-xs" style={{ color: "#64748b" }}>
+        <div className="text-xs" style={{ color: theme.muted }}>
           Memuat daftar user...
         </div>
       )}
@@ -166,7 +210,7 @@ export function AdminUsers() {
       )}
 
       {!loading && !error && users.length === 0 && (
-        <div className="text-xs" style={{ color: "#64748b" }}>
+        <div className="text-xs" style={{ color: theme.muted }}>
           Belum ada user.
         </div>
       )}
@@ -174,36 +218,37 @@ export function AdminUsers() {
       {!loading && !error && users.length > 0 && (
         <div
           className="rounded-xl overflow-hidden"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{ background: theme.panelBg, border: `1px solid ${theme.panelBorder}` }}
         >
+
           <div
             className="grid px-4 py-2.5 items-center"
             style={{
               gridTemplateColumns: "2fr 2fr 1fr 1fr",
-              borderBottom: "1px solid #1a2540",
+              borderBottom: `1px solid ${theme.panelBorder}`,
             }}
           >
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: theme.title }}
             >
               Name
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: theme.title }}
             >
               Email
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: theme.title }}
             >
               Role
             </span>
             <span
               className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "#334155" }}
+              style={{ color: theme.title }}
             >
               Created At
             </span>
@@ -215,17 +260,26 @@ export function AdminUsers() {
               className="grid px-4 py-2.5 items-center"
               style={{
                 gridTemplateColumns: "2fr 2fr 1fr 1fr",
-                borderBottom: "1px solid rgba(10,16,32,1)",
+                borderBottom: `1px solid ${theme.panelBorder}`,
               }}
             >
-              <span className="text-sm" style={{ color: "#cbd5e1" }}>
-                {u.name}
+              <span className="text-sm font-semibold capitalize" style={{ color: theme.title }}>
+               {u.role}
               </span>
-              <span className="text-xs" style={{ color: "#475569" }}>
+              <span className="text-xs" style={{ color: theme.title }}>
                 {u.email}
               </span>
-              <span>{roleBadge(u.role)}</span>
-              <span className="text-xs" style={{ color: "#475569" }}>
+              <span
+              className="inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
+              style={{
+                background: u.role === "admin" ? "#4f46e5" : theme.panelBg,
+                color: u.role === "admin" ? "#ffffff" : theme.title,
+                border: `1px solid ${u.role === "admin" ? "#4f46e5" : theme.panelBorder}`,
+             }}
+          >
+             {u.role}
+           </span>
+              <span className="text-xs" style={{ color: theme.title }}>
                 {formatDate(u.created_at)}
               </span>
             </div>

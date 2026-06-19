@@ -23,8 +23,43 @@ import type { ActivityLogItem } from "../../types/activityLog";
 // (we only pass them as React components to JSX)
 type LucideIcon = any;
 
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  try {
+    const raw = localStorage.getItem("nimbus_appearance_theme");
+    if (!raw) return "system";
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+    return "system";
+  } catch {
+    return "system";
+  }
+}
+
+function safeReadAccentColor(): string {
+  try {
+    const raw = localStorage.getItem("nimbus_accent_color");
+    return raw ? String(raw) : "#a78bfa";
+  } catch {
+    return "#a78bfa";
+  }
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  if (theme === "dark" || theme === "light") return theme;
+
+  try {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  } catch {
+      return "light";
+  }
+}
 
 const filters = ["All", "Uploads", "Downloads", "Shares", "Edits", "Deletes", "Login", "Trash", "Move"];
+
 
 const DELETED_ACTIVITY_STORAGE_KEY = "nimbus_deleted_activity_ids";
 
@@ -48,6 +83,7 @@ type ActivityUIItem = {
 
 
 
+
 function readDeletedActivityIds(): Set<string> {
   try {
     const raw = localStorage.getItem(DELETED_ACTIVITY_STORAGE_KEY);
@@ -57,6 +93,7 @@ function readDeletedActivityIds(): Set<string> {
     return new Set();
   }
 }
+
 
 function writeDeletedActivityIds(ids: Set<string>) {
   try {
@@ -174,7 +211,7 @@ function localDateLabel(iso: string): string {
   if (diffDays === 0) return "Today";
   if (diffDays === -1) return "Yesterday";
 
-  return d.toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "2-digit" });
+      return d.toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "2-digit" });
 }
 
 function localTimeLabel(iso: string): string {
@@ -184,6 +221,7 @@ function localTimeLabel(iso: string): string {
 }
 
 function mapBackendToUIRows(rows: ActivityLogItem[]): ActivityUIItem[] {
+
   const deletedIds = readDeletedActivityIds();
 
   return rows
@@ -224,6 +262,11 @@ function mapBackendToUIRows(rows: ActivityLogItem[]): ActivityUIItem[] {
 export function Activity() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
+
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(() => safeReadAppearanceTheme());
+  const [accentColor, setAccentColor] = useState<string>(() => safeReadAccentColor());
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
+
 
   function normalizeActivityAction(action: string | null, file: string, message?: string): string {
     const a = (action || "").toLowerCase();
@@ -337,9 +380,137 @@ export function Activity() {
 
 
   useEffect(() => {
+    const handler = () => {
+      const nextAppearance = safeReadAppearanceTheme();
+      setAppearanceTheme(nextAppearance);
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(nextAppearance));
+    };
+
+    // nimbus-appearance-change custom event
+    const maybeNimbus = () => {
+      try {
+        window.dispatchEvent(new Event("nimbus-appearance-change"));
+      } catch {
+        // ignore
+      }
+    };
+
+    try {
+      window.addEventListener("nimbus-appearance-change", handler as EventListener);
+    } catch {
+      // ignore
+    }
+
+    // storage changes (e.g., switching theme in another tab)
+    try {
+      window.addEventListener("storage", (e) => {
+        if (!e.key) return;
+        if (e.key === "nimbus_appearance_theme" || e.key === "nimbus_accent_color") handler();
+      });
+    } catch {
+      // ignore
+    }
+
+    // focus (covers some SPA theme toggles)
+    try {
+      window.addEventListener("focus", handler);
+    } catch {
+      // ignore
+    }
+
+    // prefers-color-scheme changes (system theme)
+    let mql: MediaQueryList | null = null;
+    try {
+      mql = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+      if (mql) {
+        const onMqlChange = () => handler();
+        if ("addEventListener" in mql) {
+          mql.addEventListener("change", onMqlChange);
+        } else {
+          (mql as any).addListener(onMqlChange);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // initial sync
+    handler();
+
+    return () => {
+      try {
+        window.removeEventListener("nimbus-appearance-change", handler as EventListener);
+      } catch {
+        // ignore
+      }
+
+      try {
+        window.removeEventListener("focus", handler);
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (mql) {
+          const onMqlChange = () => handler();
+          // Best-effort cleanup (browser support varies)
+          if ("removeEventListener" in mql) {
+            mql.removeEventListener("change", onMqlChange);
+          } else {
+            (mql as any).removeListener(onMqlChange);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  const activityColors = useMemo(() => {
+    if (resolvedTheme === "light") {
+      return {
+        pageBg: "#f8fafc",
+        cardBg: "#ffffff",
+        panelBg: "#f1f5f9",
+        inputBg: "#ffffff",
+        border: "#dbe3ef",
+        borderSoft: "#e5eaf1",
+        title: "#0f172a",
+        text: "#334155",
+        muted: "#64748b",
+        muted2: "#94a3b8",
+        rowHover: "#f8fafc",
+        selectedBg: "rgba(168, 85, 247, 0.08)",
+        modalBg: "#ffffff",
+        overlay: "rgba(15, 23, 42, 0.45)",
+      };
+    }
+
+    return {
+      pageBg: "#111c2f",
+      cardBg: "#0f1729",
+      panelBg: "#0d1829",
+      inputBg: "#0d1829",
+      border: "#1a2540",
+      borderSoft: "#0a1020",
+      title: "#e2e8f0",
+      text: "#94a3b8",
+      muted: "#64748b",
+      muted2: "#475569",
+      rowHover: "#0d1829",
+      selectedBg: "rgba(168, 85, 247, 0.08)",
+      modalBg: "#0f1729",
+      overlay: "rgba(0, 0, 0, 0.70)",
+    };
+  }, [resolvedTheme]);
+
+  useEffect(() => {
     let cancelled = false;
 
+
     async function run() {
+
       setLoading(true);
       setError(null);
 
@@ -423,8 +594,10 @@ export function Activity() {
   }, [filteredActivities]);
 
   const activityStats = useMemo(
+
     () => [
       {
+
         label: "Actions Today",
         value: activities.filter((item) => item.date === "Today").length,
         color: "#3b82f6",
@@ -500,15 +673,18 @@ export function Activity() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#111c2f" }}>
+    <div className="flex-1 overflow-y-auto p-6" style={{ background: activityColors.pageBg }}>
+
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>Activity</h1>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>Complete audit log of all file activity</p>
+          <h1 className="text-xl font-semibold" style={{ color: activityColors.title }}>Activity</h1>
+          <p className="text-xs mt-0.5" style={{ color: activityColors.muted2 }}>Complete audit log of all file activity</p>
+
         </div>
         <button
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-          style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#94a3b8" }}
+          style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}`, color: activityColors.text }}
+
         >
           <Download size={13} /> Export Log
         </button>
@@ -522,19 +698,20 @@ export function Activity() {
             <div
               key={idx}
               className="rounded-xl p-4"
-              style={{ background: "#0f1729", border: "1px solid #1a2540", opacity: 0.6 }}
+              style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}`, opacity: 0.6 }}
             >
-              <div className="text-2xl font-bold mb-1" style={{ color: "#94a3b8" }}>—</div>
-              <div className="text-xs" style={{ color: "#475569" }}>Memuat...</div>
+              <div className="text-2xl font-bold mb-1" style={{ color: activityColors.muted2 }}>—</div>
+              <div className="text-xs" style={{ color: activityColors.muted }}>Memuat...</div>
             </div>
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-4 gap-4 mb-6">
           {activityStats.map((s) => (
-            <div key={s.label} className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+              <div key={s.label} className="rounded-xl p-4" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}` }}>
+
               <div className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-xs" style={{ color: "#475569" }}>{s.label}</div>
+              <div className="text-xs" style={{ color: activityColors.muted }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -544,24 +721,24 @@ export function Activity() {
       {/* Filters + Search */}
       <div className="flex items-center gap-3 mb-5">
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#475569" }} />
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: activityColors.muted }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search activity..."
             className="pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
-            style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#94a3b8", width: "200px" }}
+            style={{ background: activityColors.inputBg, border: `1px solid ${activityColors.border}`, color: activityColors.text, width: "200px" }}
           />
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "#0d1829", border: "1px solid #1a2540" }}>
+        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}>
           {filters.map((f) => (
             <button
               key={f}
               onClick={() => setActiveFilter(f)}
               className="px-3 py-1 rounded-md text-xs transition-all"
               style={{
-                background: activeFilter === f ? "#1a2540" : "transparent",
-                color: activeFilter === f ? "#e2e8f0" : "#475569",
+                background: activeFilter === f ? activityColors.border : "transparent",
+                color: activeFilter === f ? activityColors.title : activityColors.muted,
               }}
             >
               {f}
@@ -571,22 +748,22 @@ export function Activity() {
       </div>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-red-400/20 bg-[#0f1729] px-4 py-4 text-sm" style={{ borderColor: "rgba(248,113,113,0.4)", color: "#f87171" }}>
+        <div className="mb-4 rounded-xl border border-red-400/20 px-4 py-4 text-sm" style={{ background: activityColors.cardBg, borderColor: "rgba(248,113,113,0.4)", color: "#f87171" }}>
           <div className="font-semibold">Gagal memuat aktivitas</div>
-          <div className="mt-1" style={{ color: "#94a3b8", fontSize: 12 }}>{error}</div>
+          <div className="mt-1" style={{ color: activityColors.text, fontSize: 12 }}>{error}</div>
         </div>
       ) : loading ? (
-        <div className="mb-4 rounded-xl border border-[#1a2540] bg-[#0f1729] px-4 py-4 text-xs" style={{ color: "#94a3b8" }}>
+        <div className="mb-4 rounded-xl border px-4 py-4 text-xs" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}`, color: activityColors.text }}>
           Memuat aktivitas...
         </div>
       ) : filteredActivities.length > 0 && (
 
         <div
           className="mb-4 flex flex-col gap-3 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}
         >
 
-          <label className="flex items-center gap-3 text-xs" style={{ color: "#94a3b8" }}>
+          <label className="flex items-center gap-3 text-xs" style={{ color: activityColors.text }}>
             <input
               ref={selectAllRef}
               type="checkbox"
@@ -600,12 +777,12 @@ export function Activity() {
                   clearSelection();
                 }
               }}
-              className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829]"
-              style={{ accentColor: "#ef4444" }}
+              className="h-4 w-4 rounded"
+              style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor: "#ef4444" }}
               aria-label="Pilih semua activity"
             />
             <span>
-              <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+              <span style={{ color: activityColors.title, fontWeight: 700 }}>
                 {selectedActivityIds.size}
               </span>{" "}
               activity dipilih
@@ -622,7 +799,7 @@ export function Activity() {
                 style={{
                   background: "#f87171",
                   border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#0b1121",
+                  color: "#ffffff",
                   opacity: bulkDeleteLoading ? 0.75 : 1,
                 }}
                 aria-label="Hapus activity terpilih"
@@ -638,9 +815,9 @@ export function Activity() {
                 disabled={bulkDeleteLoading}
                 className="rounded-lg px-3 py-2 text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: activityColors.panelBg,
+                  border: `1px solid ${activityColors.border}`,
+                  color: activityColors.text,
                   opacity: bulkDeleteLoading ? 0.6 : 1,
                 }}
                 aria-label="Batalkan pilihan activity"
@@ -660,19 +837,19 @@ export function Activity() {
           aria-labelledby="activity-bulk-delete-title"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl p-6"
+            style={{ background: activityColors.modalBg, border: `1px solid ${activityColors.border}`, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2
                   id="activity-bulk-delete-title"
                   className="text-sm font-semibold"
-                  style={{ color: "#e2e8f0" }}
+                  style={{ color: activityColors.title }}
                 >
                   Hapus activity?
                 </h2>
-                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                <p className="mt-2 text-xs" style={{ color: activityColors.text }}>
                   {bulkDeleteIds.length} activity terpilih akan dihapus dari
                   tampilan Activity.
                 </p>
@@ -684,9 +861,9 @@ export function Activity() {
                 disabled={bulkDeleteLoading}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: activityColors.panelBg,
+                  border: `1px solid ${activityColors.border}`,
+                  color: activityColors.text,
                   opacity: bulkDeleteLoading ? 0.55 : 1,
                 }}
                 aria-label="Tutup modal hapus activity"
@@ -698,7 +875,7 @@ export function Activity() {
             {bulkDeleteLoading && (
               <div
                 className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs"
-                style={{ color: "#67e8f9" }}
+                style={{ color: "#06b6d4" }}
                 role="status"
               >
                 Menghapus activity...
@@ -708,10 +885,11 @@ export function Activity() {
             {bulkDeleteResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  className="rounded-xl border p-4"
                   role="status"
+                  style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}
                 >
-                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  <div className="text-xs" style={{ color: activityColors.text }}>
                     Hasil proses
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
@@ -742,9 +920,9 @@ export function Activity() {
                     onClick={closeBulkDeleteModal}
                     className="rounded-xl px-3 py-2 text-xs font-medium"
                     style={{
-                      background: "#0d1829",
-                      border: "1px solid #1a2540",
-                      color: "#94a3b8",
+                      background: activityColors.panelBg,
+                      border: `1px solid ${activityColors.border}`,
+                      color: activityColors.text,
                     }}
                   >
                     Tutup
@@ -776,7 +954,7 @@ export function Activity() {
                   style={{
                     background: "#f87171",
                     border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#0b1121",
+                    color: "#ffffff",
                     opacity: bulkDeleteLoading ? 0.75 : 1,
                   }}
                 >
@@ -790,9 +968,9 @@ export function Activity() {
 
       {/* Activity Feed */}
       {!loading && !error && filteredActivities.length === 0 && (
-        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-[#1a2540] bg-[#0f1729] px-4 py-12 text-center">
-          <div className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Activity masih kosong</div>
-          <div className="mt-1 text-xs" style={{ color: "#475569" }}>Belum ada aktivitas untuk filter pencarian yang dipilih.</div>
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl px-4 py-12 text-center" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}` }}>
+          <div className="text-sm font-semibold" style={{ color: activityColors.title }}>Activity masih kosong</div>
+          <div className="mt-1 text-xs" style={{ color: activityColors.muted }}>Belum ada aktivitas untuk filter pencarian yang dipilih.</div>
         </div>
       )}
 
@@ -801,26 +979,39 @@ export function Activity() {
         {Object.entries(groupedActivity).map(([date, items]) => (
           <div key={date}>
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#334155" }}>{date}</span>
-              <div className="flex-1 h-px" style={{ background: "#1a2540" }} />
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: activityColors.muted }}>{date}</span>
+              <div className="flex-1 h-px" style={{ background: activityColors.border }} />
             </div>
-            <div className="rounded-xl overflow-hidden" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div className="rounded-xl overflow-hidden" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}` }}>
               {items.map((item, i) => {
                 const ActionIcon = item.icon;
                 const FileIcon = item.fileIcon;
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center gap-4 px-4 py-3 hover:bg-[#0d1829] transition-colors"
+                    className="flex items-center gap-4 px-4 py-3 transition-colors"
                     style={{
-                      borderBottom: i < items.length - 1 ? "1px solid #0a1020" : "none",
+                      borderBottom: i < items.length - 1 ? `1px solid ${activityColors.borderSoft}` : "none",
                       background: selectedActivityIds.has(item.id)
                         ? "rgba(168, 85, 247, 0.08)"
                         : "transparent",
+                      backgroundColor: selectedActivityIds.has(item.id)
+                        ? "rgba(168, 85, 247, 0.08)"
+                        : activityColors.cardBg,
                       borderLeft: selectedActivityIds.has(item.id)
                         ? "3px solid rgba(168, 85, 247, 0.3)"
                         : "3px solid transparent",
                       paddingLeft: selectedActivityIds.has(item.id) ? "calc(1rem - 3px)" : "1rem",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!selectedActivityIds.has(item.id)) {
+                        e.currentTarget.style.backgroundColor = activityColors.rowHover;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!selectedActivityIds.has(item.id)) {
+                        e.currentTarget.style.backgroundColor = activityColors.cardBg;
+                      }
                     }}
                   >
                     <input
@@ -834,8 +1025,8 @@ export function Activity() {
                           return next;
                         });
                       }}
-                      className="h-4 w-4 rounded border-[#1a2540] bg-[#0d1829] shrink-0"
-                      style={{ accentColor: "#ef4444" }}
+                      className="h-4 w-4 rounded shrink-0"
+                      style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor: "#ef4444" }}
                       aria-label={`Pilih activity ${item.action} ${item.file}`}
                     />
 
@@ -859,7 +1050,7 @@ export function Activity() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-medium" style={{ color: item.color }}>{item.action}</span>
-                        <span className="text-xs" style={{ color: "#94a3b8" }}>
+                        <span className="text-xs" style={{ color: activityColors.text }}>
                           {item.file}
                         </span>
                       </div>
@@ -867,14 +1058,14 @@ export function Activity() {
                         <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold" style={{ background: "linear-gradient(135deg, #3b82f6, #22d3ee)", color: "#fff" }}>
                           {item.user[0]}
                         </div>
-                        <span className="text-[10px]" style={{ color: "#475569" }}>{item.user}</span>
+                        <span className="text-[10px]" style={{ color: activityColors.muted }}>{item.user}</span>
                       </div>
                     </div>
 
                     {/* Time */}
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Clock size={10} style={{ color: "#334155" }} />
-                      <span className="text-[10px]" style={{ color: "#334155" }}>{item.time}</span>
+                      <Clock size={10} style={{ color: activityColors.muted }} />
+                      <span className="text-[10px]" style={{ color: activityColors.muted }}>{item.time}</span>
                     </div>
                   </div>
                 );

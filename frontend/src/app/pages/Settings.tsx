@@ -38,6 +38,10 @@ function safeReadAccentColor(): string {
   return "#3b82f6";
 }
 
+function withAlpha(color: string, alphaHex: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
+}
+
 const sections = [
   { id: "profile", label: "Profile", icon: User },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -124,6 +128,21 @@ function SettingRow({
 
 export function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applyHash = () => {
+      const hash = window.location.hash || "";
+      if (hash === "#notifications") {
+        setActiveSection("notifications");
+      }
+    };
+
+    applyHash();
+    window.addEventListener("popstate", applyHash);
+    return () => window.removeEventListener("popstate", applyHash);
+  }, []);
   const [showPass, setShowPass] = useState(false);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
@@ -212,13 +231,17 @@ export function Settings() {
           muted: "#64748b",
           muted2: "#94a3b8",
           sectionLabel: "#64748b",
-          itemActiveBg: `${accentColor}12`,
-          itemActiveBorder: `${accentColor}55`,
+          itemActiveBg: `linear-gradient(135deg, ${withAlpha(accentColor, "26")} 0%, rgba(34,211,238,0.14) 100%)`,
+          itemActiveBorder: withAlpha(accentColor, "66"),
           itemInactiveText: "#64748b",
           itemActiveText: "#0f172a",
+          itemInactiveIcon: "#94a3b8",
+          itemActiveIcon: accentColor,
           cardBg: "#ffffff",
           panelBg: "#f8fafc",
           panelBorder: "#dbe3ef",
+          previewBorder: "#dbe3ef",
+          emptyIcon: "#94a3b8",
         }
       : {
           pageBg: "#111c2f",
@@ -229,13 +252,17 @@ export function Settings() {
           muted: "#64748b",
           muted2: "#475569",
           sectionLabel: "#334155",
-          itemActiveBg: "#0d1829",
-          itemActiveBorder: "#1e3a8a",
+          itemActiveBg: `linear-gradient(135deg, ${withAlpha(accentColor, "26")} 0%, rgba(34,211,238,0.14) 100%)`,
+          itemActiveBorder: withAlpha(accentColor, "66"),
           itemInactiveText: "#64748b",
           itemActiveText: "#e2e8f0",
+          itemInactiveIcon: "#475569",
+          itemActiveIcon: accentColor,
           cardBg: "#0f1729",
           panelBg: "#0d1829",
           panelBorder: "#1a2540",
+          previewBorder: "#1a2540",
+          emptyIcon: "#334155",
         };
 
   return (
@@ -263,12 +290,12 @@ export function Settings() {
                 onClick={() => setActiveSection(s.id)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left"
                 style={{
-                  background: isActive ? "rgba(59,130,246,0.12)" : "transparent",
-                  border: isActive ? "1px solid rgba(59,130,246,0.2)" : "1px solid transparent",
-                  color: isActive ? "#e2e8f0" : "#64748b",
+                  background: isActive ? settingsColors.itemActiveBg : "transparent",
+                  border: isActive ? `1px solid ${settingsColors.itemActiveBorder}` : "1px solid transparent",
+                  color: isActive ? settingsColors.itemActiveText : settingsColors.itemInactiveText,
                 }}
               >
-                <Icon size={14} style={{ color: isActive ? "#3b82f6" : "#475569" }} />
+                <Icon size={14} style={{ color: isActive ? settingsColors.itemActiveIcon : settingsColors.itemInactiveIcon }} />
                 <span className="text-sm">{s.label}</span>
               </button>
             );
@@ -441,7 +468,7 @@ export function Settings() {
                   <div className="relative">
                     <input
                       type={showPass ? "text" : "password"}
-                      placeholder="••••••••"
+                      placeholder="********"
                       className="w-full px-3 py-2 pr-9 rounded-lg text-sm outline-none"
                       style={{
                         background: settingsColors.panelBg,
@@ -646,16 +673,22 @@ export function Settings() {
 
         {activeSection === "appearance" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: "#e2e8f0" }}>
+            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
               Appearance
             </h2>
-            <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
               Customize how NimbusDrive looks
             </p>
 
-            <div className="rounded-xl p-5" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div
+              className="rounded-xl p-5"
+              style={{
+                background: settingsColors.cardBg,
+                border: `1px solid ${settingsColors.border}`,
+              }}
+            >
               <div className="mb-5">
-                <div className="text-sm mb-3" style={{ color: "#cbd5e1" }}>
+                <div className="text-sm mb-3" style={{ color: settingsColors.text }}>
                   Theme
                 </div>
                 <div className="grid grid-cols-3 gap-3">
@@ -669,18 +702,18 @@ export function Settings() {
                       onClick={() => setAppearanceTheme(t.id as AppearanceTheme)}
                       className="p-3 rounded-xl flex flex-col items-center gap-2 transition-all"
                       style={{
-                        border: appearanceTheme === (t.id as AppearanceTheme) ? `2px solid ${accentColor}` : "1px solid #1a2540",
-                        background: "#0d1829",
+                        border: appearanceTheme === (t.id as AppearanceTheme) ? `2px solid ${accentColor}` : `1px solid ${settingsColors.panelBorder}`,
+                        background: settingsColors.panelBg,
                       }}
                     >
                       <div
                         className="w-full h-10 rounded-lg"
-                        style={{ background: t.preview, border: "1px solid #1a2540" }}
+                        style={{ background: t.preview, border: `1px solid ${settingsColors.previewBorder}` }}
                       />
                       <span
                         className="text-xs"
                         style={{
-                          color: appearanceTheme === (t.id as AppearanceTheme) ? accentColor : "#64748b",
+                          color: appearanceTheme === (t.id as AppearanceTheme) ? accentColor : settingsColors.muted,
                         }}
                       >
                         {t.label}
@@ -691,7 +724,7 @@ export function Settings() {
               </div>
 
               <div className="mb-5">
-                <div className="text-sm mb-3" style={{ color: "#cbd5e1" }}>
+                <div className="text-sm mb-3" style={{ color: settingsColors.text }}>
                   Accent Color
                 </div>
                 <div className="flex items-center gap-2">
@@ -709,7 +742,7 @@ export function Settings() {
                     />
                   ))}
                 </div>
-                <div className="text-xs mt-2" style={{ color: "#64748b" }}>
+                <div className="text-xs mt-2" style={{ color: settingsColors.muted }}>
                   Selected: {accentColor}
                 </div>
               </div>
@@ -718,23 +751,26 @@ export function Settings() {
         )}
 
         {!['profile', 'notifications', 'security', 'storage', 'appearance'].includes(activeSection as "profile" | "notifications" | "security" | "storage" | "appearance") && (
-          <div className="flex flex-col items-center justify-center h-full" style={{ color: "#475569" }}>
+          <div className="flex flex-col items-center justify-center h-full" style={{ color: settingsColors.muted }}>
 
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center mb-3"
-              style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+              style={{
+                background: settingsColors.cardBg,
+                border: `1px solid ${settingsColors.border}`,
+              }}
             >
               {sections.find((s) => s.id === activeSection) &&
                 (() => {
                   const S = sections.find((s) => s.id === activeSection)!;
                   const SIcon = S.icon;
-                  return <SIcon size={24} style={{ color: "#334155" }} />;
+                  return <SIcon size={24} style={{ color: settingsColors.emptyIcon }} />;
                 })()}
             </div>
-            <div className="text-sm font-medium" style={{ color: "#64748b" }}>
+            <div className="text-sm font-medium" style={{ color: settingsColors.muted }}>
               {sections.find((s) => s.id === activeSection)?.label} Settings
             </div>
-            <div className="text-xs mt-1" style={{ color: "#334155" }}>Coming soon</div>
+            <div className="text-xs mt-1" style={{ color: settingsColors.muted2 }}>Coming soon</div>
           </div>
         )}
       </div>

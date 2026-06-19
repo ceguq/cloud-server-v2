@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   getServerMonitor,
@@ -7,40 +7,111 @@ import {
 
 import {
   Server, Cpu, MemoryStick, HardDrive, Wifi, Activity,
-  ThermometerSun, AlertTriangle, CheckCircle, RefreshCw,
-  Globe, Clock, TrendingUp, Zap
+  AlertTriangle, CheckCircle, RefreshCw,
+  Globe, Clock, Zap
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip
 } from "recharts";
 
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
 
-const ChartUnavailable = ({ title }: { title: string }) => (
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+
+  return "dark";
+}
+
+function safeReadAccentColor(): string {
+  if (typeof window === "undefined") return "#3b82f6";
+
+  try {
+    const raw = window.localStorage.getItem("nimbus_accent_color");
+    if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  } catch {
+    // ignore
+  }
+
+  return "#3b82f6";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  if (theme === "dark" || theme === "light") return theme;
+
+  try {
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
+function withAlpha(color: string, alphaHex: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
+}
+
+function tone(color: string, isDark: boolean) {
+  return {
+    background: withAlpha(color, isDark ? "24" : "14"),
+    border: `1px solid ${withAlpha(color, isDark ? "55" : "40")}`,
+    color,
+  };
+}
+
+
+const ChartUnavailable = ({
+  colors,
+  title,
+}: {
+  colors: Record<string, string>;
+  title: string;
+}) => (
   <div
-    className="relative flex h-32 items-center justify-center overflow-hidden rounded-xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center"
+    className="relative flex h-32 items-center justify-center overflow-hidden rounded-xl border border-dashed p-5 text-center"
+    style={{
+      backgroundColor: colors.panelSoftBg,
+      borderColor: colors.border,
+    }}
   >
     {/* subtle background grid */}
     <div
       className="pointer-events-none absolute inset-0"
       style={{
         backgroundImage:
-          "linear-gradient(to right, rgba(148,163,184,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.10) 1px, transparent 1px)",
+          `linear-gradient(to right, ${colors.grid} 1px, transparent 1px), linear-gradient(to bottom, ${colors.grid} 1px, transparent 1px)`,
         backgroundSize: "26px 26px",
         opacity: 0.35,
       }}
     />
 
     <div className="relative">
-      <div className="mx-auto mb-2 w-fit rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[11px] text-slate-300">
+      <div
+        className="mx-auto mb-2 w-fit rounded-full border px-2 py-0.5 text-[11px]"
+        style={{
+          backgroundColor: colors.panelBg,
+          borderColor: colors.border,
+          color: colors.text,
+        }}
+      >
         Awaiting backend history
       </div>
 
-      <p className="text-sm font-semibold text-slate-200">{title}</p>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="text-sm font-semibold" style={{ color: colors.title }}>
+        {title}
+      </p>
+      <p className="mt-2 text-xs" style={{ color: colors.muted }}>
         Backend time-series data is not available yet. Showing unavailable state.
       </p>
-      <p className="mt-1 text-[11px] text-amber-300">
+      <p className="mt-1 text-[11px]" style={{ color: colors.warning }}>
         Live summary values above use the current API response.
       </p>
     </div>
@@ -113,23 +184,6 @@ const formatIpList = (ips: string[] | undefined) => {
   return ips.slice(0, 3).join(", ");
 };
 
-
-
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload?.length) {
-    return (
-      <div className="rounded-lg px-3 py-2 text-xs" style={{ background: "#0f1729", border: "1px solid #1a2540", color: "#94a3b8" }}>
-        <div style={{ color: "#64748b" }}>{label}</div>
-        {payload.map((p: any, i: number) => (
-          <div key={i} style={{ color: p.color }}>{p.name || "Value"}: {Math.round(p.value)}%</div>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
 export function ServerMonitor() {
   const [refreshing, setRefreshing] = useState(false);
   const [monitorData, setMonitorData] = useState<ServerMonitorResponse | null>(null);
@@ -137,6 +191,114 @@ export function ServerMonitor() {
   const [error, setError] = useState<string | null>(null);
   const [cpuHistory, setCpuHistory] = useState<Array<{ time: string; usage: number; load_1m: number }>>([]);
   const [memoryHistory, setMemoryHistory] = useState<Array<{ time: string; used: number; free: number }>>([]);
+  const [accentColor, setAccentColor] = useState(() => safeReadAccentColor());
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    resolveAppearanceTheme(safeReadAppearanceTheme()),
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncThemeFromStorage = () => {
+      const nextTheme = safeReadAppearanceTheme();
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(nextTheme));
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (
+        event.key === "nimbus_appearance_theme" ||
+        event.key === "nimbus_accent_color"
+      ) {
+        syncThemeFromStorage();
+      }
+    };
+
+    syncThemeFromStorage();
+    window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", syncThemeFromStorage);
+
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    mq?.addEventListener?.("change", syncThemeFromStorage);
+
+    return () => {
+      window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
+    };
+  }, []);
+
+  const isDark = resolvedTheme === "dark";
+
+  const colors = useMemo(() => {
+    if (isDark) {
+      return {
+        pageBg: "#111c2f",
+        panelBg: "#0f1729",
+        panelSoftBg: "#0d1829",
+        tileBg: "#1e2d45",
+        border: "#1a2540",
+        borderSoft: "#0a1020",
+        title: "#e2e8f0",
+        text: "#94a3b8",
+        textStrong: "#cbd5e1",
+        muted: "#64748b",
+        mutedSoft: "#475569",
+        mutedFaint: "#334155",
+        grid: "rgba(148,163,184,0.10)",
+        shadow: "0 22px 60px rgba(0, 0, 0, 0.28)",
+        accent: accentColor,
+        accentSoftBg: withAlpha(accentColor, "1f"),
+        accentBorder: withAlpha(accentColor, "59"),
+        blue: "#3b82f6",
+        blueSoft: "rgba(59,130,246,0.10)",
+        success: "#34d399",
+        successSoft: "rgba(52,211,153,0.15)",
+        warning: "#f59e0b",
+        warningSoft: "rgba(245,158,11,0.12)",
+        danger: "#ef4444",
+        dangerSoft: "rgba(239,68,68,0.14)",
+        cyan: "#22d3ee",
+        cyanSoft: "rgba(34,211,238,0.20)",
+        purple: "#a78bfa",
+        orange: "#f97316",
+      };
+    }
+
+    return {
+      pageBg: "#f8fafc",
+      panelBg: "#ffffff",
+      panelSoftBg: "#f8fafc",
+      tileBg: "#f1f5f9",
+      border: "#dbe3ef",
+      borderSoft: "#e5eaf1",
+      title: "#0f172a",
+      text: "#334155",
+      textStrong: "#1e293b",
+      muted: "#64748b",
+      mutedSoft: "#94a3b8",
+      mutedFaint: "#cbd5e1",
+      grid: "rgba(100,116,139,0.16)",
+      shadow: "0 18px 45px rgba(15, 23, 42, 0.08)",
+      accent: accentColor,
+      accentSoftBg: withAlpha(accentColor, "12"),
+      accentBorder: withAlpha(accentColor, "4d"),
+      blue: "#2563eb",
+      blueSoft: "rgba(37,99,235,0.10)",
+      success: "#059669",
+      successSoft: "rgba(5,150,105,0.12)",
+      warning: "#d97706",
+      warningSoft: "rgba(217,119,6,0.10)",
+      danger: "#dc2626",
+      dangerSoft: "rgba(220,38,38,0.10)",
+      cyan: "#0891b2",
+      cyanSoft: "rgba(8,145,178,0.14)",
+      purple: "#7c3aed",
+      orange: "#ea580c",
+    };
+  }, [accentColor, isDark]);
 
   const loadServerMonitor = async (options?: { silent?: boolean }) => {
     try {
@@ -200,53 +362,31 @@ export function ServerMonitor() {
     return () => clearInterval(interval);
   }, []);
 
+  const statusColor =
+    loading && !monitorData
+      ? colors.blue
+      : error
+        ? colors.danger
+        : monitorData
+          ? colors.success
+          : colors.warning;
+
   return (
-    <div className="flex-1 overflow-y-auto p-6" style={{ background: "#111c2f" }}>
+    <div
+      className="flex-1 overflow-y-auto p-6"
+      style={{ background: colors.pageBg, color: colors.text }}
+    >
       <div className="flex items-center justify-between mb-5">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>Server Monitor</h1>
+            <h1 className="text-xl font-semibold" style={{ color: colors.title }}>Server Monitor</h1>
             <span
               className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-              style={{
-                background:
-                  loading && !monitorData
-                    ? "rgba(59,130,246,0.1)"
-                    : error
-                      ? "rgba(239,68,68,0.1)"
-                      : monitorData
-                        ? "rgba(52,211,153,0.1)"
-                        : "rgba(245,158,11,0.1)",
-                color:
-                  loading && !monitorData
-                    ? "#3b82f6"
-                    : error
-                      ? "#ef4444"
-                      : monitorData
-                        ? "#34d399"
-                        : "#f59e0b",
-                border:
-                  loading && !monitorData
-                    ? "1px solid rgba(59,130,246,0.25)"
-                    : error
-                      ? "1px solid rgba(239,68,68,0.25)"
-                      : monitorData
-                        ? "1px solid rgba(52,211,153,0.25)"
-                        : "1px solid rgba(245,158,11,0.25)",
-              }}
+              style={tone(statusColor, isDark)}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full inline-block"
-                style={{
-                  background:
-                    loading && !monitorData
-                      ? "#3b82f6"
-                      : error
-                        ? "#ef4444"
-                        : monitorData
-                          ? "#34d399"
-                          : "#f59e0b",
-                }}
+                style={{ background: statusColor }}
               />
               {loading && !monitorData
                 ? "Checking"
@@ -258,7 +398,7 @@ export function ServerMonitor() {
             </span>
 
           </div>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <p className="text-xs mt-0.5" style={{ color: colors.muted }}>
             {error
               ? "Server monitor API unavailable"
               : loading && !monitorData
@@ -266,11 +406,11 @@ export function ServerMonitor() {
                 : (
                   <>
                     {monitorData?.server.hostname ?? "Unknown host"}
-                    {" · "}
+                    {" / "}
                     {monitorData?.server.os ?? "Unknown OS"}
-                    {" · "}
+                    {" / "}
                     PHP {monitorData?.server.php_version ?? "N/A"}
-                    {" · "}
+                    {" / "}
                     Laravel {monitorData?.server.laravel_version ?? "N/A"}
                   </>
                 )}
@@ -279,25 +419,47 @@ export function ServerMonitor() {
         <button
           onClick={handleRefresh}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
-          style={{ background: "#0d1829", border: "1px solid #1a2540", color: "#94a3b8" }}
+          style={{
+            background: colors.panelSoftBg,
+            border: `1px solid ${colors.border}`,
+            color: colors.text,
+          }}
         >
           <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} /> Refresh
         </button>
       </div>
 
       {loading && (
-        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+        <div
+          className="mt-3 rounded-xl border p-3 text-sm"
+          style={{
+            background: colors.panelSoftBg,
+            borderColor: colors.border,
+            color: colors.text,
+          }}
+        >
           Memuat data server monitor...
         </div>
       )}
 
       {error && (
-        <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+        <div
+          className="mt-3 rounded-xl border p-3 text-sm"
+          style={{
+            background: colors.dangerSoft,
+            borderColor: withAlpha(colors.danger, isDark ? "66" : "40"),
+            color: colors.danger,
+          }}
+        >
           <p>{error}</p>
           <button
             type="button"
             onClick={() => loadServerMonitor()}
-            className="mt-2 rounded-lg border border-red-400/40 px-3 py-1 text-xs text-red-100 hover:bg-red-500/20"
+            className="mt-2 rounded-lg border px-3 py-1 text-xs hover:opacity-90"
+            style={{
+              borderColor: withAlpha(colors.danger, isDark ? "66" : "40"),
+              color: colors.danger,
+            }}
           >
             Retry
           </button>
@@ -307,16 +469,20 @@ export function ServerMonitor() {
       {monitorData && (
         <div
           className="mb-6 rounded-xl p-4"
-          style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+          style={{
+            background: colors.panelBg,
+            border: `1px solid ${colors.border}`,
+            boxShadow: colors.shadow,
+          }}
         >
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Server size={16} style={{ color: "#60a5fa" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>
+              <Server size={16} style={{ color: colors.accent }} />
+              <span className="text-sm font-semibold" style={{ color: colors.title }}>
                 Current PC
               </span>
             </div>
-            <span className="text-[11px]" style={{ color: "#64748b" }}>
+            <span className="text-[11px]" style={{ color: colors.muted }}>
               Last checked {formatDateTime(monitorData.server.checked_at)}
             </span>
           </div>
@@ -375,18 +541,21 @@ export function ServerMonitor() {
                 <div
                   key={item.label}
                   className="min-w-0 rounded-lg px-3 py-2"
-                  style={{ background: "#0d1829", border: "1px solid #1a2540" }}
+                  style={{
+                    background: colors.panelSoftBg,
+                    border: `1px solid ${colors.border}`,
+                  }}
                 >
                   <div className="mb-1 flex items-center gap-2">
-                    <Icon size={12} style={{ color: "#64748b" }} />
-                    <span className="text-[11px]" style={{ color: "#64748b" }}>
+                    <Icon size={12} style={{ color: colors.muted }} />
+                    <span className="text-[11px]" style={{ color: colors.muted }}>
                       {item.label}
                     </span>
                   </div>
                   <div
                     className="truncate text-xs font-medium"
                     title={item.value}
-                    style={{ color: "#cbd5e1" }}
+                    style={{ color: colors.textStrong }}
                   >
                     {item.value}
                   </div>
@@ -399,7 +568,7 @@ export function ServerMonitor() {
 
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "CPU Usage",
@@ -408,18 +577,18 @@ export function ServerMonitor() {
                 ? formatPercent(monitorData.cpu.usage_percent)
                 : formatLoad(monitorData?.cpu.load_1m),
             icon: Cpu,
-            color: "#3b82f6",
+            color: colors.blue,
             sub:
               monitorData?.cpu.load_1m == null
                 ? "CPU usage unavailable"
-                : `5m ${formatLoad(monitorData?.cpu.load_5m)} · 15m ${formatLoad(monitorData?.cpu.load_15m)}`,
+                : `5m ${formatLoad(monitorData?.cpu.load_5m)} / 15m ${formatLoad(monitorData?.cpu.load_15m)}`,
             progress: clampPercent(monitorData?.cpu.usage_percent),
           },
           {
             label: "Memory",
             value: formatPercent(monitorData?.memory.usage_percent),
             icon: MemoryStick,
-            color: "#a78bfa",
+            color: colors.purple,
             sub: `${formatBytes(monitorData?.memory.used_bytes)} used / ${formatBytes(monitorData?.memory.total_bytes)} total`,
             progress: clampPercent(monitorData?.memory.usage_percent),
           },
@@ -427,7 +596,7 @@ export function ServerMonitor() {
             label: "Disk Usage",
             value: formatPercent(monitorData?.disk.usage_percent),
             icon: HardDrive,
-            color: "#22d3ee",
+            color: colors.cyan,
             sub: `${formatBytes(monitorData?.disk.used_bytes)} used / ${formatBytes(monitorData?.disk.total_bytes)} total`,
             progress: clampPercent(monitorData?.disk.usage_percent),
           },
@@ -435,7 +604,7 @@ export function ServerMonitor() {
             label: "Network",
             value: monitorData?.network?.primary_ip ?? "N/A",
             icon: Wifi,
-            color: "#f97316",
+            color: colors.orange,
             sub:
               (monitorData?.network?.local_ips?.length ?? 0) > 0
                 ? `${monitorData?.network?.local_ips?.length ?? 0} local IP detected`
@@ -445,36 +614,44 @@ export function ServerMonitor() {
         ].map((m) => {
           const Icon = m.icon;
           return (
-            <div key={m.label} className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+            <div
+              key={m.label}
+              className="rounded-xl p-4"
+              style={{
+                background: colors.panelBg,
+                border: `1px solid ${colors.border}`,
+                boxShadow: colors.shadow,
+              }}
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Icon size={14} style={{ color: m.color }} />
-                  <span className="text-xs" style={{ color: "#64748b" }}>{m.label}</span>
+                  <span className="text-xs" style={{ color: colors.muted }}>{m.label}</span>
                 </div>
                 <span className="text-xs font-bold" style={{ color: m.color }}>{m.value}</span>
               </div>
-              <div className="relative h-1.5 rounded-full overflow-hidden mb-2" style={{ background: "#1e2d45" }}>
+              <div className="relative h-1.5 rounded-full overflow-hidden mb-2" style={{ background: colors.tileBg }}>
                 <div
                   className="absolute inset-y-0 left-0 rounded-full"
                   style={{ width: `${m.progress}%`, background: `linear-gradient(90deg, ${m.color}99, ${m.color})` }}
                 />
               </div>
-              <div className="text-[10px]" style={{ color: "#475569" }}>{m.sub}</div>
+              <div className="text-[10px]" style={{ color: colors.mutedSoft }}>{m.sub}</div>
             </div>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 gap-4 mb-4 xl:grid-cols-2">
 
         {/* CPU Chart */}
-        <div className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+        <div className="rounded-xl p-4" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Cpu size={13} style={{ color: "#3b82f6" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>CPU Usage (Real-time)</span>
+              <Cpu size={13} style={{ color: colors.blue }} />
+              <span className="text-sm font-semibold" style={{ color: colors.title }}>CPU Usage (Real-time)</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#3b82f6" }}>
+            <span className="text-sm font-bold" style={{ color: colors.blue }}>
               {typeof monitorData?.cpu.usage_percent === "number"
                 ? formatPercent(monitorData.cpu.usage_percent)
                 : formatLoad(monitorData?.cpu.load_1m)}
@@ -483,23 +660,23 @@ export function ServerMonitor() {
           <ResponsiveContainer width="100%" height={200}>
             {cpuHistory.length > 0 ? (
               <LineChart data={cpuHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a2540" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
                 <XAxis 
                   dataKey="time" 
-                  stroke="#64748b" 
+                  stroke={colors.muted}
                   style={{ fontSize: "11px" }}
                   tick={{ angle: -45, textAnchor: 'end', height: 60 }}
                 />
-                <YAxis stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, 100]} />
+                <YAxis stroke={colors.muted} style={{ fontSize: "12px" }} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  labelStyle={{ color: colors.text }}
                   formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="usage" 
-                  stroke="#3b82f6" 
+                  stroke={colors.blue}
                   strokeWidth={2}
                   dot={false}
                   name="CPU Usage %"
@@ -507,42 +684,42 @@ export function ServerMonitor() {
                 />
               </LineChart>
             ) : (
-              <ChartUnavailable title="Waiting for data..." />
+              <ChartUnavailable colors={colors} title="Waiting for data..." />
             )}
           </ResponsiveContainer>
         </div>
 
         {/* Memory Chart */}
-        <div className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+        <div className="rounded-xl p-4" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <MemoryStick size={13} style={{ color: "#a78bfa" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Memory Usage (Real-time)</span>
+              <MemoryStick size={13} style={{ color: colors.purple }} />
+              <span className="text-sm font-semibold" style={{ color: colors.title }}>Memory Usage (Real-time)</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#a78bfa" }}>
+            <span className="text-sm font-bold" style={{ color: colors.purple }}>
               {formatPercent(monitorData?.memory.usage_percent)}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             {memoryHistory.length > 0 ? (
               <LineChart data={memoryHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a2540" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
                 <XAxis 
                   dataKey="time" 
-                  stroke="#64748b" 
+                  stroke={colors.muted}
                   style={{ fontSize: "11px" }}
                   tick={{ angle: -45, textAnchor: 'end', height: 60 }}
                 />
-                <YAxis stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, 100]} />
+                <YAxis stroke={colors.muted} style={{ fontSize: "12px" }} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  labelStyle={{ color: colors.text }}
                   formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="used" 
-                  stroke="#a78bfa" 
+                  stroke={colors.purple}
                   strokeWidth={2}
                   dot={false}
                   name="Used %"
@@ -550,37 +727,37 @@ export function ServerMonitor() {
                 />
               </LineChart>
             ) : (
-              <ChartUnavailable title="Waiting for data..." />
+              <ChartUnavailable colors={colors} title="Waiting for data..." />
             )}
           </ResponsiveContainer>
         </div>
 
         {/* Network Chart */}
-        <div className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+        <div className="rounded-xl p-4" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Wifi size={13} style={{ color: "#34d399" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Network Info</span>
+              <Wifi size={13} style={{ color: colors.success }} />
+              <span className="text-sm font-semibold" style={{ color: colors.title }}>Network Info</span>
             </div>
-            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: "rgba(52, 211, 153, 0.1)", border: "1px solid rgba(52, 211, 153, 0.2)" }}>
-              <span className="text-[10px] font-mono" style={{ color: "#34d399" }}>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={tone(colors.success, isDark)}>
+              <span className="text-[10px] font-mono" style={{ color: colors.success }}>
                 {(monitorData?.network?.local_ips?.length ?? 0)} IPs
               </span>
             </div>
           </div>
           <div className="space-y-3">
-            <div className="p-3 rounded-lg" style={{ background: "#1e2d45", border: "1px solid rgba(52, 211, 153, 0.2)" }}>
-              <div className="text-[10px]" style={{ color: "#64748b" }}>Primary IP</div>
-              <div className="text-sm font-mono font-semibold mt-1" style={{ color: "#34d399" }}>
+            <div className="p-3 rounded-lg" style={{ background: colors.tileBg, border: `1px solid ${withAlpha(colors.success, isDark ? "55" : "40")}` }}>
+              <div className="text-[10px]" style={{ color: colors.muted }}>Primary IP</div>
+              <div className="text-sm font-mono font-semibold mt-1" style={{ color: colors.success }}>
                 {monitorData?.network?.primary_ip ?? "N/A"}
               </div>
             </div>
             {(monitorData?.network?.local_ips ?? []).length > 1 && (
-              <div className="p-3 rounded-lg" style={{ background: "#1e2d45" }}>
-                <div className="text-[10px]" style={{ color: "#64748b" }}>All Local IPs</div>
+              <div className="p-3 rounded-lg" style={{ background: colors.tileBg }}>
+                <div className="text-[10px]" style={{ color: colors.muted }}>All Local IPs</div>
                 <div className="mt-2 space-y-1">
                   {monitorData?.network?.local_ips?.map((ip, i) => (
-                    <div key={i} className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: "rgba(52, 211, 153, 0.1)", color: "#34d399" }}>
+                    <div key={i} className="text-[11px] font-mono px-2 py-1 rounded" style={{ background: colors.successSoft, color: colors.success }}>
                       {ip}
                     </div>
                   ))}
@@ -591,13 +768,13 @@ export function ServerMonitor() {
         </div>
 
         {/* Disk Usage Chart */}
-        <div className="rounded-xl p-4" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
+        <div className="rounded-xl p-4" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <HardDrive size={13} style={{ color: "#22d3ee" }} />
-              <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Disk Usage</span>
+              <HardDrive size={13} style={{ color: colors.cyan }} />
+              <span className="text-sm font-semibold" style={{ color: colors.title }}>Disk Usage</span>
             </div>
-            <span className="text-sm font-bold" style={{ color: "#22d3ee" }}>
+            <span className="text-sm font-bold" style={{ color: colors.cyan }}>
               {formatPercent(monitorData?.disk.usage_percent)}
             </span>
           </div>
@@ -605,8 +782,8 @@ export function ServerMonitor() {
             <PieChart>
               <Pie
                 data={[
-                  { name: "Used", value: Math.round(monitorData?.disk.usage_percent || 0), fill: "#22d3ee" },
-                  { name: "Free", value: Math.round(100 - (monitorData?.disk.usage_percent || 0)), fill: "rgba(34, 211, 238, 0.2)" }
+                  { name: "Used", value: Math.round(monitorData?.disk.usage_percent || 0), fill: colors.cyan },
+                  { name: "Free", value: Math.round(100 - (monitorData?.disk.usage_percent || 0)), fill: colors.cyanSoft }
                 ]}
                 cx="50%"
                 cy="50%"
@@ -615,24 +792,24 @@ export function ServerMonitor() {
                 paddingAngle={2}
                 dataKey="value"
               >
-                <Cell fill="#22d3ee" />
-                <Cell fill="rgba(34, 211, 238, 0.2)" />
+                <Cell fill={colors.cyan} />
+                <Cell fill={colors.cyanSoft} />
               </Pie>
               <Tooltip
-                contentStyle={{ background: "#0d1829", border: "1px solid #1a2540", borderRadius: "8px" }}
-                labelStyle={{ color: "#94a3b8" }}
+                contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                labelStyle={{ color: colors.text }}
                 formatter={(value) => `${value}%`}
               />
             </PieChart>
           </ResponsiveContainer>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2 rounded-lg" style={{ background: "#1e2d45" }}>
-              <div style={{ color: "#64748b" }}>Used</div>
-              <div className="font-semibold" style={{ color: "#22d3ee" }}>{formatBytes(monitorData?.disk.used_bytes)}</div>
+            <div className="p-2 rounded-lg" style={{ background: colors.tileBg }}>
+              <div style={{ color: colors.muted }}>Used</div>
+              <div className="font-semibold" style={{ color: colors.cyan }}>{formatBytes(monitorData?.disk.used_bytes)}</div>
             </div>
-            <div className="p-2 rounded-lg" style={{ background: "#1e2d45" }}>
-              <div style={{ color: "#64748b" }}>Free</div>
-              <div className="font-semibold" style={{ color: "#22d3ee" }}>{formatBytes(monitorData?.disk.free_bytes)}</div>
+            <div className="p-2 rounded-lg" style={{ background: colors.tileBg }}>
+              <div style={{ color: colors.muted }}>Free</div>
+              <div className="font-semibold" style={{ color: colors.cyan }}>{formatBytes(monitorData?.disk.free_bytes)}</div>
             </div>
           </div>
         </div>
@@ -640,85 +817,85 @@ export function ServerMonitor() {
       </div>
 
       {/* Services + Alerts Row */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Services */}
-        <div className="rounded-xl overflow-hidden" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #1a2540" }}>
-            <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>Services</span>
-            <span className="text-xs" style={{ color: "#475569" }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${colors.border}` }}>
+            <span className="text-sm font-semibold" style={{ color: colors.title }}>Services</span>
+            <span className="text-xs" style={{ color: colors.mutedSoft }}>
               {(monitorData?.services ?? []).filter((service) => service.status === "online").length}/{(monitorData?.services ?? []).length} online
             </span>
           </div>
 
           {loading ? (
-            <div className="px-4 py-3 text-xs" style={{ color: "#64748b" }}>Memuat layanan...</div>
+            <div className="px-4 py-3 text-xs" style={{ color: colors.muted }}>Memuat layanan...</div>
           ) : ((monitorData?.services ?? []).length === 0 ? (
-            <div className="px-4 py-3 text-xs" style={{ color: "#64748b" }}>Tidak ada data layanan.</div>
+            <div className="px-4 py-3 text-xs" style={{ color: colors.muted }}>Tidak ada data layanan.</div>
           ) : (
             (monitorData?.services ?? []).map((svc, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#0d1829] transition-colors"
-                style={{ borderBottom: "1px solid #0a1020" }}
+                className="flex items-center gap-3 px-4 py-2.5 transition-colors"
+                style={{ borderBottom: `1px solid ${colors.borderSoft}` }}
               >
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
                     background:
-                      svc.status === "online" ? "#34d399" : svc.status === "offline" ? "#ef4444" : "#f59e0b",
+                      svc.status === "online" ? colors.success : svc.status === "offline" ? colors.danger : colors.warning,
                   }}
                 />
-                <span className="text-sm flex-1" style={{ color: "#94a3b8" }}>{svc.name}</span>
+                <span className="text-sm flex-1" style={{ color: colors.text }}>{svc.name}</span>
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full capitalize"
                   style={{
                     background:
                       svc.status === "online"
-                        ? "rgba(52,211,153,0.15)"
+                        ? colors.successSoft
                         : svc.status === "offline"
-                          ? "rgba(239,68,68,0.15)"
-                          : "rgba(245,158,11,0.15)",
+                          ? colors.dangerSoft
+                          : colors.warningSoft,
                     color:
                       svc.status === "online"
-                        ? "#34d399"
+                        ? colors.success
                         : svc.status === "offline"
-                          ? "#ef4444"
-                          : "#f59e0b",
+                          ? colors.danger
+                          : colors.warning,
                   }}
                 >
                   {svc.status}
                 </span>
-                <span className="text-[10px]" style={{ color: "#334155" }}>{svc.details ?? "No details"}</span>
+                <span className="text-[10px]" style={{ color: colors.mutedFaint }}>{svc.details ?? "No details"}</span>
               </div>
             ))
           ))}
         </div>
 
         {/* Alerts */}
-        <div className="rounded-xl overflow-hidden" style={{ background: "#0f1729", border: "1px solid #1a2540" }}>
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #1a2540" }}>
-            <span className="text-sm font-semibold" style={{ color: "#e2e8f0" }}>System Alerts</span>
-            <span className="text-xs" style={{ color: "#475569" }}>{monitorData?.warnings?.length ?? 0} total</span>
+        <div className="rounded-xl overflow-hidden" style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${colors.border}` }}>
+            <span className="text-sm font-semibold" style={{ color: colors.title }}>System Alerts</span>
+            <span className="text-xs" style={{ color: colors.mutedSoft }}>{monitorData?.warnings?.length ?? 0} total</span>
           </div>
           <div className="p-3 space-y-2">
             {loading ? (
-              <div className="text-xs" style={{ color: "#64748b" }}>Memuat peringatan...</div>
+              <div className="text-xs" style={{ color: colors.muted }}>Memuat peringatan...</div>
             ) : ((monitorData?.warnings ?? []).length === 0 ? (
-              <div className="text-xs" style={{ color: "#34d399" }}>Tidak ada peringatan dari backend.</div>
+              <div className="text-xs" style={{ color: colors.success }}>Tidak ada peringatan dari backend.</div>
             ) : (
               (monitorData?.warnings ?? []).map((w, i) => (
                 <div
                   key={i}
                   className="flex items-start gap-3 p-3 rounded-lg"
                   style={{
-                    background: "rgba(245,158,11,0.06)",
-                    border: "1px solid rgba(245,158,11,0.15)",
+                    background: colors.warningSoft,
+                    border: `1px solid ${withAlpha(colors.warning, isDark ? "55" : "40")}`,
                   }}
                 >
-                  <AlertTriangle size={13} style={{ color: "#f59e0b" }} className="shrink-0 mt-0.5" />
+                  <AlertTriangle size={13} style={{ color: colors.warning }} className="shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <div className="text-xs" style={{ color: "#94a3b8" }}>{w}</div>
-                    <div className="text-[10px] mt-0.5" style={{ color: "#475569" }}>Backend warning</div>
+                    <div className="text-xs" style={{ color: colors.text }}>{w}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: colors.mutedSoft }}>Backend warning</div>
                   </div>
                 </div>
               ))
@@ -726,7 +903,7 @@ export function ServerMonitor() {
           </div>
 
           {/* Server info */}
-          <div className="px-4 pb-3 pt-1 space-y-2" style={{ borderTop: "1px solid #1a2540" }}>
+          <div className="px-4 pb-3 pt-1 space-y-2" style={{ borderTop: `1px solid ${colors.border}` }}>
             {(() => {
               const uptimeValue = formatDuration(monitorData?.server.uptime_seconds);
               const cpuLoad1m = monitorData?.cpu.load_1m;
@@ -745,10 +922,10 @@ export function ServerMonitor() {
                 return (
                   <div key={info.label} className="flex items-center justify-between py-1">
                     <div className="flex items-center gap-2">
-                      <InfoIcon size={11} style={{ color: "#475569" }} />
-                      <span className="text-xs" style={{ color: "#64748b" }}>{info.label}</span>
+                      <InfoIcon size={11} style={{ color: colors.mutedSoft }} />
+                      <span className="text-xs" style={{ color: colors.muted }}>{info.label}</span>
                     </div>
-                    <span className="text-xs font-mono" style={{ color: "#94a3b8" }}>{info.value}</span>
+                    <span className="text-xs font-mono" style={{ color: colors.text }}>{info.value}</span>
                   </div>
                 );
               });

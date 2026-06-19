@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import {
   Activity,
   AlertCircle,
+  ChevronDown,
   Clock,
   Filter,
   RefreshCw,
@@ -18,6 +19,50 @@ import { LoadingSpinner } from "../app/components/LoadingSpinner";
 
 const PER_PAGE = 20;
 const DELETED_ACTIVITY_LOG_STORAGE_KEY = "nimbus_deleted_activity_log_keys";
+
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  if (typeof window === "undefined") return "dark";
+
+  try {
+    const raw = window.localStorage.getItem("nimbus_appearance_theme");
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+  } catch {
+    // ignore
+  }
+
+  return "dark";
+}
+
+function safeReadAccentColor(): string {
+  if (typeof window === "undefined") return "#a78bfa";
+
+  try {
+    const raw = window.localStorage.getItem("nimbus_accent_color");
+    if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  } catch {
+    // ignore
+  }
+
+  return "#a78bfa";
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  if (theme === "dark" || theme === "light") return theme;
+
+  try {
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    return mq?.matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
+}
+
+function withAlpha(color: string, alphaHex: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
+}
 
 function readDeletedActivityLogKeys(): Set<string> {
   try {
@@ -109,21 +154,21 @@ const ACTION_LABELS: Record<ActivityAction, string> = {
   "file.download": "Unduh file",
 };
 
-const ACTION_TONES: Record<ActivityAction, string> = {
-  "auth.login": "border-cyan-400/30 bg-cyan-400/10 text-cyan-200",
-  "file.upload": "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  "folder.create": "border-amber-400/30 bg-amber-400/10 text-amber-200",
-  "file.rename": "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  "folder.rename": "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  "file.trash": "border-rose-400/30 bg-rose-400/10 text-rose-200",
-  "folder.trash": "border-rose-400/30 bg-rose-400/10 text-rose-200",
-  "file.restore": "border-violet-400/30 bg-violet-400/10 text-violet-200",
-  "folder.restore": "border-violet-400/30 bg-violet-400/10 text-violet-200",
-  "file.force_delete": "border-red-400/30 bg-red-400/10 text-red-200",
-  "folder.force_delete": "border-red-400/30 bg-red-400/10 text-red-200",
-  "share.create": "border-indigo-400/30 bg-indigo-400/10 text-indigo-200",
-  "share.delete": "border-indigo-400/30 bg-indigo-400/10 text-indigo-200",
-  "file.download": "border-teal-400/30 bg-teal-400/10 text-teal-200",
+const ACTION_COLORS: Record<ActivityAction, string> = {
+  "auth.login": "#06b6d4",
+  "file.upload": "#10b981",
+  "folder.create": "#f59e0b",
+  "file.rename": "#0ea5e9",
+  "folder.rename": "#0ea5e9",
+  "file.trash": "#f43f5e",
+  "folder.trash": "#f43f5e",
+  "file.restore": "#8b5cf6",
+  "folder.restore": "#8b5cf6",
+  "file.force_delete": "#ef4444",
+  "folder.force_delete": "#ef4444",
+  "share.create": "#6366f1",
+  "share.delete": "#6366f1",
+  "file.download": "#14b8a6",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("id-ID", {
@@ -212,12 +257,9 @@ function getActionLabel(action: string | null): string {
   return ACTION_LABELS[action as ActivityAction] ?? action;
 }
 
-function getActionTone(action: string | null): string {
-  if (!action) return "border-slate-500/30 bg-slate-500/10 text-slate-200";
-  return (
-    ACTION_TONES[action as ActivityAction] ??
-    "border-slate-500/30 bg-slate-500/10 text-slate-200"
-  );
+function getActionColor(action: string | null): string {
+  if (!action) return "#64748b";
+  return ACTION_COLORS[action as ActivityAction] ?? "#64748b";
 }
 
 function getDescription(log: ActivityLogRow): string {
@@ -277,23 +319,33 @@ function getErrorMessage(error: unknown): string {
   return "Gagal memuat activity log.";
 }
 
-function ActionBadge({ action }: { action: string | null }) {
+function ActionBadge({
+  action,
+  isDark,
+}: {
+  action: string | null;
+  isDark: boolean;
+}) {
+  const actionColor = getActionColor(action);
+
   return (
     <span
-      className={`inline-flex w-fit items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${getActionTone(action)}`}
+      className="inline-flex w-fit items-center rounded-md border px-2.5 py-1 text-xs font-semibold"
+      style={{
+        backgroundColor: withAlpha(actionColor, isDark ? "24" : "14"),
+        borderColor: withAlpha(actionColor, isDark ? "66" : "4d"),
+        color: actionColor,
+      }}
     >
       {getActionLabel(action)}
     </span>
   );
 }
 
-function LoadingState() {
+function LoadingState({ color }: { color: string }) {
   return (
     <div className="space-y-3 p-4 sm:p-6">
-      <div
-        className="flex items-center gap-2 text-xs"
-        style={{ color: "#94a3b8" }}
-      >
+      <div className="flex items-center gap-2 text-xs" style={{ color }}>
         <LoadingSpinner size={12} />
         Memuat Activity Log...
       </div>
@@ -304,6 +356,115 @@ function LoadingState() {
 export default function ActivityLogPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
+  const [accentColor, setAccentColor] = useState<string>(() =>
+    safeReadAccentColor(),
+  );
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    resolveAppearanceTheme(safeReadAppearanceTheme()),
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncThemeFromStorage = () => {
+      const nextTheme = safeReadAppearanceTheme();
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(nextTheme));
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (
+        event.key === "nimbus_appearance_theme" ||
+        event.key === "nimbus_accent_color"
+      ) {
+        syncThemeFromStorage();
+      }
+    };
+
+    syncThemeFromStorage();
+    window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", syncThemeFromStorage);
+
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    mq?.addEventListener?.("change", syncThemeFromStorage);
+
+    return () => {
+      window.removeEventListener(
+        "nimbus-appearance-change",
+        syncThemeFromStorage,
+      );
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
+    };
+  }, []);
+
+  const isActivityLogDark = resolvedTheme === "dark";
+
+  const activityLogShellColors = useMemo(() => {
+    if (isActivityLogDark) {
+      return {
+        pageBg: "#111c2f",
+        text: "#94a3b8",
+        title: "#e2e8f0",
+        muted: "#94a3b8",
+        mutedSoft: "#64748b",
+        border: "#1a2540",
+        borderSoft: "#24324f",
+        panelBg: "#0f1729",
+        panelSoftBg: "#0d1829",
+        inputBg: "#0d1829",
+        tableHeadBg: "#0d1829",
+        rowHover: "rgba(13, 24, 41, 0.72)",
+        selectedBg: withAlpha(accentColor, "18"),
+        selectedBorder: withAlpha(accentColor, "73"),
+        overlay: "rgba(0, 0, 0, 0.70)",
+        iconSoftBg: "#0d1829",
+        shadow: "0 22px 60px rgba(0, 0, 0, 0.32)",
+        accent: accentColor,
+        accentSoftBg: withAlpha(accentColor, "1f"),
+        accentBorder: withAlpha(accentColor, "59"),
+        danger: "#ef4444",
+        dangerText: "#fecaca",
+        dangerSoftBg: "rgba(239, 68, 68, 0.14)",
+        dangerBorder: "rgba(248, 113, 113, 0.32)",
+        successText: "#86efac",
+        successSoftBg: "rgba(34, 197, 94, 0.12)",
+        successBorder: "rgba(74, 222, 128, 0.34)",
+      };
+    }
+
+    return {
+      pageBg: "#f8fafc",
+      text: "#334155",
+      title: "#0f172a",
+      muted: "#64748b",
+      mutedSoft: "#94a3b8",
+      border: "#dbe3ef",
+      borderSoft: "#e5eaf1",
+      panelBg: "#ffffff",
+      panelSoftBg: "#f8fafc",
+      inputBg: "#ffffff",
+      tableHeadBg: "#f1f5f9",
+      rowHover: "#f8fafc",
+      selectedBg: withAlpha(accentColor, "12"),
+      selectedBorder: withAlpha(accentColor, "66"),
+      overlay: "rgba(15, 23, 42, 0.45)",
+      iconSoftBg: "#f1f5f9",
+      shadow: "0 18px 45px rgba(15, 23, 42, 0.08)",
+      accent: accentColor,
+      accentSoftBg: withAlpha(accentColor, "12"),
+      accentBorder: withAlpha(accentColor, "4d"),
+      danger: "#dc2626",
+      dangerText: "#991b1b",
+      dangerSoftBg: "rgba(239, 68, 68, 0.10)",
+      dangerBorder: "rgba(220, 38, 38, 0.28)",
+      successText: "#047857",
+      successSoftBg: "rgba(16, 185, 129, 0.10)",
+      successBorder: "rgba(5, 150, 105, 0.28)",
+    };
+  }, [accentColor, isActivityLogDark]);
 
 
   const [selectedAction, setSelectedAction] =
@@ -339,7 +500,7 @@ export default function ActivityLogPage() {
 
   const filterLabel = useMemo(() => {
     if (selectedAction === "all") return "Semua";
-    return selectedAction;
+    return getActionLabel(selectedAction);
   }, [selectedAction]);
 
   const clearSelection = useCallback(() => {
@@ -560,42 +721,83 @@ export default function ActivityLogPage() {
 
   return (
     <div
-      className="flex-1 min-h-0 w-full overflow-y-auto nimbus-scrollbar bg-slate-950 px-4 py-5 text-slate-100 sm:px-6 lg:px-8"
+      className="flex-1 min-h-0 w-full overflow-y-auto nimbus-scrollbar px-4 py-5 sm:px-6 lg:px-8"
       ref={scrollContainerRef}
+      style={{
+        backgroundColor: activityLogShellColors.pageBg,
+        color: activityLogShellColors.text,
+      }}
     >
       <div className="flex w-full flex-col gap-5">
-        <header className="flex flex-col gap-4 border-b border-slate-800 pb-5 md:flex-row md:items-end md:justify-between">
+        <header
+          className="flex flex-col gap-4 pb-5 md:flex-row md:items-end md:justify-between"
+          style={{
+            borderBottom: `1px solid ${activityLogShellColors.border}`,
+            color: activityLogShellColors.title,
+          }}
+        >
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-cyan-300">
+            <div
+              className="flex items-center gap-2 text-sm font-semibold"
+              style={{ color: activityLogShellColors.accent }}
+            >
               <Activity className="h-4 w-4" aria-hidden="true" />
               <span>NimbusDrive</span>
             </div>
             <div>
-              <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">
+              <h1
+                className="text-2xl font-semibold tracking-normal sm:text-3xl"
+                style={{ color: activityLogShellColors.title }}
+              >
                 Activity Log
               </h1>
-              <p className="mt-1 text-sm text-slate-400">
+              <p
+                className="mt-1 text-sm"
+                style={{ color: activityLogShellColors.muted }}
+              >
                 Riwayat aktivitas terbaru di workspace.
               </p>
             </div>
           </div>
 
-          <label className="flex w-full flex-col gap-2 text-sm font-medium text-slate-300 sm:w-72">
+          <label
+            className="flex w-full flex-col gap-2 text-sm font-medium sm:w-72"
+            style={{ color: activityLogShellColors.muted }}
+          >
             <span>Filter aksi</span>
-            <span className="relative">
+            <span
+              className="relative"
+              style={{
+                background: activityLogShellColors.panelBg,
+                border: `1px solid ${activityLogShellColors.border}`,
+                borderRadius: "0.5rem",
+                padding: "0.25rem",
+              }}
+            >
               <Filter
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: activityLogShellColors.muted }}
+                aria-hidden="true"
+              />
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: activityLogShellColors.muted }}
                 aria-hidden="true"
               />
               <select
-                className="h-11 w-full appearance-none rounded-lg border border-slate-700 bg-slate-900 px-10 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+                className="h-11 w-full appearance-none rounded-lg px-10 text-sm outline-none transition focus:ring-2 focus:ring-cyan-400/20"
+                style={{
+                  backgroundColor: activityLogShellColors.inputBg,
+                  color: activityLogShellColors.text,
+                  border: `1px solid ${activityLogShellColors.border}`,
+                }}
                 onChange={handleFilterChange}
                 value={selectedAction}
               >
                 <option value="all">Semua</option>
                 {ACTIVITY_ACTIONS.map((action) => (
                   <option key={action} value={action}>
-                    {action}
+                    {getActionLabel(action)}
                   </option>
                 ))}
               </select>
@@ -603,23 +805,51 @@ export default function ActivityLogPage() {
           </label>
         </header>
 
-        <section className="rounded-lg border border-slate-800 bg-slate-900/50 shadow-2xl shadow-black/20">
-          <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <section
+          className="rounded-lg border"
+          style={{
+            borderColor: activityLogShellColors.border,
+            backgroundColor: activityLogShellColors.panelBg,
+            boxShadow: activityLogShellColors.shadow,
+          }}
+        >
+
+          <div
+            className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+            style={{ borderBottomColor: activityLogShellColors.border }}
+          >
             <div>
-              <p className="text-sm font-semibold text-white">Log aktivitas</p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p
+                className="text-sm font-semibold"
+                style={{ color: activityLogShellColors.title }}
+              >
+                Log aktivitas
+              </p>
+              <p
+                className="mt-1 text-xs"
+                style={{ color: activityLogShellColors.muted }}
+              >
                 Filter aktif: {filterLabel}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div
+              className="flex items-center gap-2 text-xs"
+              style={{ color: activityLogShellColors.muted }}
+            >
               <Clock className="h-4 w-4" aria-hidden="true" />
               <span>Per halaman {PER_PAGE}</span>
             </div>
           </div>
 
           {isAdmin === true && !logsLoading && !error && logs.length > 0 ? (
-            <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <label className="flex items-center gap-3 text-sm text-slate-300">
+            <div
+              className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+              style={{ borderBottomColor: activityLogShellColors.border }}
+            >
+              <label
+                className="flex items-center gap-3 text-sm"
+                style={{ color: activityLogShellColors.text }}
+              >
                 <input
                   ref={selectAllRef}
                   type="checkbox"
@@ -631,12 +861,15 @@ export default function ActivityLogPage() {
                       clearSelection();
                     }
                   }}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                  style={{ accentColor: "#ef4444" }}
+                  className="h-4 w-4 rounded"
+                  style={{ accentColor: activityLogShellColors.danger }}
                   aria-label="Pilih semua activity log yang dimuat"
                 />
                 <span>
-                  <span className="font-semibold text-white">
+                  <span
+                    className="font-semibold"
+                    style={{ color: activityLogShellColors.title }}
+                  >
                     {selectedLogKeys.size}
                   </span>{" "}
                   activity log dipilih
@@ -649,7 +882,12 @@ export default function ActivityLogPage() {
                     type="button"
                     onClick={openBulkDeleteModal}
                     disabled={bulkDeleteLoading}
-                    className="inline-flex items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/15 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-400/20 disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:opacity-90 disabled:opacity-60"
+                    style={{
+                      backgroundColor: activityLogShellColors.dangerSoftBg,
+                      borderColor: activityLogShellColors.dangerBorder,
+                      color: activityLogShellColors.dangerText,
+                    }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                     Hapus Log
@@ -659,7 +897,12 @@ export default function ActivityLogPage() {
                     type="button"
                     onClick={clearSelection}
                     disabled={bulkDeleteLoading}
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-800 disabled:opacity-60"
+                    className="rounded-lg border px-3 py-2 text-xs font-medium transition hover:opacity-85 disabled:opacity-60"
+                    style={{
+                      backgroundColor: activityLogShellColors.panelSoftBg,
+                      borderColor: activityLogShellColors.border,
+                      color: activityLogShellColors.text,
+                    }}
                   >
                     Batalkan pilihan
                   </button>
@@ -670,21 +913,33 @@ export default function ActivityLogPage() {
 
           {isAdmin === true && isBulkDeleteModalOpen ? (
             <div
-              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+              className="fixed inset-0 z-[120] flex items-center justify-center px-4"
+              style={{ backgroundColor: activityLogShellColors.overlay }}
               role="dialog"
               aria-modal="true"
               aria-labelledby="activity-log-bulk-delete-title"
             >
-              <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/60">
+              <div
+                className="w-full max-w-md rounded-2xl border p-6"
+                style={{
+                  backgroundColor: activityLogShellColors.panelBg,
+                  borderColor: activityLogShellColors.border,
+                  boxShadow: activityLogShellColors.shadow,
+                }}
+              >
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <h2
                       id="activity-log-bulk-delete-title"
-                      className="text-sm font-semibold text-white"
+                      className="text-sm font-semibold"
+                      style={{ color: activityLogShellColors.title }}
                     >
                       Hapus activity log?
                     </h2>
-                    <p className="mt-2 text-xs text-slate-400">
+                    <p
+                      className="mt-2 text-xs"
+                      style={{ color: activityLogShellColors.muted }}
+                    >
                       {bulkDeleteKeys.length} activity log terpilih akan dihapus
                       dari tampilan Activity Log.
                     </p>
@@ -694,16 +949,26 @@ export default function ActivityLogPage() {
                     type="button"
                     onClick={closeBulkDeleteModal}
                     disabled={bulkDeleteLoading}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-950 text-sm text-slate-300 disabled:opacity-60"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border text-sm disabled:opacity-60"
+                    style={{
+                      backgroundColor: activityLogShellColors.panelSoftBg,
+                      borderColor: activityLogShellColors.border,
+                      color: activityLogShellColors.text,
+                    }}
                     aria-label="Tutup modal hapus activity log"
                   >
-                    ×
+                    x
                   </button>
                 </div>
 
                 {bulkDeleteLoading ? (
                   <div
-                    className="mb-4 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100"
+                    className="mb-4 rounded-xl border px-3 py-2 text-xs"
+                    style={{
+                      backgroundColor: activityLogShellColors.accentSoftBg,
+                      borderColor: activityLogShellColors.accentBorder,
+                      color: activityLogShellColors.accent,
+                    }}
                     role="status"
                   >
                     Menghapus activity log...
@@ -713,18 +978,43 @@ export default function ActivityLogPage() {
                 {bulkDeleteResult ? (
                   <>
                     <div
-                      className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+                      className="rounded-xl border p-4"
+                      style={{
+                        backgroundColor: activityLogShellColors.panelSoftBg,
+                        borderColor: activityLogShellColors.border,
+                      }}
                       role="status"
                     >
-                      <div className="text-xs text-slate-400">Hasil proses</div>
+                      <div
+                        className="text-xs"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
+                        Hasil proses
+                      </div>
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-emerald-200">
+                        <div
+                          className="rounded-xl border px-3 py-2"
+                          style={{
+                            backgroundColor:
+                              activityLogShellColors.successSoftBg,
+                            borderColor: activityLogShellColors.successBorder,
+                            color: activityLogShellColors.successText,
+                          }}
+                        >
                           <div className="text-lg font-semibold">
                             {bulkDeleteResult.okCount}
                           </div>
                           <div className="text-[11px]">berhasil</div>
                         </div>
-                        <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-red-200">
+                        <div
+                          className="rounded-xl border px-3 py-2"
+                          style={{
+                            backgroundColor:
+                              activityLogShellColors.dangerSoftBg,
+                            borderColor: activityLogShellColors.dangerBorder,
+                            color: activityLogShellColors.dangerText,
+                          }}
+                        >
                           <div className="text-lg font-semibold">
                             {bulkDeleteResult.failCount}
                           </div>
@@ -737,7 +1027,12 @@ export default function ActivityLogPage() {
                       <button
                         type="button"
                         onClick={closeBulkDeleteModal}
-                        className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-300"
+                        className="rounded-xl border px-3 py-2 text-xs font-medium"
+                        style={{
+                          backgroundColor: activityLogShellColors.panelSoftBg,
+                          borderColor: activityLogShellColors.border,
+                          color: activityLogShellColors.text,
+                        }}
                       >
                         Tutup
                       </button>
@@ -749,7 +1044,12 @@ export default function ActivityLogPage() {
                       type="button"
                       onClick={closeBulkDeleteModal}
                       disabled={bulkDeleteLoading}
-                      className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-300 disabled:opacity-60"
+                      className="rounded-xl border px-3 py-2 text-xs font-medium disabled:opacity-60"
+                      style={{
+                        backgroundColor: activityLogShellColors.panelSoftBg,
+                        borderColor: activityLogShellColors.border,
+                        color: activityLogShellColors.text,
+                      }}
                     >
                       Batal
                     </button>
@@ -758,7 +1058,12 @@ export default function ActivityLogPage() {
                       type="button"
                       onClick={handleConfirmBulkDelete}
                       disabled={bulkDeleteLoading}
-                      className="rounded-xl border border-red-400/30 bg-red-400/80 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-70"
+                      className="rounded-xl border px-3 py-2 text-xs font-semibold disabled:opacity-70"
+                      style={{
+                        backgroundColor: activityLogShellColors.danger,
+                        borderColor: activityLogShellColors.dangerBorder,
+                        color: "#ffffff",
+                      }}
                     >
                       {bulkDeleteLoading ? "Menghapus..." : "Hapus Log"}
                     </button>
@@ -772,7 +1077,7 @@ export default function ActivityLogPage() {
             <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
               <div
                 className="flex items-center gap-2 text-sm"
-                style={{ color: "#94a3b8" }}
+                style={{ color: activityLogShellColors.muted }}
               >
                 <LoadingSpinner size={12} />
                 Memeriksa akses admin...
@@ -780,30 +1085,60 @@ export default function ActivityLogPage() {
             </div>
           ) : isAdmin === false ? (
             <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-400/10 text-rose-200">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-lg border"
+                style={{
+                  backgroundColor: activityLogShellColors.dangerSoftBg,
+                  borderColor: activityLogShellColors.dangerBorder,
+                  color: activityLogShellColors.dangerText,
+                }}
+              >
                 <AlertCircle className="h-6 w-6" aria-hidden="true" />
               </span>
               <div className="space-y-1">
-                <p className="font-semibold text-white">
+                <p
+                  className="font-semibold"
+                  style={{ color: activityLogShellColors.title }}
+                >
                   Akses ditolak. Activity Log hanya untuk admin.
                 </p>
               </div>
             </div>
           ) : logsLoading ? (
-            <LoadingState />
+            <LoadingState color={activityLogShellColors.muted} />
           ) : error ? (
             <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-400/10 text-rose-200">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-lg border"
+                style={{
+                  backgroundColor: activityLogShellColors.dangerSoftBg,
+                  borderColor: activityLogShellColors.dangerBorder,
+                  color: activityLogShellColors.dangerText,
+                }}
+              >
                 <AlertCircle className="h-6 w-6" aria-hidden="true" />
               </span>
               <div className="space-y-1">
-                <p className="font-semibold text-white">
+                <p
+                  className="font-semibold"
+                  style={{ color: activityLogShellColors.title }}
+                >
                   Activity log gagal dimuat
                 </p>
-                <p className="max-w-md text-sm text-slate-400">{error}</p>
+                <p
+                  className="max-w-md text-sm"
+                  style={{ color: activityLogShellColors.muted }}
+                >
+                  {error}
+                </p>
               </div>
               <button
-                className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+                className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+                style={{
+                  backgroundColor: activityLogShellColors.accentSoftBg,
+                  borderColor: activityLogShellColors.accentBorder,
+                  color: activityLogShellColors.accent,
+                }}
                 onClick={handleRetry}
                 type="button"
               >
@@ -813,14 +1148,27 @@ export default function ActivityLogPage() {
             </div>
           ) : logs.length === 0 ? (
             <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/70 text-slate-300">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-lg border"
+                style={{
+                  backgroundColor: activityLogShellColors.iconSoftBg,
+                  borderColor: activityLogShellColors.border,
+                  color: activityLogShellColors.muted,
+                }}
+              >
                 <Search className="h-6 w-6" aria-hidden="true" />
               </span>
               <div className="space-y-1">
-                <p className="font-semibold text-white">
+                <p
+                  className="font-semibold"
+                  style={{ color: activityLogShellColors.title }}
+                >
                   Activity log masih kosong
                 </p>
-                <p className="max-w-md text-sm text-slate-400">
+                <p
+                  className="max-w-md text-sm"
+                  style={{ color: activityLogShellColors.muted }}
+                >
                   Belum ada aktivitas untuk filter yang dipilih.
                 </p>
               </div>
@@ -828,30 +1176,55 @@ export default function ActivityLogPage() {
           ) : (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-full divide-y divide-slate-800">
-                  <thead className="bg-slate-950/60">
+                <table
+                  className="min-w-full"
+                  style={{ borderColor: activityLogShellColors.border }}
+                >
+                  <thead
+                    style={{
+                      backgroundColor: activityLogShellColors.tableHeadBg,
+                    }}
+                  >
                     <tr>
-                      <th className="w-12 px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="w-12 px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         <span className="sr-only">Pilih</span>
                       </th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         Deskripsi
                       </th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         Aksi
                       </th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         User
                       </th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         IP
                       </th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-400">
+                      <th
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase"
+                        style={{ color: activityLogShellColors.muted }}
+                      >
                         Waktu
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody>
                     {logs.map((log, index) => {
                       const action = getAction(log);
                       const ipAddress = getIpAddress(log);
@@ -859,15 +1232,16 @@ export default function ActivityLogPage() {
                       const isSelected = selectedLogKeys.has(logKey);
                       return (
                         <tr
-                          className="transition hover:bg-slate-800/40"
+                          className="transition"
                           key={logKey}
                           style={{
                             background: isSelected
-                              ? "rgba(168, 85, 247, 0.08)"
+                              ? activityLogShellColors.selectedBg
                               : "transparent",
                             borderLeft: isSelected
-                              ? "3px solid rgba(168, 85, 247, 0.3)"
+                              ? `3px solid ${activityLogShellColors.selectedBorder}`
                               : "3px solid transparent",
+                            borderBottom: `1px solid ${activityLogShellColors.border}`,
                           }}
                         >
                           <td className="px-5 py-4">
@@ -882,40 +1256,69 @@ export default function ActivityLogPage() {
                                   return next;
                                 });
                               }}
-                              className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                              style={{ accentColor: "#ef4444" }}
+                              className="h-4 w-4 rounded"
+                              style={{
+                                accentColor: activityLogShellColors.danger,
+                              }}
                               aria-label={`Pilih activity log ${getDescription(log)}`}
                             />
                           </td>
-                          <td className="max-w-lg px-5 py-4 text-sm text-slate-100">
+                          <td
+                            className="max-w-lg px-5 py-4 text-sm"
+                            style={{ color: activityLogShellColors.title }}
+                          >
                             {getDescription(log)}
                           </td>
                           <td className="px-5 py-4">
-                            <ActionBadge action={action} />
+                            <ActionBadge
+                              action={action}
+                              isDark={isActivityLogDark}
+                            />
                           </td>
-                          <td className="px-5 py-4 text-sm text-slate-300">
+                          <td
+                            className="px-5 py-4 text-sm"
+                            style={{ color: activityLogShellColors.text }}
+                          >
                             <span className="inline-flex items-center gap-2">
                               <User
-                                className="h-4 w-4 text-slate-500"
+                                className="h-4 w-4"
+                                style={{
+                                  color: activityLogShellColors.mutedSoft,
+                                }}
                                 aria-hidden="true"
                               />
                               {getUserName(log)}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-sm text-slate-300">
+                          <td
+                            className="px-5 py-4 text-sm"
+                            style={{ color: activityLogShellColors.text }}
+                          >
                             {ipAddress ? (
                               <span className="inline-flex items-center gap-2">
                                 <Wifi
-                                  className="h-4 w-4 text-slate-500"
+                                  className="h-4 w-4"
+                                  style={{
+                                    color: activityLogShellColors.mutedSoft,
+                                  }}
                                   aria-hidden="true"
                                 />
                                 {ipAddress}
                               </span>
                             ) : (
-                              <span className="text-slate-600">-</span>
+                              <span
+                                style={{
+                                  color: activityLogShellColors.mutedSoft,
+                                }}
+                              >
+                                -
+                              </span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-300">
+                          <td
+                            className="whitespace-nowrap px-5 py-4 text-sm"
+                            style={{ color: activityLogShellColors.text }}
+                          >
                             {getCreatedAt(log)}
                           </td>
                         </tr>
@@ -934,15 +1337,16 @@ export default function ActivityLogPage() {
 
                   return (
                     <article
-                      className="rounded-lg border border-slate-800 bg-slate-950/60 p-4"
+                      className="rounded-lg border p-4"
                       key={logKey}
                       style={{
                         background: isSelected
-                          ? "rgba(168, 85, 247, 0.08)"
-                          : "bg-slate-950/60",
+                          ? activityLogShellColors.selectedBg
+                          : activityLogShellColors.panelSoftBg,
+                        borderColor: activityLogShellColors.border,
                         borderLeft: isSelected
-                          ? "3px solid rgba(168, 85, 247, 0.3)"
-                          : "none",
+                          ? `3px solid ${activityLogShellColors.selectedBorder}`
+                          : `1px solid ${activityLogShellColors.border}`,
                         paddingLeft: isSelected ? "calc(1rem - 3px)" : "1rem",
                       }}
                     >
@@ -959,27 +1363,53 @@ export default function ActivityLogPage() {
                                 return next;
                               });
                             }}
-                            className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                            style={{ accentColor: "#ef4444" }}
+                            className="h-4 w-4 rounded"
+                            style={{
+                              accentColor: activityLogShellColors.danger,
+                            }}
                             aria-label={`Pilih activity log ${getDescription(log)}`}
                           />
-                          <ActionBadge action={action} />
+                          <ActionBadge
+                            action={action}
+                            isDark={isActivityLogDark}
+                          />
                         </div>
-                        <span className="text-right text-xs text-slate-500">
+                        <span
+                          className="text-right text-xs"
+                          style={{ color: activityLogShellColors.mutedSoft }}
+                        >
                           {getCreatedAt(log)}
                         </span>
                       </div>
-                      <p className="mt-3 text-sm font-medium text-slate-100">
+                      <p
+                        className="mt-3 text-sm font-medium"
+                        style={{ color: activityLogShellColors.title }}
+                      >
                         {getDescription(log)}
                       </p>
-                      <div className="mt-4 grid gap-2 text-sm text-slate-400">
+                      <div
+                        className="mt-4 grid gap-2 text-sm"
+                        style={{ color: activityLogShellColors.text }}
+                      >
                         <span className="inline-flex items-center gap-2">
-                          <User className="h-4 w-4" aria-hidden="true" />
+                          <User
+                            className="h-4 w-4"
+                            style={{
+                              color: activityLogShellColors.mutedSoft,
+                            }}
+                            aria-hidden="true"
+                          />
                           {getUserName(log)}
                         </span>
                         {ipAddress ? (
                           <span className="inline-flex items-center gap-2">
-                            <Wifi className="h-4 w-4" aria-hidden="true" />
+                            <Wifi
+                              className="h-4 w-4"
+                              style={{
+                                color: activityLogShellColors.mutedSoft,
+                              }}
+                              aria-hidden="true"
+                            />
                             {ipAddress}
                           </span>
                         ) : null}
@@ -994,7 +1424,7 @@ export default function ActivityLogPage() {
               {loadingNext ? (
                 <div
                   className="px-4 pb-6 flex items-center justify-center gap-2 text-xs"
-                  style={{ color: "#94a3b8" }}
+                  style={{ color: activityLogShellColors.muted }}
                 >
                   <LoadingSpinner size={10} />
                   Memuat aktivitas berikutnya...

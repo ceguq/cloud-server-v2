@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Search, Upload, Bell, ChevronDown, Plus, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Upload, Bell, ChevronDown } from "lucide-react";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -63,6 +63,45 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
   const [searchValue, setSearchValue] = useState("");
 
   const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement | null>(null);
+
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        notifRef.current &&
+        !notifRef.current.contains(event.target as Node)
+      ) {
+        setNotifOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [notifOpen]);
+
+
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>("dark");
   const [accentColor, setAccentColor] = useState<string>("#3b82f6");
@@ -188,6 +227,9 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
 
   const systemModeAccentCaret = accentColor;
 
+  // Notifications are not wired up yet; keep UI honest.
+  const notifications: Array<{ id: string }> = [];
+
   return (
     <header
       className="flex items-center gap-4 px-6 py-0 shrink-0 rounded-2xl"
@@ -252,16 +294,24 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
             background: `linear-gradient(135deg, ${accentColor} 0%, #22d3ee 100%)`,
             color: "#fff",
           }}
+          onClick={() => {
+            const nextPath = "/uploads";
+            if (window.location.pathname !== nextPath) {
+              window.history.pushState({}, "", nextPath);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }
+          }}
         >
           <Upload size={13} />
           Upload
         </button>
 
         {/* Notification */}
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
-            onClick={() => setNotifOpen(!notifOpen)}
+            onClick={() => setNotifOpen((open) => !open)}
             className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+
             style={{
               border: `1px solid ${topbarColors.buttonBorder}`,
             }}
@@ -273,10 +323,12 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
             }}
           >
             <Bell size={15} style={{ color: topbarColors.icon }} />
-            <span
-              className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
-              style={{ background: accentColor }}
-            />
+            {notifications.length > 0 && (
+              <span
+                className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+                style={{ background: accentColor }}
+              />
+            )}
           </button>
           {notifOpen && (
             <div
@@ -288,69 +340,125 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
                   Notifications
                 </span>
               </div>
-              {[
-                { title: "Sync Complete", desc: "All 3 devices are up to date", time: "2m ago", dot: accentColor },
-                { title: "Storage Warning", desc: "You've used 68% of your storage", time: "1h ago", dot: "#f59e0b" },
-                { title: "New Share", desc: "Alex shared 'Project Files'", time: "3h ago", dot: "#3b82f6" },
-              ].map((n, i) => (
-                <div
-                  key={i}
-                  className="flex gap-3 px-4 py-3 cursor-pointer transition-colors"
-                  style={{
-                    borderBottom: `1px solid ${topbarColors.dropdownItemBorder}`,
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = topbarColors.buttonHover;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: n.dot }} />
-                  <div>
-                    <div className="text-xs font-medium" style={{ color: topbarColors.dropdownText }}>
-                      {n.title}
-                    </div>
-                    <div className="text-xs" style={{ color: topbarColors.dropdownMuted }}>
-                      {n.desc}
-                    </div>
-                    <div className="text-[10px] mt-0.5" style={{ color: topbarColors.dropdownTime }}>
-                      {n.time}
-                    </div>
+              {notifications.length > 0 ? (
+                <div />
+              ) : (
+                <div className="px-4 py-6">
+                  <div className="text-sm font-semibold" style={{ color: topbarColors.dropdownText }}>
+                    No notifications yet
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: topbarColors.dropdownMuted }}>
+                    You're all caught up.
                   </div>
                 </div>
-              ))}
+              )}
+              <div className="px-4 py-3" style={{ borderTop: `1px solid ${topbarColors.dropdownItemBorder}` }}>
+                <button
+                  className="text-xs font-semibold transition-all hover:opacity-90"
+                  style={{
+                    color: accentColor,
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    window.history.pushState({}, "", "/settings#notifications");
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                    setNotifOpen(false);
+
+                  }}
+                >
+                  Notification settings
+                </button>
+              </div>
+
             </div>
           )}
         </div>
 
-        {/* User Avatar */}
-        <button
-          className="flex items-center gap-2 px-3.5 h-10 rounded-lg transition-colors"
-          style={{
-            border: `1px solid ${topbarColors.buttonBorder}`,
-            background: topbarColors.buttonBg,
-            minWidth: "96px",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = topbarColors.buttonHover;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = topbarColors.buttonBg;
-          }}
-        >
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
+        {/* User Avatar / Profile Dropdown */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            className="flex items-center gap-2 px-3.5 h-10 rounded-lg transition-colors"
+            style={{
+              border: `1px solid ${topbarColors.buttonBorder}`,
+              background: topbarColors.buttonBg,
+              minWidth: "96px",
+            }}
+            onClick={() => setUserMenuOpen((o) => !o)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = topbarColors.buttonHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = topbarColors.buttonBg;
+            }}
           >
-            A
-          </div>
-          <span className="text-xs font-medium" style={{ color: topbarColors.userText }}>
-            Alex
-          </span>
-          <ChevronDown size={12} style={{ color: topbarColors.icon }} />
-        </button>
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
+            >
+              A
+            </div>
+            <span className="text-xs font-medium" style={{ color: topbarColors.userText }}>
+              Alex
+            </span>
+            <ChevronDown size={12} style={{ color: topbarColors.icon }} />
+          </button>
+
+          {userMenuOpen && (
+            <div
+              className="absolute right-0 top-10 w-56 rounded-xl shadow-2xl z-50 overflow-hidden"
+              style={{ background: topbarColors.dropdownBg, border: `1px solid ${topbarColors.dropdownBorder}` }}
+            >
+              <div className="px-4 py-3" style={{ borderBottom: `1px solid ${topbarColors.dropdownBorder}` }}>
+                <span className="text-sm font-semibold" style={{ color: topbarColors.dropdownText }}>
+                  Account
+                </span>
+              </div>
+
+              {(() => {
+                const handleProfileClick = () => {
+                  window.history.pushState({}, "", "/settings#profile");
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                  setUserMenuOpen(false);
+                };
+
+                const handleLogoutClick = async () => {
+                  if (onLogout) await onLogout();
+                  setUserMenuOpen(false);
+                };
+
+                return (
+                  <>
+                    <button
+                      className="w-full text-left px-4 py-3 text-xs font-semibold transition-all hover:opacity-90"
+                      style={{ color: topbarColors.dropdownText, background: "transparent" }}
+                      onClick={handleProfileClick}
+                    >
+                      Profile
+                    </button>
+
+
+
+                    {onLogout && (
+                      <button
+                        className="w-full text-left px-4 py-3 text-xs font-semibold transition-all hover:opacity-90"
+                        style={{
+                          color: topbarColors.logoutText,
+                          background: "transparent",
+                          borderTop: `1px solid ${topbarColors.dropdownItemBorder}`,
+                        }}
+                        onClick={handleLogoutClick}
+                      >
+                        Logout
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+
+            </div>
+          )}
+        </div>
+
 
         {/* Logout */}
         {onLogout && (

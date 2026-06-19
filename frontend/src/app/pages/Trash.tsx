@@ -19,6 +19,41 @@ import {
 } from "../../services/trashService";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
+type AppearanceTheme = "dark" | "light" | "system";
+type ResolvedTheme = "dark" | "light";
+
+function safeReadAppearanceTheme(): AppearanceTheme {
+  try {
+    const raw = localStorage.getItem("nimbus_appearance_theme");
+    if (!raw) return "system";
+    if (raw === "dark" || raw === "light" || raw === "system") return raw;
+    return "system";
+  } catch {
+    return "system";
+  }
+}
+
+function safeReadAccentColor(): string {
+  try {
+    const raw = localStorage.getItem("nimbus_accent_color");
+    return raw ? String(raw) : "#a78bfa";
+  } catch {
+    return "#a78bfa";
+  }
+}
+
+function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+  if (theme === "dark" || theme === "light") return theme;
+
+  try {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  } catch {
+    return "light";
+  }
+}
+
 function formatSize(bytes?: number | null): string {
   const b = typeof bytes === "number" ? bytes : 0;
   const units = ["B", "KB", "MB", "GB"];
@@ -54,6 +89,49 @@ export function Trash({
 }: {
   onStorageChanged?: () => void;
 }): any {
+  // Theme state
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(() => safeReadAppearanceTheme());
+  const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor());
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
+
+  const trashColors = useMemo(() => {
+    if (resolvedTheme === "light") {
+      return {
+        pageBg: "#f8fafc",
+        cardBg: "#ffffff",
+        panelBg: "#f1f5f9",
+        inputBg: "#ffffff",
+        border: "#dbe3ef",
+        borderSoft: "#e5eaf1",
+        title: "#0f172a",
+        text: "#334155",
+        muted: "#64748b",
+        muted2: "#94a3b8",
+        rowHover: "#f8fafc",
+        selectedBg: "rgba(168, 85, 247, 0.08)",
+        modalBg: "#ffffff",
+        overlay: "rgba(15, 23, 42, 0.45)",
+      };
+    }
+
+    return {
+      pageBg: "#111c2f",
+      cardBg: "#0f1729",
+      panelBg: "#0d1829",
+      inputBg: "#0d1829",
+      border: "#1a2540",
+      borderSoft: "#0a1020",
+      title: "#e2e8f0",
+      text: "#94a3b8",
+      muted: "#64748b",
+      muted2: "#475569",
+      rowHover: "#0d1829",
+      selectedBg: "rgba(168, 85, 247, 0.08)",
+      modalBg: "#0f1729",
+      overlay: "rgba(0, 0, 0, 0.70)",
+    };
+  }, [resolvedTheme]);
+
   // Selection untuk Deleted Files harus terpisah dengan Deleted Folders
 
   const [trashFiles, setTrashFiles] = useState<TrashFile[]>([]);
@@ -119,6 +197,66 @@ export function Trash({
     useState<TrashBulkResult | null>(null);
 
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const handler = () => {
+      const nextAppearance = safeReadAppearanceTheme();
+      setAppearanceTheme(nextAppearance);
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(nextAppearance));
+    };
+
+    try {
+      window.addEventListener("nimbus-appearance-change", handler as EventListener);
+    } catch {
+      // ignore
+    }
+
+    try {
+      window.addEventListener("storage", (e) => {
+        if (!e.key) return;
+        if (e.key === "nimbus_appearance_theme" || e.key === "nimbus_accent_color") handler();
+      });
+    } catch {
+      // ignore
+    }
+
+    try {
+      window.addEventListener("focus", handler);
+    } catch {
+      // ignore
+    }
+
+    let mql: MediaQueryList | null = null;
+    try {
+      mql = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+      if (mql) {
+        const onMqlChange = () => handler();
+        if ("addEventListener" in mql) {
+          mql.addEventListener("change", onMqlChange);
+        } else {
+          (mql as any).addListener(onMqlChange);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    handler();
+
+    return () => {
+      try {
+        window.removeEventListener("nimbus-appearance-change", handler as EventListener);
+      } catch {
+        // ignore
+      }
+      try {
+        window.removeEventListener("focus", handler);
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
 
   async function loadTrashFiles() {
     try {
@@ -323,21 +461,21 @@ export function Trash({
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: "#111c2f" }}
+      style={{ background: trashColors.pageBg }}
     >
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: "#e2e8f0" }}>
+          <h1 className="text-xl font-semibold" style={{ color: trashColors.title }}>
             Trash
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
+          <p className="text-xs mt-0.5" style={{ color: trashColors.muted }}>
             Items are deleted permanently after 30 days
           </p>
         </div>
       </div>
 
       {loading && (
-        <div className="text-sm" style={{ color: "#94a3b8" }}>
+        <div className="text-sm" style={{ color: trashColors.text }}>
           Loading trash...
         </div>
       )}
@@ -350,7 +488,7 @@ export function Trash({
         !error &&
         filtered.length === 0 &&
         filteredFolders.length === 0 && (
-          <div className="text-sm" style={{ color: "#94a3b8" }}>
+          <div className="text-sm" style={{ color: trashColors.text }}>
             Trash kosong.
           </div>
         )}
@@ -361,10 +499,10 @@ export function Trash({
           {selectedFileIds.size > 0 && (
             <div
               className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-xl"
-              style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+              style={{ background: trashColors.cardBg, border: `1px solid ${trashColors.border}` }}
             >
-              <div className="text-xs" style={{ color: "#94a3b8" }}>
-                <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+              <div className="text-xs" style={{ color: trashColors.text }}>
+                <span style={{ color: trashColors.title, fontWeight: 700 }}>
                   {selectedFileIds.size}
                 </span>{" "}
                 file dipilih
@@ -413,9 +551,9 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: trashColors.panelBg,
+                    border: `1px solid ${trashColors.border}`,
+                    color: trashColors.text,
                   }}
                   aria-label="Batalkan pilihan"
                   onClick={() => {
@@ -435,7 +573,7 @@ export function Trash({
               <Search
                 size={13}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: "#475569" }}
+                style={{ color: trashColors.muted }}
               />
               <input
                 value={search}
@@ -443,9 +581,9 @@ export function Trash({
                 placeholder="Search trash..."
                 className="pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: trashColors.inputBg,
+                  border: `1px solid ${trashColors.border}`,
+                  color: trashColors.text,
                   width: "200px",
                 }}
               />
@@ -454,20 +592,20 @@ export function Trash({
 
           <div
             className="rounded-xl overflow-hidden"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{ background: trashColors.cardBg, border: `1px solid ${trashColors.border}` }}
           >
             <div
               className="grid px-4 py-2.5"
               style={{
                 gridTemplateColumns: "1fr 120px 150px 130px 170px",
-                borderBottom: "1px solid #1a2540",
+                borderBottom: `1px solid ${trashColors.border}`,
               }}
             >
               {["Name", "Type", "Size", "Deleted At", "Actions"].map((h) => (
                 <span
                   key={h}
                   className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
+                  style={{ color: trashColors.muted }}
                 >
                   {h}
                 </span>
@@ -558,10 +696,10 @@ export function Trash({
             {filtered.map((item) => (
               <div
                 key={item.id}
-                className="grid px-4 py-3 items-center hover:bg-[#0d1829] transition-colors"
+                className="grid px-4 py-3 items-center transition-colors"
                 style={{
                   gridTemplateColumns: "28px 1fr 120px 150px 130px 170px",
-                  borderBottom: "1px solid #0a1020",
+                  borderBottom: `1px solid ${trashColors.borderSoft}`,
                   background: selectedFileIds.has(item.id)
                     ? "rgba(168, 85, 247, 0.08)"
                     : "transparent",
@@ -569,6 +707,16 @@ export function Trash({
                     ? "3px solid rgba(168, 85, 247, 0.3)"
                     : "3px solid transparent",
                   paddingLeft: selectedFileIds.has(item.id) ? "calc(1rem - 3px)" : "1rem",
+                }}
+                onMouseEnter={(e) => {
+                  if (!selectedFileIds.has(item.id)) {
+                    e.currentTarget.style.backgroundColor = trashColors.rowHover;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!selectedFileIds.has(item.id)) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
                 }}
               >
                 <div className="flex items-center">
@@ -592,27 +740,27 @@ export function Trash({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className="w-7 h-7 rounded-md flex items-center justify-center opacity-60"
-                    style={{ background: "#1a2540" }}
+                    style={{ background: trashColors.border }}
                   >
-                    <FileText size={14} style={{ color: "#94a3b8" }} />
+                    <FileText size={14} style={{ color: trashColors.muted }} />
                   </div>
                   <span
                     className="text-sm text-ellipsis overflow-hidden whitespace-nowrap"
-                    style={{ color: "#8899aa" }}
+                    style={{ color: trashColors.text }}
                   >
                     {item.original_name}
                   </span>
                 </div>
 
-                <span className="text-xs" style={{ color: "#475569" }}>
+                <span className="text-xs" style={{ color: trashColors.muted }}>
                   {item.mime_type || "-"}
                 </span>
 
-                <span className="text-xs" style={{ color: "#475569" }}>
+                <span className="text-xs" style={{ color: trashColors.muted }}>
                   {formatSize(item.size)}
                 </span>
 
-                <span className="text-xs" style={{ color: "#475569" }}>
+                <span className="text-xs" style={{ color: trashColors.muted }}>
                   {formatDate(item.deleted_at)}
                 </span>
 
@@ -716,9 +864,9 @@ export function Trash({
                   type="button"
                   className="px-3 py-2 rounded-lg text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: trashColors.panelBg,
+                    border: `1px solid ${trashColors.border}`,
+                    color: trashColors.text,
                   }}
                   aria-label="Batalkan pilihan folder"
                   onClick={() => {
@@ -733,20 +881,20 @@ export function Trash({
 
           <h2
             className="text-xs font-semibold mb-3 uppercase tracking-wider"
-            style={{ color: "#334155" }}
+            style={{ color: trashColors.muted }}
           >
             Deleted Folders
           </h2>
 
           <div
             className="rounded-xl overflow-hidden"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{ background: trashColors.cardBg, border: `1px solid ${trashColors.border}` }}
           >
             <div
               className="grid px-4 py-2.5 items-center"
               style={{
                 gridTemplateColumns: "28px 1fr 130px 170px",
-                borderBottom: "1px solid #1a2540",
+                borderBottom: `1px solid ${trashColors.border}`,
               }}
             >
               {/* Select all folders (visible only) */}
@@ -792,19 +940,19 @@ export function Trash({
 
               <span
                 className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "#334155" }}
+                style={{ color: trashColors.muted }}
               >
                 Folder
               </span>
               <span
                 className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "#334155" }}
+                style={{ color: trashColors.muted }}
               >
                 Deleted At
               </span>
               <span
                 className="text-[11px] font-medium uppercase tracking-wider"
-                style={{ color: "#334155" }}
+                style={{ color: trashColors.muted }}
               >
                 Actions
               </span>
@@ -813,10 +961,10 @@ export function Trash({
             {filteredFolders.map((folder) => (
               <div
                 key={folder.id}
-                className="grid px-4 py-3 items-center hover:bg-[#0d1829] transition-colors"
+                className="grid px-4 py-3 items-center transition-colors"
                 style={{
                   gridTemplateColumns: "28px 1fr 130px 170px",
-                  borderBottom: "1px solid #0a1020",
+                  borderBottom: `1px solid ${trashColors.borderSoft}`,
                   background: selectedFolderIds.has(folder.id)
                     ? "rgba(168, 85, 247, 0.08)"
                     : "transparent",
@@ -824,6 +972,16 @@ export function Trash({
                     ? "3px solid rgba(168, 85, 247, 0.3)"
                     : "3px solid transparent",
                   paddingLeft: selectedFolderIds.has(folder.id) ? "calc(1rem - 3px)" : "1rem",
+                }}
+                onMouseEnter={(e) => {
+                  if (!selectedFolderIds.has(folder.id)) {
+                    e.currentTarget.style.backgroundColor = trashColors.rowHover;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!selectedFolderIds.has(folder.id)) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
                 }}
               >
                 <div className="flex items-center">
@@ -849,17 +1007,17 @@ export function Trash({
                     className="w-7 h-7 rounded-md flex items-center justify-center opacity-60"
                     style={{ background: "#1a2540" }}
                   >
-                    <FileText size={14} style={{ color: "#94a3b8" }} />
+                    <FileText size={14} style={{ color: trashColors.muted }} />
                   </div>
                   <span
                     className="text-sm text-ellipsis overflow-hidden whitespace-nowrap"
-                    style={{ color: "#8899aa" }}
+                    style={{ color: trashColors.text }}
                   >
                     {folder.name}
                   </span>
                 </div>
 
-                <span className="text-xs" style={{ color: "#475569" }}>
+                <span className="text-xs" style={{ color: trashColors.muted }}>
                   {formatDate(folder.deleted_at)}
                 </span>
 
@@ -880,11 +1038,17 @@ export function Trash({
                         setRestoreFolderLoadingId(null);
                       }
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] hover:bg-[#1a2540] transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors"
                     style={{
                       color: "#34d399",
                       border: "1px solid rgba(52,211,153,0.2)",
                       background: "rgba(52,211,153,0.08)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.15)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.08)";
                     }}
                   >
                     <RotateCcw size={10} />{" "}
@@ -929,19 +1093,19 @@ export function Trash({
           aria-labelledby="trash-bulk-action-title"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            className="w-full max-w-md rounded-2xl p-6"
+            style={{ background: trashColors.modalBg, border: `1px solid ${trashColors.border}`, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2
                   id="trash-bulk-action-title"
                   className="text-sm font-semibold"
-                  style={{ color: "#e2e8f0" }}
+                  style={{ color: trashColors.title }}
                 >
                   {bulkActionContent.title}
                 </h2>
-                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                <p className="mt-2 text-xs" style={{ color: trashColors.text }}>
                   {bulkActionContent.description}
                 </p>
               </div>
@@ -952,9 +1116,9 @@ export function Trash({
                 disabled={bulkActionLoading}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: trashColors.panelBg,
+                  border: `1px solid ${trashColors.border}`,
+                  color: trashColors.text,
                   opacity: bulkActionLoading ? 0.55 : 1,
                 }}
                 aria-label="Tutup modal bulk action"
@@ -976,7 +1140,7 @@ export function Trash({
             {bulkActionLoading && (
               <div
                 className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs flex items-center gap-2"
-                style={{ color: "#67e8f9" }}
+                style={{ color: "#06b6d4" }}
                 role="status"
               >
                 <LoadingSpinner size={12} />
@@ -987,10 +1151,11 @@ export function Trash({
             {bulkActionResult ? (
               <>
                 <div
-                  className="rounded-xl border border-[#1a2540] bg-[#0b1121] p-4"
+                  className="rounded-xl border p-4"
                   role="status"
+                  style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
                 >
-                  <div className="text-xs" style={{ color: "#94a3b8" }}>
+                  <div className="text-xs" style={{ color: trashColors.text }}>
                     Hasil proses
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1021,9 +1186,9 @@ export function Trash({
                     onClick={closeBulkActionModal}
                     className="rounded-xl px-3 py-2 text-xs font-medium"
                     style={{
-                      background: "#0d1829",
-                      border: "1px solid #1a2540",
-                      color: "#94a3b8",
+                      background: trashColors.panelBg,
+                      border: `1px solid ${trashColors.border}`,
+                      color: trashColors.text,
                     }}
                   >
                     Tutup
@@ -1038,9 +1203,9 @@ export function Trash({
                   disabled={bulkActionLoading}
                   className="rounded-xl px-3 py-2 text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: trashColors.panelBg,
+                    border: `1px solid ${trashColors.border}`,
+                    color: trashColors.text,
                     opacity: bulkActionLoading ? 0.6 : 1,
                   }}
                 >
@@ -1059,7 +1224,7 @@ export function Trash({
                     border: bulkActionContent.danger
                       ? "1px solid rgba(248,113,113,0.4)"
                       : "1px solid rgba(34,211,238,0.35)",
-                    color: bulkActionContent.danger ? "#0b1121" : "#fff",
+                    color: bulkActionContent.danger ? "#ffffff" : "#fff",
                     opacity: bulkActionLoading ? 0.75 : 1,
                   }}
                 >
@@ -1082,28 +1247,28 @@ export function Trash({
       {isForceDeleteModalOpen && selectedFileForForceDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.55)" }}
+          style={{ background: trashColors.overlay }}
         >
           <div
             className="w-full max-w-md rounded-xl p-5"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{ background: trashColors.modalBg, border: `1px solid ${trashColors.border}` }}
           >
             <h2
               className="text-base font-semibold"
-              style={{ color: "#e2e8f0" }}
+              style={{ color: trashColors.title }}
             >
               Delete Permanently?
             </h2>
-            <p className="text-xs mt-2" style={{ color: "#94a3b8" }}>
+            <p className="text-xs mt-2" style={{ color: trashColors.text }}>
               File ini akan dihapus permanen dari storage dan tidak bisa
               direstore.
             </p>
 
             <div
               className="mt-3 rounded-lg p-3"
-              style={{ background: "#0b1121", border: "1px solid #1a2540" }}
+              style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
             >
-              <div className="text-sm" style={{ color: "#8899aa" }}>
+              <div className="text-sm" style={{ color: trashColors.text }}>
                 {selectedFileForForceDelete.original_name}
               </div>
             </div>
@@ -1120,9 +1285,9 @@ export function Trash({
                 onClick={closeForceDeleteModal}
                 className="px-3 py-2 rounded-lg text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: trashColors.panelBg,
+                  border: `1px solid ${trashColors.border}`,
+                  color: trashColors.text,
                 }}
               >
                 Cancel
@@ -1135,9 +1300,9 @@ export function Trash({
                 onClick={handleForceDelete}
                 className="px-3 py-2 rounded-lg text-xs font-semibold"
                 style={{
-                  background: "rgba(239,68,68,0.15)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  color: "#ef4444",
+                  background: "#f87171",
+                  border: "1px solid rgba(248,113,113,0.4)",
+                  color: "#ffffff",
                 }}
               >
                 {forceDeleteLoadingId === selectedFileForForceDelete.id
@@ -1153,28 +1318,28 @@ export function Trash({
       {isFolderForceDeleteModalOpen && selectedFolderForForceDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.55)" }}
+          style={{ background: trashColors.overlay }}
         >
           <div
             className="w-full max-w-md rounded-xl p-5"
-            style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+            style={{ background: trashColors.modalBg, border: `1px solid ${trashColors.border}` }}
           >
             <h2
               className="text-base font-semibold"
-              style={{ color: "#e2e8f0" }}
+              style={{ color: trashColors.title }}
             >
               Delete Folder Permanently?
             </h2>
-            <p className="text-xs mt-2" style={{ color: "#94a3b8" }}>
+            <p className="text-xs mt-2" style={{ color: trashColors.text }}>
               Folder, subfolder, dan seluruh file di dalamnya akan dihapus
               permanen. Tindakan ini tidak bisa direstore.
             </p>
 
             <div
               className="mt-3 rounded-lg p-3"
-              style={{ background: "#0b1121", border: "1px solid #1a2540" }}
+              style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
             >
-              <div className="text-sm" style={{ color: "#8899aa" }}>
+              <div className="text-sm" style={{ color: trashColors.text }}>
                 {selectedFolderForForceDelete.name}
               </div>
             </div>
@@ -1197,9 +1362,9 @@ export function Trash({
                 }}
                 className="px-3 py-2 rounded-lg text-xs font-medium"
                 style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
+                  background: trashColors.panelBg,
+                  border: `1px solid ${trashColors.border}`,
+                  color: trashColors.text,
                 }}
               >
                 Cancel
@@ -1236,9 +1401,9 @@ export function Trash({
                 }}
                 className="px-3 py-2 rounded-lg text-xs font-semibold"
                 style={{
-                  background: "rgba(239,68,68,0.15)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  color: "#ef4444",
+                  background: "#f87171",
+                  border: "1px solid rgba(248,113,113,0.4)",
+                  color: "#ffffff",
                   opacity: forceDeleteFolderLoading ? 0.75 : 1,
                 }}
               >
