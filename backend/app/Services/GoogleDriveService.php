@@ -3,14 +3,17 @@
 namespace App\Services;
 
 use App\Models\GDriveAccount;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
+
 class GoogleDriveService
 {
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+    private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
+    private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
+
 
     private function config(): array
     {
@@ -29,6 +32,22 @@ class GoogleDriveService
             'redirect_uri' => $redirectUri,
             'scopes' => $scopes,
         ];
+    }
+
+    public function getAccountAbout(string $accessToken): array
+    {
+        if (empty($accessToken)) {
+            throw new RuntimeException('Google Drive access_token is missing.');
+        }
+
+        $response = Http::withToken($accessToken)
+            ->get(self::DRIVE_ABOUT_ENDPOINT, [
+                'fields' => 'user,storageQuota',
+            ])
+            ->throw()
+            ->json();
+
+        return is_array($response) ? $response : [];
     }
 
     public function exchangeAuthorizationCode(string $code): array
@@ -99,5 +118,22 @@ class GoogleDriveService
 
         return $this->refreshAccessToken($account);
     }
+
+    public function getAccountAbout(string $accessToken): array
+    {
+        if (empty($accessToken)) {
+            throw new RuntimeException('Google Drive access_token is missing.');
+        }
+
+        $response = Http::withToken($accessToken)
+            ->get(self::DRIVE_ABOUT_ENDPOINT, [
+                'fields' => 'user,storageQuota',
+            ])
+            ->throw()
+            ->json();
+
+        return is_array($response) ? $response : [];
+    }
 }
+
 
