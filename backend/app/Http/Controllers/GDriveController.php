@@ -255,6 +255,69 @@ class GDriveController extends Controller
 
     }
 
+    public function files(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($account->user_id !== $user->id) {
+            return response()->json([
+                'message' => 'Google Drive account not found.',
+            ], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json([
+                'message' => 'Google Drive account is disconnected.',
+            ], 422);
+        }
+
+        $pageToken = $request->query('page_token');
+        $pageSize = (int) $request->query('page_size', 50);
+
+        try {
+            $response = $googleDriveService->listFiles(
+                $account,
+                is_string($pageToken) ? $pageToken : null,
+                $pageSize
+            );
+
+            $files = collect($response['files'] ?? [])->map(function (array $file) use ($account) {
+                $owner = $file['owners'][0] ?? [];
+
+                return [
+                    'id' => $file['id'] ?? null,
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'name' => $file['name'] ?? null,
+                    'mime_type' => $file['mimeType'] ?? null,
+                    'icon_link' => $file['iconLink'] ?? null,
+                    'web_view_link' => $file['webViewLink'] ?? null,
+                    'web_content_link' => $file['webContentLink'] ?? null,
+                    'size' => $file['size'] ?? null,
+                    'created_time' => $file['createdTime'] ?? null,
+                    'modified_time' => $file['modifiedTime'] ?? null,
+                    'shared' => $file['shared'] ?? null,
+                    'owner_name' => $owner['displayName'] ?? null,
+                    'owner_email' => $owner['emailAddress'] ?? null,
+                    'source' => 'gdrive',
+                ];
+            });
+
+            return response()->json([
+                'data' => $files,
+                'meta' => [
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'next_page_token' => $response['nextPageToken'] ?? null,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to load Google Drive files.',
+            ], 502);
+        }
+    }
+
     public function destroy(Request $request, GDriveAccount $account): JsonResponse
     {
         $user = $request->user();

@@ -99,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Google Drive connector (read-only MVP skeleton)
     Route::get('/gdrive/accounts', [GDriveController::class, 'index']);
+    Route::get('/gdrive/accounts/{account}/files', [GDriveController::class, 'files']);
     Route::get('/gdrive/connect', [GDriveController::class, 'connect']);
     Route::delete('/gdrive/accounts/{account}', [GDriveController::class, 'destroy']);
 });
