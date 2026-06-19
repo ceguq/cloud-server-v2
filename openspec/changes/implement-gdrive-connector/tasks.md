@@ -29,12 +29,13 @@
 
 
 ## 4. Add `GoogleDriveService` token refresh skeleton
-
-- [ ] Buat class `GoogleDriveService` sebagai abstraction layer.
-- [ ] Implement skeleton:
+- [x] Buat class `GoogleDriveService` sebagai abstraction layer.
+- [x] Implement skeleton:
   - ambil token dari model,
   - cek token expired,
   - refresh token (placeholder).
+
+
 
 ## 5. Add account list API
 - [ ] Implement `GET /api/gdrive/accounts`.
