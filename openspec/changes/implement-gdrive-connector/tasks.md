@@ -41,6 +41,18 @@
 - [x] Implement `GET /api/gdrive/accounts`.
 - [x] Return daftar akun (tanpa token) dan status koneksi.
 
+### 5A. Google Drive about metadata helper
+- [x] Add Google Drive about metadata helper.
+
+### 6B. Verify OAuth callback token exchange and account metadata without persisting
+- [x] Verify OAuth callback token exchange and account metadata without persisting.
+
+### 6C. Persist connected Google Drive account after OAuth callback
+- [x] Persist connected Google Drive account after OAuth callback.
+
+
+
+
 
 ## 6. Add file list API read-only
 - [ ] Implement `GET /api/gdrive/files` (aggregate across accounts).

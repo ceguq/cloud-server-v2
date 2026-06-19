@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\GDriveAccount;
+use App\Models\User;
+use App\Services\GoogleDriveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use Throwable;
+
+
 
 
 class GDriveController extends Controller
@@ -102,7 +105,7 @@ class GDriveController extends Controller
         return redirect()->away($url);
     }
 
-    public function callback(Request $request): JsonResponse
+    public function callback(Request $request, GoogleDriveService $googleDriveService): JsonResponse
     {
         $code = $request->input('code');
         $state = $request->input('state');
@@ -141,11 +144,114 @@ class GDriveController extends Controller
             return response()->json(['message' => 'Expired OAuth state.'], 400);
         }
 
-        return response()->json([
-            'message' => 'Google Drive OAuth callback received. Token exchange is not implemented yet.',
-            'has_code' => true,
-            'user_id' => $statePayload['user_id'],
-        ]);
+        try {
+            $tokenResponse = $googleDriveService->exchangeAuthorizationCode($code);
+
+            $accessToken = $tokenResponse['access_token'] ?? null;
+            if (empty($accessToken)) {
+                return response()->json([
+                    'message' => 'Failed to connect Google Drive account.',
+                ], 502);
+            }
+
+            $about = $googleDriveService->getAccountAbout($accessToken);
+
+            $driveUser = $about['user'] ?? [];
+            $email = $driveUser['emailAddress'] ?? null;
+            $displayName = $driveUser['displayName'] ?? null;
+            $photoLink = $driveUser['photoLink'] ?? null;
+            $permissionId = $driveUser['permissionId'] ?? null;
+
+            if (empty($email)) {
+                return response()->json([
+                    'message' => 'Unable to read Google Drive account email.',
+                ], 422);
+            }
+
+            $user = User::query()->find($statePayload['user_id']);
+            if (!$user) {
+                return response()->json(['message' => 'OAuth user not found.'], 404);
+            }
+
+            $account = null;
+            if (!empty($permissionId)) {
+                $account = GDriveAccount::query()
+                    ->where('user_id', $user->id)
+                    ->where('google_account_id', $permissionId)
+                    ->first();
+            }
+
+            if (!$account) {
+                $account = GDriveAccount::query()
+                    ->where('user_id', $user->id)
+                    ->where('email', $email)
+                    ->first();
+            }
+
+            if (!$account) {
+                $account = new GDriveAccount();
+            }
+
+            $incomingRefreshToken = $tokenResponse['refresh_token'] ?? null;
+
+            if (empty($incomingRefreshToken) && !$account->exists) {
+                return response()->json([
+                    'message' => 'Google Drive refresh token was not returned. Please revoke access in Google account permissions and connect again.',
+                ], 422);
+            }
+
+            $account->user_id = $user->id;
+            $account->email = $email;
+            $account->google_account_id = $permissionId;
+            $account->avatar_url = $photoLink;
+            $account->label = !empty($account->label) ? $account->label : ($displayName ?: $email);
+
+            $account->access_token = $tokenResponse['access_token'];
+
+            if (!empty($incomingRefreshToken)) {
+                $account->refresh_token = $incomingRefreshToken;
+            }
+
+            $account->token_expires_at = now()->addSeconds((int) ($tokenResponse['expires_in'] ?? 3600));
+
+            $scopes = config('services.google_drive.scopes', []);
+
+            if (isset($tokenResponse['scope']) && is_string($tokenResponse['scope'])) {
+                $scopes = array_values(array_filter(explode(' ', $tokenResponse['scope'])));
+            }
+
+            $account->scopes = $scopes;
+
+            $account->connected_at = $account->connected_at ?: now();
+            $account->revoked_at = null;
+
+            $account->save();
+
+            return response()->json([
+                'message' => 'Google Drive account connected.',
+                'data' => [
+                    'id' => $account->id,
+                    'label' => $account->label,
+                    'email' => $account->email,
+                    'google_account_id' => $account->google_account_id,
+                    'avatar_url' => $account->avatar_url,
+                    'scopes' => $account->scopes,
+                    'token_expires_at' => $account->token_expires_at?->toISOString(),
+                    'connected_at' => $account->connected_at?->toISOString(),
+                    'last_synced_at' => $account->last_synced_at?->toISOString(),
+                    'revoked_at' => $account->revoked_at?->toISOString(),
+                    'status' => 'connected',
+                    'is_connected' => true,
+                    'is_revoked' => false,
+                ],
+            ]);
+
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to connect Google Drive account.',
+            ], 502);
+        }
+
 
     }
 
