@@ -18,10 +18,12 @@ import {
   disconnectGDriveAccount,
   getGDriveAccountFiles,
   getGDriveAccounts,
+  getGDriveConnectUrl,
   getGDriveFiles,
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
 
 
 
@@ -177,11 +179,10 @@ export function GDrive() {
   const [filesError, setFilesError] = useState(false);
   const [fileScope, setFileScope] = useState<"all" | "account">("all");
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
-
-
-
+  const [connectingAccount, setConnectingAccount] = useState(false);
 
   useEffect(() => {
+
 
     let cancelled = false;
 
@@ -216,7 +217,23 @@ export function GDrive() {
 
 
 
+  const handleConnectAccount = async () => {
+    if (connectingAccount) return;
+
+    setConnectingAccount(true);
+    try {
+      const url = await getGDriveConnectUrl();
+      window.location.href = url;
+    } catch {
+      setAccountsError(true);
+      window.alert("Failed to start Google Drive connect.");
+    } finally {
+      setConnectingAccount(false);
+    }
+  };
+
   const handleDisconnectAccount = async (accountId: string) => {
+
     if (!accountId) return;
     if (!disconnectingAccountId || disconnectingAccountId === accountId) {
       // ok
@@ -443,14 +460,21 @@ export function GDrive() {
               </div>
               <button
                 type="button"
+                title="Connect Google Drive"
+                disabled={connectingAccount}
                 className="flex items-center gap-2 px-2 py-2 rounded-lg text-xs"
-                style={{ background: `${accentColor}14`, border: `1px solid ${accentColor}33`, color: colors.title }}
-                onClick={() => {
-                  // UI-only: placeholder
+                style={{
+                  background: connectingAccount ? "rgba(148,163,184,0.12)" : `${accentColor}14`,
+                  border: `1px solid ${connectingAccount ? colors.borderSoft : `${accentColor}33`}`,
+                  color: colors.title,
+                  opacity: connectingAccount ? 0.7 : 1,
+                  cursor: connectingAccount ? "not-allowed" : "pointer",
                 }}
+                onClick={handleConnectAccount}
               >
                 <Plus size={13} />
               </button>
+
             </div>
 
             <div className="space-y-3">
