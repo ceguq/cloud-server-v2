@@ -279,8 +279,11 @@ class GDriveController extends Controller
             ];
 
             if (! $request->expectsJson()) {
-                return redirect()->away('http://localhost:5173/gdrive?gdrive=connected');
+                $frontendUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
+
+                return redirect()->away($frontendUrl . '/gdrive?gdrive=connected');
             }
+
 
             return response()->json($payload);
 
