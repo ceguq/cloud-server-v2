@@ -15,7 +15,8 @@
 - [ ] Tentukan kebutuhan untuk resolusi `account_id` per item file (agar open/download tepat).
 
 ## 3) Desain endpoint read-only (open/download/metadata preview)
-- [ ] Desain endpoint metadata preview yang memanggil Google Drive API read-only.
+- [x] Preview metadata/file info dari data existing sudah diimplementasikan di frontend (modal details).
+
 - [ ] Desain endpoint open file:
   - pastikan tidak membocorkan access token ke browser
   - tentukan apakah berupa redirect atau proxy open

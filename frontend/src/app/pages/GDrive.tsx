@@ -397,6 +397,8 @@ export function GDrive() {
   const [search, setSearch] = useState<string>("");
   const [copiedFileId, setCopiedFileId] = useState<string>("");
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
+  const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
+
 
 
   useEffect(() => {
@@ -636,6 +638,24 @@ export function GDrive() {
     }
   };
 
+  const setDetailsFileAndReset = (file: GDriveFileUI | null) => {
+    setDetailsFile(file);
+  };
+
+  const formatOptionalString = (v: string | null | undefined) => {
+    if (!v) return "-";
+    return v;
+  };
+
+  const formatOptionalBytes = (v: number | null | undefined) => {
+    if (v === null || v === undefined) return "-";
+    return formatBytes(v);
+  };
+
+  const formatOptionalDate = (iso: string | null | undefined) => {
+    if (!iso) return "-";
+    return formatDate(iso);
+  };
 
   const copyFileLink = async (file: GDriveFileUI) => {
     const url = file.webViewLink || file.webContentLink;
@@ -799,6 +819,7 @@ export function GDrive() {
 
     return (
       <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+
         <button
           type="button"
           title="Open"
@@ -833,8 +854,22 @@ export function GDrive() {
           <Download size={14} />
         </button>
 
+        <button
+          type="button"
+          title="Details"
+          disabled={!file.id}
+          onClick={() => setDetailsFile(file)}
+          style={{
+            ...actionBase,
+            opacity: !file.id ? 0.35 : 1,
+            cursor: !file.id ? "not-allowed" : "pointer",
+          }}
+        >
+          <Eye size={14} />
+        </button>
 
         <button
+
           type="button"
           title={copiedFileId === file.id ? "Copied" : "Copy link"}
           disabled={!hasOpenUrl}
@@ -867,6 +902,125 @@ export function GDrive() {
 
   return (
     <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
+      {detailsFile ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
+          style={{ background: resolvedTheme === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.45)" }}
+          onClick={() => setDetailsFileAndReset(null)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl border p-4"
+            style={{ background: colors.surfaceBg, borderColor: colors.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: colors.title }}>
+                  Details
+                </div>
+                <div className="mt-1 truncate text-xs" style={{ color: colors.text }} title={detailsFile.name}>
+                  {detailsFile.name}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDetailsFileAndReset(null)}
+                className="rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{ color: accentColor, background: `${accentColor}14`, border: `1px solid ${accentColor}33` }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Name
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalString(detailsFile.name)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  MIME
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalString(detailsFile.mime)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Owner
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalString(detailsFile.owner)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Account ID
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalString(detailsFile.accountId)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Size
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalBytes(detailsFile.sizeBytes)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Modified
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {formatOptionalString(detailsFile.recentAt)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Shared
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {detailsFile.shared ? "Shared" : "Private"}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Starred
+                </div>
+                <div className="mt-1 text-xs" style={{ color: colors.text }}>
+                  {detailsFile.starred ? "Starred" : "Not starred"}
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Google Link
+                </div>
+                <div className="mt-1 break-all text-xs" style={{ color: colors.text }}>
+                  {detailsFile.webViewLink ? detailsFile.webViewLink : detailsFile.webContentLink ? detailsFile.webContentLink : "-"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside
           className="min-h-0 overflow-y-auto border-r p-3 nimbus-scrollbar"
