@@ -634,7 +634,8 @@ export function GDrive() {
                           {formatGB(f.sizeGB)}
                         </div>
                         <div className="text-xs" style={{ color: colors.muted2 }}>
-                          {f.owner === "me" ? "You" : "Someone"}
+                          {f.owner || "Unknown"}
+
                         </div>
                         <div className="flex items-center justify-start">
                           {f.starred ? <Star size={16} style={{ color: "#fbbf24" }} /> : null}
