@@ -289,7 +289,7 @@ export function GDrive() {
   }, [gdriveAllFiles, tab, search, activeAccountId]);
 
 
-  const anyFiles = gdriveAllFiles.length > 0;
+  const anyFiles = filteredFiles.length > 0;
 
   const formatGB = (n: number) => {
 
@@ -559,9 +559,10 @@ export function GDrive() {
                             <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
                               {f.name}
                             </div>
-                            <div className="text-[11px] mt-1" style={{ color: colors.muted2 }}>
-                              {new Date(f.recentAt).toLocaleDateString()}
-                            </div>
+                          <div className="text-[11px] mt-1" style={{ color: colors.muted2 }}>
+                            {f.recentAt ? new Date(f.recentAt).toLocaleDateString() : "-"}
+                          </div>
+
                           </div>
                         </div>
                         {f.starred && (
@@ -570,9 +571,10 @@ export function GDrive() {
                       </div>
 
                       <div className="mt-3 flex justify-between text-[11px]" style={{ color: colors.muted2 }}>
-                        <span>{f.owner === "me" ? "You" : "Shared"}</span>
+                        <span>{f.owner || "Unknown"}</span>
                         <span>{formatGB(f.sizeGB)}</span>
                       </div>
+
 
                       {f.shared && (
                         <div className="mt-2 text-[11px] font-semibold px-2 py-1 rounded-full inline-flex" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}33`, color: accentColor }}>
