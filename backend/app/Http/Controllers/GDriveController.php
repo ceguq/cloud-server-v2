@@ -103,6 +103,10 @@ class GDriveController extends Controller
 
         $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . $query;
 
+        if ($request->expectsJson()) {
+            return response()->json(['url' => $url]);
+        }
+
         return redirect()->away($url);
     }
 
