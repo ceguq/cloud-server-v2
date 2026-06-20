@@ -14,13 +14,20 @@ import {
 } from "lucide-react";
 
 import { GDriveIcon } from "../components/GDriveIcon";
-import { getGDriveAccounts, type GDriveAccount } from "../../services/gdriveService";
+import {
+  getGDriveAccounts,
+  getGDriveFiles,
+  type GDriveAccount,
+  type GDriveFile,
+} from "../../services/gdriveService";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
 
 
+
 function safeReadAppearanceTheme(): AppearanceTheme {
+
   if (typeof window === "undefined") return "dark";
   try {
     const raw = window.localStorage.getItem("nimbus_appearance_theme");
@@ -55,7 +62,8 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
 
 
 
-type GDriveFile = {
+
+type GDriveFileUI = {
   id: string;
   name: string;
   mime: string;
@@ -63,7 +71,7 @@ type GDriveFile = {
   shared?: boolean;
   recentAt: string;
   sizeGB: number;
-  owner: "me" | "someone";
+  owner: string;
 };
 
 type TabKey = "all" | "starred" | "shared" | "recent";
@@ -72,6 +80,7 @@ type GDriveFileIconProps = {
   mime: string;
   size?: number;
 };
+
 
 function renderGDriveFileIcon({ mime, size = 16 }: GDriveFileIconProps) {
   const m = (mime || "").toLowerCase();
@@ -159,8 +168,12 @@ export function GDrive() {
   const [accountsError, setAccountsError] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string>("");
 
+  const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState(false);
 
   useEffect(() => {
+
     let cancelled = false;
 
     const load = async () => {
@@ -193,65 +206,66 @@ export function GDrive() {
   }, []);
 
 
-  // Dummy file list
-  const gdriveAllFiles: GDriveFile[] = useMemo(
-    () => [
-      {
-        id: "f-1",
-        name: "Project NimbusDrive Plan.pdf",
-        mime: "application/pdf",
-        starred: true,
-        shared: true,
-        recentAt: "2026-06-17T10:12:00Z",
-        sizeGB: 0.42,
-        owner: "someone",
-      },
-      {
-        id: "f-2",
-        name: "Q2 Budget 2026.xlsx",
-        mime: "application/vnd.google-apps.spreadsheet",
-        starred: false,
-        shared: false,
-        recentAt: "2026-06-14T08:01:00Z",
-        sizeGB: 0.08,
-        owner: "me",
-      },
-      {
-        id: "f-3",
-        name: "Sprint 21 Deck.pptx",
-        mime: "application/vnd.google-apps.presentation",
-        starred: true,
-        shared: false,
-        recentAt: "2026-06-12T18:34:00Z",
-        sizeGB: 0.22,
-        owner: "me",
-      },
-      {
-        id: "f-4",
-        name: "Brand Assets.zip",
-        mime: "application/zip",
-        starred: false,
-        shared: true,
-        recentAt: "2026-06-11T09:20:00Z",
-        sizeGB: 1.3,
-        owner: "someone",
-      },
-      {
-        id: "f-5",
-        name: "Team Photo.png",
-        mime: "image/png",
-        starred: false,
-        shared: false,
-        recentAt: "2026-06-09T22:12:00Z",
-        sizeGB: 0.05,
-        owner: "me",
-      },
-    ],
-    [],
-  );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFiles = async () => {
+      setFilesLoading(true);
+      setFilesError(false);
+      try {
+        const res = await getGDriveFiles({ page_size: 50 });
+        if (cancelled) return;
+        const list = res?.data ?? [];
+        setGdriveFiles(list);
+      } catch {
+        if (cancelled) return;
+        setGdriveFiles([]);
+        setFilesError(true);
+      } finally {
+        if (cancelled) return;
+        setFilesLoading(false);
+      }
+    };
+
+    void loadFiles();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
+    const toSizeGB = (size: string | number | null | undefined): number => {
+      if (size === null || size === undefined) return 0;
+      const n = typeof size === "string" ? Number(size) : size;
+      if (!Number.isFinite(n)) return 0;
+      return n / (1024 * 1024 * 1024);
+    };
+
+    return (gdriveFiles ?? []).map((file): GDriveFileUI => {
+      const id = String(file.id ?? "");
+      const name = file.name || "Untitled";
+      const mime = file.mime_type || "";
+      const recentAt = file.modified_time || "";
+      const sizeGB = toSizeGB(file.size);
+      const owner = (file.owner_email || file.owner_name || file.account_email || "") as string;
+      const shared = !!file.shared;
+
+      return {
+        id,
+        name,
+        mime,
+        recentAt,
+        sizeGB,
+        owner,
+        shared,
+        starred: false,
+      };
+    });
+  }, [gdriveFiles]);
 
   const [tab, setTab] = useState<TabKey>("all");
+
   const [search, setSearch] = useState<string>("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
@@ -263,7 +277,7 @@ export function GDrive() {
     if (tab === "shared") base = base.filter((f) => !!f.shared);
     if (tab === "recent") {
       base = [...base]
-        .sort((a, b) => b.recentAt.localeCompare(a.recentAt))
+        .sort((a, b) => (b.recentAt || "").localeCompare(a.recentAt || ""))
         .slice(0, 4);
     }
 
@@ -274,9 +288,11 @@ export function GDrive() {
     return base;
   }, [gdriveAllFiles, tab, search, activeAccountId]);
 
-  const anyFiles = filteredFiles.length > 0;
+
+  const anyFiles = gdriveAllFiles.length > 0;
 
   const formatGB = (n: number) => {
+
     if (!Number.isFinite(n)) return "0 GB";
     if (n < 1) return `${Math.round(n * 1024)} MB`;
     return `${n.toFixed(n >= 10 ? 0 : 1)} GB`;
@@ -472,6 +488,8 @@ export function GDrive() {
 
               <div className="flex items-center gap-3">
                 <div className="relative flex-1 max-w-md">
+
+
                   <Search
                     size={13}
                     className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -490,27 +508,38 @@ export function GDrive() {
                   />
                 </div>
 
-                <div className="text-xs" style={{ color: colors.muted2 }}>
-                  {activeAccount ? `Showing ${filteredFiles.length} item(s)` : ""}
-                </div>
+                  <div className="text-xs" style={{ color: colors.muted2 }}>
+                    {activeAccount ? `Showing ${filteredFiles.length} item(s)` : ""}
+                  </div>
+
               </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              {!anyFiles ? (
+              {filesLoading ? (
+                <div className="flex flex-col items-center justify-center py-14">
+                  <div className="text-sm font-semibold" style={{ color: colors.title }}>
+                    Loading Google Drive files...
+                  </div>
+                </div>
+              ) : filesError ? (
+                <div className="flex flex-col items-center justify-center py-14">
+                  <div className="text-sm font-semibold" style={{ color: "#fb7185" }}>
+                    Failed to load Google Drive files.
+                  </div>
+                </div>
+              ) : !anyFiles ? (
                 <div className="flex flex-col items-center justify-center py-14">
                   <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}33` }}>
                     <Share2 size={18} style={{ color: accentColor }} />
                   </div>
                   <div className="mt-4 text-sm font-semibold" style={{ color: colors.title }}>
-                    No files found
-                  </div>
-                  <div className="text-xs mt-1" style={{ color: colors.muted2 }}>
-                    Try another tab or clear your search.
+                    No Google Drive files found.
                   </div>
                 </div>
               ) : viewMode === "grid" ? (
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {filteredFiles.map((f) => (
                     <div
