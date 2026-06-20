@@ -137,7 +137,7 @@ class GDriveController extends Controller
         return redirect()->away($url);
     }
 
-    public function callback(Request $request, GoogleDriveService $googleDriveService): JsonResponse
+    public function callback(Request $request, GoogleDriveService $googleDriveService): JsonResponse|RedirectResponse
     {
         $code = $request->input('code');
         $state = $request->input('state');
@@ -448,6 +448,32 @@ class GDriveController extends Controller
             return response()->json([
                 'message' => 'Failed to load Google Drive files.',
             ], 502);
+        }
+    }
+
+    public function downloadFile(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService)
+    {
+        $user = $request->user();
+
+        if (!$user || $account->user_id !== $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        try {
+            return $googleDriveService->downloadFile($account, $fileId);
+        } catch (Throwable $e) {
+            $message = $e->getMessage();
+
+            // Workspace export is not supported (read-only binary files only)
+            if (str_contains($message, 'Google Workspace file export is not supported yet.')) {
+                return response()->json(['message' => 'Google Workspace file export is not supported yet.'], 422);
+            }
+
+            return response()->json(['message' => 'Failed to download Google Drive file.'], 502);
         }
     }
 

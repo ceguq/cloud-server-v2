@@ -785,7 +785,6 @@ export function GDrive() {
 
   const renderFileActions = (file: GDriveFileUI) => {
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
-    const hasDownloadUrl = !!(file.webContentLink || file.webViewLink);
     const actionBase: CSSProperties = {
       width: 28,
       height: 28,

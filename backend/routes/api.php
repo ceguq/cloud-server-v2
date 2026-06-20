@@ -103,6 +103,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gdrive/accounts/{account}/files', [GDriveController::class, 'files']);
     Route::get('/gdrive/connect', [GDriveController::class, 'connect']);
     Route::delete('/gdrive/accounts/{account}', [GDriveController::class, 'destroy']);
+
+    // Google Drive file download proxy (read-only)
+    Route::get('/gdrive/accounts/{account}/files/{fileId}/download', [GDriveController::class, 'downloadFile']);
+
 });
 
 Route::get('/gdrive/callback', [GDriveController::class, 'callback']);

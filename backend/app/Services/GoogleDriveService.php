@@ -13,6 +13,13 @@ class GoogleDriveService
 
 {
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+    private const DRIVE_FILE_MEDIA_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
+
+    private function fileDownloadUrl(string $fileId): string
+    {
+        // Use alt=media for binary content.
+        return self::DRIVE_FILE_MEDIA_ENDPOINT . '/' . $fileId . '?alt=media';
+    }
     private const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
     private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
     private const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
@@ -165,6 +172,62 @@ class GoogleDriveService
             return $response->successful();
         } catch (Throwable $e) {
             return false;
+        }
+    }
+
+    public function downloadFile(GDriveAccount $account, string $fileId)
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        // Fetch basic metadata for filename.
+        $meta = Http::withToken($account->access_token)
+            ->get(self::DRIVE_FILES_ENDPOINT . '/' . $fileId, [
+                'fields' => 'id,name,mimeType',
+            ])
+            ->throw()
+            ->json();
+
+        if (! is_array($meta)) {
+            throw new RuntimeException('Failed to resolve Google Drive file metadata.');
+        }
+
+        $fileName = isset($meta['name']) && is_string($meta['name']) ? $meta['name'] : ('gdrive-file-' . $fileId);
+        $mimeType = isset($meta['mimeType']) && is_string($meta['mimeType']) ? $meta['mimeType'] : 'application/octet-stream';
+
+        // Workspace document types can require export; detect common patterns.
+        // If Drive returns a non-binary content (or an error that indicates export is required), we map it to 422.
+        try {
+            $url = $this->fileDownloadUrl($fileId);
+
+            $response = Http::withToken($account->access_token)
+                ->withOptions(['stream' => true])
+                ->get($url, []);
+
+            // If Google responds with JSON, treat as unsupported export in this phase.
+            $contentType = $response->header('Content-Type');
+            if (is_string($contentType) && str_contains(strtolower($contentType), 'application/json')) {
+                throw new RuntimeException('Google Workspace file export is not supported yet.');
+            }
+
+            $disposition = 'attachment; filename="' . str_replace('"', '', $fileName) . '"';
+
+            return response()->stream(function () use ($response) {
+                echo $response->body();
+            }, 200, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => $disposition,
+            ]);
+        } catch (Throwable $e) {
+            if (str_contains($e->getMessage(), 'Google Workspace file export is not supported yet.')) {
+                throw $e;
+            }
+
+            // Heuristic: many workspace exports fail with messages indicating export is required.
+            if (str_contains(strtolower($e->getMessage()), 'export')) {
+                throw new RuntimeException('Google Workspace file export is not supported yet.');
+            }
+
+            throw $e;
         }
     }
 }
