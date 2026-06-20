@@ -93,3 +93,11 @@
   - background sync via queue.
 - [x] Update design jika perlu (fase berikutnya).
 
+## 10. Final verification (Google Drive connector)
+- [x] Google OAuth connect berhasil.
+- [x] Account Google Drive tampil di NimbusDrive.
+- [x] File dari Google Drive tampil di halaman GDrive NimbusDrive.
+- [x] Callback OAuth redirect ke halaman frontend GDrive (`/gdrive?gdrive=connected`).
+- [x] `FRONTEND_URL` sudah configurable dari backend config/env (`config('app.frontend_url')`).
+
+

@@ -108,3 +108,10 @@ Rancang tabel `gdrive_accounts` untuk menyimpan metadata akun dan token OAuth.
 5. **Revoke saat disconnect**
    - Mitigasi: endpoint `DELETE` melakukan revoke akses Google (best-effort) lalu menandai `revoked_at`.
 
+## 7) OAuth callback redirect (frontend)
+- Callback sukses melakukan redirect ke halaman frontend GDrive menggunakan:
+  - `config('app.frontend_url')` untuk base URL,
+  - lalu path: `/gdrive?gdrive=connected`.
+
+
+
