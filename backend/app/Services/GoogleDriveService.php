@@ -11,8 +11,10 @@ use RuntimeException;
 class GoogleDriveService
 {
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+    private const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
     private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
     private const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
+
 
 
     private function config(): array
@@ -141,6 +143,26 @@ class GoogleDriveService
 
         return is_array($response) ? $response : [];
     }
+
+    public function revokeToken(?string $token): bool
+    {
+        if (empty($token)) {
+            return false;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/x-www-form-urlencoded',
+            ])->asForm()->post(self::REVOKE_ENDPOINT, [
+                'token' => $token,
+            ]);
+
+            return $response->successful();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
 }
+
 
 

@@ -16,6 +16,7 @@ use Throwable;
 
 
 
+
 class GDriveController extends Controller
 {
     public function index(Request $request): JsonResponse
@@ -393,19 +394,44 @@ class GDriveController extends Controller
         }
     }
 
-    public function destroy(Request $request, GDriveAccount $account): JsonResponse
+    public function destroy(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
         if (!$user || $account->user_id !== $user->id) {
             return response()->json(['message' => 'Not found.'], 404);
         }
 
+        $token = $account->refresh_token ?: $account->access_token;
+        $googleRevoked = false;
+
+        try {
+            $googleRevoked = $googleDriveService->revokeToken($token);
+        } catch (Throwable $e) {
+            // best-effort revoke: swallow errors
+            $googleRevoked = false;
+        }
+
         $account->revoked_at = Carbon::now();
+
+        // Optional safe cleanup (still keep behavior non-sensitive)
+        $account->access_token = null;
+        $account->refresh_token = null;
+
         $account->save();
 
         return response()->json([
-            'message' => 'Google Drive account disconnected locally. Google token revoke is not implemented yet.',
+            'message' => $googleRevoked
+                ? 'Google Drive account disconnected. Google token revoked.'
+                : 'Google Drive account disconnected locally. Google token revoke failed.',
+            'google_revoked' => (bool) $googleRevoked,
+            'data' => [
+                'id' => $account->id,
+                'email' => $account->email,
+                'status' => 'revoked',
+                'revoked_at' => $account->revoked_at?->toISOString(),
+            ],
         ]);
     }
 }
+
 
