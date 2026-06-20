@@ -88,8 +88,8 @@
 
 
 ## 9. Add cache/queue later
-- [ ] Rencanakan peningkatan performa:
+- [x] Rencanakan peningkatan performa:
   - caching list file per akun,
   - background sync via queue.
-- [ ] Update design jika perlu (fase berikutnya).
+- [x] Update design jika perlu (fase berikutnya).
 
