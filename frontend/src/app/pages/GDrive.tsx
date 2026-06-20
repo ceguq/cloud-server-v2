@@ -1,10 +1,14 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
 } from "react";
+
+import { createPortal } from "react-dom";
+
 import {
   Archive,
   CheckCircle2,
@@ -433,8 +437,67 @@ export function GDrive() {
   const [copiedFileId, setCopiedFileId] = useState<string>("");
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
+  const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
+  const ACTION_MENU_WIDTH = 176;
+
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const [actionMenuPosition, setActionMenuPosition] = useState<
+    { top: number; left: number } | null
+  >(null);
+
+
+
+
+  useEffect(() => {
+    if (!openActionFileId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (openActionFileId === null) return;
+
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        closeActionMenu();
+        return;
+      }
+
+      const menuEl = actionMenuRef.current;
+      if (menuEl?.contains(target)) return;
+
+      const buttonEl =
+        openActionFileId !== null
+          ? actionButtonRefs.current[openActionFileId] ?? null
+          : null;
+
+      if (buttonEl?.contains(target)) return;
+
+      closeActionMenu();
+    };
+
+
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeActionMenu();
+      }
+    };
+
+
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openActionFileId]);
+
 
   const connectedAccountIdsKey = useMemo(
+
     () =>
       gdriveAccounts
         .filter((account) => account.is_connected)
@@ -926,8 +989,17 @@ export function GDrive() {
     );
   };
 
+  const closeActionMenu = () => {
+    setOpenActionFileId(null);
+    setActionMenuPosition(null);
+  };
+
+
   const renderFileActions = (file: GDriveFileUI) => {
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
+    const isOpen = openActionFileId === file.id;
+
+
     const actionBase: CSSProperties = {
       width: 28,
       height: 28,
@@ -940,95 +1012,218 @@ export function GDrive() {
       color: colors.muted,
     };
 
+
+
+    const downloadTitle =
+      file.mime === "application/vnd.google-apps.document"
+        ? "Export as PDF"
+        : file.mime === "application/vnd.google-apps.spreadsheet"
+          ? "Export as XLSX"
+          : file.mime === "application/vnd.google-apps.presentation"
+            ? "Export as PDF"
+            : file.mime === "application/vnd.google-apps.drawing"
+              ? "Export as PNG"
+              : "Download";
+
     return (
-      <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-
+      <div className="relative flex items-center justify-end" data-gdrive-action-menu="true">
         <button
           type="button"
-          title="Open"
-          disabled={!hasOpenUrl}
-          onClick={() => openFile(file)}
+          title="More actions"
+          ref={(el) => {
+            actionButtonRefs.current[file.id] = el;
+          }}
+
+          onClick={(e) => {
+            e.stopPropagation();
+
+            const nextOpen = openActionFileId === file.id ? null : file.id;
+
+            if (!nextOpen) {
+              closeActionMenu();
+              return;
+            }
+
+            closeActionMenu();
+
+            setOpenActionFileId(file.id);
+
+
+            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+
+            const menuWidth = ACTION_MENU_WIDTH;
+            const left = Math.min(
+              window.innerWidth - menuWidth - 12,
+              Math.max(12, rect.right - menuWidth),
+            );
+            const top = Math.min(window.innerHeight - 220, rect.bottom + 6);
+
+            setActionMenuPosition({ top, left });
+
+          }}
+
           style={{
             ...actionBase,
-            opacity: hasOpenUrl ? 1 : 0.35,
-            cursor: hasOpenUrl ? "pointer" : "not-allowed",
+            cursor: "pointer",
+            color: colors.muted,
+            borderColor: isOpen ? `${accentColor}33` : "transparent",
+            background: isOpen ? `${accentColor}12` : "transparent",
           }}
         >
-          <Eye size={14} />
+          <span style={{ fontSize: 18, lineHeight: 1, transform: "translateY(-1px)" }}>⋯</span>
         </button>
 
-        <button
-          type="button"
-          title={
-            file.mime === "application/vnd.google-apps.document"
-              ? "Export as PDF"
-              : file.mime === "application/vnd.google-apps.spreadsheet"
-                ? "Export as XLSX"
-                : file.mime === "application/vnd.google-apps.presentation"
-                  ? "Export as PDF"
-                  : file.mime === "application/vnd.google-apps.drawing"
-                    ? "Export as PNG"
-                    : "Download"
-          }
-          disabled={downloadingFileId === file.id || !file.accountId || !file.id}
-          onClick={() => void downloadFile(file)}
-          style={{
-            ...actionBase,
-            opacity:
-              downloadingFileId === file.id || !file.accountId || !file.id
-                ? 0.45
-                : 1,
-            cursor:
-              downloadingFileId === file.id || !file.accountId || !file.id
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          <Download size={14} />
-        </button>
+        {isOpen ? (
+          <div
+            ref={actionMenuRef}
+            role="menu"
+            aria-label="File actions"
+            data-gdrive-action-menu="true"
+            style={{
 
-        <button
-          type="button"
-          title="Details"
-          disabled={!file.id}
-          onClick={() => setDetailsFile(file)}
-          style={{
-            ...actionBase,
-            opacity: !file.id ? 0.35 : 1,
-            cursor: !file.id ? "not-allowed" : "pointer",
-          }}
-        >
-          <Eye size={14} />
-        </button>
+              position: "fixed",
+              top: actionMenuPosition?.top,
+              left: actionMenuPosition?.left,
+              width: ACTION_MENU_WIDTH,
+              zIndex: 99999,
 
-        <button
+              background: colors.panelBg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 10,
+              padding: 6,
+              boxShadow: colors.shadow,
+            }}
+          >
 
-          type="button"
-          title={copiedFileId === file.id ? "Copied" : "Copy link"}
-          disabled={!hasOpenUrl}
-          onClick={() => void copyFileLink(file)}
-          style={{
-            ...actionBase,
-            color: copiedFileId === file.id ? "#22c55e" : colors.muted,
-            opacity: hasOpenUrl ? 1 : 0.35,
-            cursor: hasOpenUrl ? "pointer" : "not-allowed",
-          }}
-        >
-          <Share2 size={14} />
-        </button>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Open"
+              title="Open"
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled={!hasOpenUrl}
+              style={{
+                opacity: hasOpenUrl ? 1 : 0.45,
+                cursor: hasOpenUrl ? "pointer" : "not-allowed",
+                color: colors.text,
+                background: "transparent",
+              }}
+              onClick={() => {
+                closeActionMenu();
+                openFile(file);
+              }}
 
-        <button
-          type="button"
-          title="Coming soon: trash Google Drive file"
-          disabled
-          style={{
-            ...actionBase,
-            opacity: 0.35,
-            cursor: "not-allowed",
-          }}
-        >
-          <Trash2 size={14} />
-        </button>
+            >
+              <div className="flex items-center gap-2">
+                <Eye size={14} />
+                <span>Open</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Details"
+              title="Details"
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled={!file.id}
+              style={{
+                marginTop: 4,
+                opacity: file.id ? 1 : 0.45,
+                cursor: file.id ? "pointer" : "not-allowed",
+                color: colors.text,
+                background: "transparent",
+              }}
+              onClick={() => {
+                closeActionMenu();
+                setDetailsFileAndReset(file);
+              }}
+
+            >
+              <div className="flex items-center gap-2">
+                <FileText size={14} />
+                <span>Details</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Download"
+              title={downloadTitle}
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled={downloadingFileId === file.id || !file.accountId || !file.id}
+              style={{
+                marginTop: 4,
+                opacity:
+                  downloadingFileId === file.id || !file.accountId || !file.id ? 0.45 : 1,
+                cursor:
+                  downloadingFileId === file.id || !file.accountId || !file.id
+                    ? "not-allowed"
+                    : "pointer",
+                color: colors.text,
+                background: "transparent",
+              }}
+              onClick={() => {
+                closeActionMenu();
+                void downloadFile(file);
+              }}
+
+            >
+              <div className="flex items-center gap-2">
+                <Download size={14} />
+                <span>Download</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Copy link"
+              title="Copy link"
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled={!hasOpenUrl}
+              style={{
+                marginTop: 4,
+                opacity: hasOpenUrl ? 1 : 0.45,
+                cursor: hasOpenUrl ? "pointer" : "not-allowed",
+                color: colors.text,
+                background: "transparent",
+              }}
+              onClick={() => {
+                closeActionMenu();
+                void copyFileLink(file);
+              }}
+
+            >
+              <div className="flex items-center gap-2">
+                <Share2 size={14} />
+                <span>Copy link</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="Coming soon: trash Google Drive file"
+              title="Coming soon: trash Google Drive file"
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled
+              style={{
+                marginTop: 4,
+                opacity: 0.45,
+                cursor: "not-allowed",
+                color: "#ef4444",
+                background: "transparent",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 size={14} />
+                <span>Trash</span>
+              </div>
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   };
