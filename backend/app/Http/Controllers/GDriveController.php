@@ -5,13 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\GDriveAccount;
 use App\Models\User;
 use App\Services\GoogleDriveService;
+use Illuminate\Http\Client\RequestException;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
+
 
 
 
@@ -252,9 +256,27 @@ class GDriveController extends Controller
             ]);
 
         } catch (Throwable $e) {
+            $context = [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ];
+
+            if ($e instanceof RequestException && $e->response !== null) {
+                $context['response_status'] = $e->response->status();
+                $context['response_body'] = $e->response->body();
+            }
+
+            Log::error('Google Drive OAuth callback failed', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => 'Failed to connect Google Drive account.',
             ], 502);
+
         }
 
 
