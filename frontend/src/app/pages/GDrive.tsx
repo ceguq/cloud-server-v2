@@ -504,14 +504,18 @@ export function GDrive() {
       setFilesError(false);
 
       try {
+        // Load files account-specific when account selected.
+        // This avoids aggregating files from all connected accounts.
         let res;
-
-        try {
-          res = await getGDriveFiles({ page_size: 50 });
-        } catch {
-          if (!accountId) throw new Error("Failed to load all Google Drive files.");
+        if (accountId) {
           res = await getGDriveAccountFiles(accountId, { page_size: 50 });
+        } else {
+          // No active account selected.
+          setGdriveFiles([]);
+          return;
         }
+
+
 
         if (cancelled) return;
 
