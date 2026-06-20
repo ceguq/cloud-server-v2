@@ -119,7 +119,13 @@ export async function getGDriveAccountFiles(
   };
 }
 
+export async function disconnectGDriveAccount(accountId: string) {
+  const res = await api.delete(`/gdrive/accounts/${accountId}`);
+  return res.data;
+}
+
 export function getGDriveConnectUrl(): string {
+
   const apiBase = (import.meta as any).env?.VITE_API_BASE_URL;
   if (!apiBase) {
     // Keep behavior deterministic even if env is missing.
