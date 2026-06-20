@@ -627,8 +627,9 @@ export function GDrive() {
                           </div>
                         </div>
                         <div className="text-xs" style={{ color: colors.muted2 }}>
-                          {new Date(f.recentAt).toLocaleString()}
+                          {f.recentAt ? new Date(f.recentAt).toLocaleString() : "-"}
                         </div>
+
                         <div className="text-xs" style={{ color: colors.muted2 }}>
                           {formatGB(f.sizeGB)}
                         </div>
