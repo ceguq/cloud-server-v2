@@ -3,8 +3,8 @@
 > Checklist step-by-step. Jangan dikerjakan sekaligus dalam satu langkah besar.
 
 ## 0. Preconditions (Dokumen/Scope)
-- [ ] Pastikan scope proyek: **hanya OpenSpec** pada perubahan ini.
-- [ ] Target MVP: **read-only** (list akun, list file, storage usage, disconnect).
+- [x] Pastikan scope proyek: **hanya OpenSpec** pada perubahan ini.
+- [x] Target MVP: **read-only** (list akun, list file, storage usage, disconnect).
 
 ## 1. Add config/env placeholders
 - [x] Tambahkan placeholder untuk:
