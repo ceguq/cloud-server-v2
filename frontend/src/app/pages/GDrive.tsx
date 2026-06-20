@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 
 import { GDriveIcon } from "../components/GDriveIcon";
+import { getGDriveAccounts, type GDriveAccount } from "../../services/gdriveService";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
+
 
 function safeReadAppearanceTheme(): AppearanceTheme {
   if (typeof window === "undefined") return "dark";
@@ -50,14 +52,15 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-type GDriveAccount = {
+type GDriveApiAccount = {
   id: string;
+  label: string | null;
   email: string;
-  kind: "personal" | "work";
-  status: "Connected";
-  usedGB: number;
-  limitGB: number;
+  status: "connected" | "revoked";
+  connected_at: string | null;
+  last_synced_at: string | null;
 };
+
 
 type GDriveFile = {
   id: string;
@@ -158,28 +161,44 @@ export function GDrive() {
     };
   }, [resolvedTheme]);
 
-  // Dummy accounts
-  const gdriveAccounts: GDriveAccount[] = useMemo(
-    () => [
-      {
-        id: "acc-personal",
-        email: "alex.personal@gmail.com",
-        kind: "personal",
-        status: "Connected",
-        usedGB: 18.4,
-        limitGB: 30,
-      },
-      {
-        id: "acc-work",
-        email: "alex.work@company.com",
-        kind: "work",
-        status: "Connected",
-        usedGB: 62.1,
-        limitGB: 100,
-      },
-    ],
-    [],
-  );
+  const [gdriveAccounts, setGdriveAccounts] = useState<GDriveAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState(false);
+  const [activeAccountId, setActiveAccountId] = useState<string>("");
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setAccountsLoading(true);
+      setAccountsError(false);
+      try {
+        const res = await getGDriveAccounts();
+        if (cancelled) return;
+        const list = res?.data ?? [];
+        setGdriveAccounts(list);
+        setActiveAccountId((prev) => {
+          if (prev && list.some((a) => a.id === prev)) return prev;
+          return list[0]?.id ?? "";
+        });
+      } catch {
+        if (cancelled) return;
+        setGdriveAccounts([]);
+        setActiveAccountId("");
+        setAccountsError(true);
+      } finally {
+        if (cancelled) return;
+        setAccountsLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
 
   // Dummy file list
   const gdriveAllFiles: GDriveFile[] = useMemo(
@@ -238,9 +257,7 @@ export function GDrive() {
     [],
   );
 
-  const [activeAccountId, setActiveAccountId] = useState<string>(
-    gdriveAccounts[0]?.id ?? "",
-  );
+
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState<string>("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -272,12 +289,9 @@ export function GDrive() {
     return `${n.toFixed(n >= 10 ? 0 : 1)} GB`;
   };
 
-  const storagePct = (usedGB: number, limitGB: number) => {
-    const pctRaw = limitGB > 0 ? (usedGB / limitGB) * 100 : 0;
-    return Math.min(100, Math.max(0, Math.round(pctRaw)));
-  };
 
   const activeAccount = gdriveAccounts.find((a) => a.id === activeAccountId) ?? gdriveAccounts[0];
+
 
   const tabs: Array<{ key: TabKey; label: string; icon?: any }> = [
     { key: "all", label: "All Files" },
@@ -332,8 +346,9 @@ export function GDrive() {
                   Google Drive
                 </div>
                 <div className="text-[11px] mt-0.5" style={{ color: colors.muted2 }}>
-                  {gdriveAccounts.length} accounts connected
+                  {accountsLoading ? "" : `${gdriveAccounts.length} accounts connected`}
                 </div>
+
               </div>
               <button
                 type="button"
@@ -348,63 +363,65 @@ export function GDrive() {
             </div>
 
             <div className="space-y-3">
-              {gdriveAccounts.map((acc) => {
-                const pct = storagePct(acc.usedGB, acc.limitGB);
-                const isActive = acc.id === activeAccountId;
-                return (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    onClick={() => setActiveAccountId(acc.id)}
-                    className="w-full text-left rounded-xl p-3 transition-all"
-                    style={{
-                      background: isActive ? `${accentColor}12` : colors.panelBg,
-                      border: `1px solid ${isActive ? `${accentColor}55` : colors.borderSoft}`,
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <HardDrive size={13} style={{ color: accentColor }} />
-                          <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
-                            {acc.kind === "personal" ? "Personal" : "Work"}
+              {accountsLoading ? (
+                <div className="text-[11px]" style={{ color: colors.muted2 }}>
+                  Loading accounts...
+                </div>
+              ) : accountsError ? (
+                <div className="text-[11px]" style={{ color: "#fb7185" }}>
+                  Failed to load Google Drive accounts.
+                </div>
+              ) : gdriveAccounts.length === 0 ? (
+                <div className="text-[11px]" style={{ color: colors.muted2 }}>
+                  No Google Drive accounts connected yet.
+                </div>
+              ) : (
+                gdriveAccounts.map((acc) => {
+                  const isActive = acc.id === activeAccountId;
+                  const label = acc.label || acc.email;
+                  const statusText = acc.is_connected ? "Connected" : "Revoked";
+
+                  return (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setActiveAccountId(acc.id)}
+                      className="w-full text-left rounded-xl p-3 transition-all"
+                      style={{
+                        background: isActive ? `${accentColor}12` : colors.panelBg,
+                        border: `1px solid ${isActive ? `${accentColor}55` : colors.borderSoft}`,
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <HardDrive size={13} style={{ color: accentColor }} />
+                            <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
+                              {label}
+                            </div>
+                          </div>
+                          <div className="text-[11px] mt-1 truncate" style={{ color: colors.muted2 }}>
+                            {acc.email}
                           </div>
                         </div>
-                        <div className="text-[11px] mt-1 truncate" style={{ color: colors.muted2 }}>
-                          {acc.email}
+
+                        <div
+                          className="text-[11px] font-semibold px-2 py-1 rounded-full"
+                          style={{
+                            background: acc.is_connected ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+                            color: acc.is_connected ? "#34d399" : "#fb7185",
+                            border: `1px solid ${acc.is_connected ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)"}`,
+                          }}
+                        >
+                          {statusText}
                         </div>
                       </div>
-
-                      <div className="text-[11px] font-semibold px-2 py-1 rounded-full" style={{
-                        background: "rgba(52,211,153,0.12)",
-                        color: "#34d399",
-                        border: "1px solid rgba(52,211,153,0.25)",
-                      }}>
-                        {acc.status}
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="flex justify-between items-center text-[11px]" style={{ color: colors.muted2 }}>
-                        <span>
-                          {formatGB(acc.usedGB)} of {formatGB(acc.limitGB)}
-                        </span>
-                        <span>{pct}%</span>
-                      </div>
-                      <div className="relative h-2 mt-2 rounded-full overflow-hidden" style={{ background: colors.borderSoft }}>
-                        <div
-                          className="absolute inset-y-0 left-0"
-                          style={{
-                            width: `${pct}%`,
-                            background: `linear-gradient(90deg, ${accentColor}, #22d3ee)`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })
+              )}
             </div>
+
           </div>
 
           {/* Right panel: file browser */}
