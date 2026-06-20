@@ -15,12 +15,14 @@ import {
 
 import { GDriveIcon } from "../components/GDriveIcon";
 import {
+  disconnectGDriveAccount,
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveFiles,
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
 
 
 type AppearanceTheme = "dark" | "light" | "system";
@@ -174,6 +176,9 @@ export function GDrive() {
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(false);
   const [fileScope, setFileScope] = useState<"all" | "account">("all");
+  const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
+
+
 
 
   useEffect(() => {
@@ -211,10 +216,66 @@ export function GDrive() {
 
 
 
+  const handleDisconnectAccount = async (accountId: string) => {
+    if (!accountId) return;
+    if (!disconnectingAccountId || disconnectingAccountId === accountId) {
+      // ok
+    } else {
+      return;
+    }
+
+    if (disconnectingAccountId === accountId) return;
+
+    const confirmed = window.confirm("Disconnect this Google Drive account?");
+    if (!confirmed) return;
+
+    setDisconnectingAccountId(accountId);
+
+    try {
+      await disconnectGDriveAccount(accountId);
+
+      const res = await getGDriveAccounts();
+      const list = res?.data ?? [];
+      setGdriveAccounts(list);
+
+      const disconnectedIsActive = activeAccountId === accountId;
+      if (disconnectedIsActive) {
+        const next = list.find((a) => a.is_connected && a.id !== accountId);
+        const nextId = next?.id ?? "";
+        setActiveAccountId(nextId);
+
+        if (fileScope === "account") {
+          setGdriveFiles(nextId ? [] : []);
+        }
+      }
+
+      if (fileScope === "all") {
+        const filesRes = await getGDriveFiles({ page_size: 50 });
+        setGdriveFiles(filesRes?.data ?? []);
+      } else {
+        if (!disconnectedIsActive) {
+          const filesRes = await getGDriveAccountFiles(activeAccountId, { page_size: 50 });
+          setGdriveFiles(filesRes?.data ?? []);
+        } else {
+          setGdriveFiles([]);
+        }
+      }
+
+      setFilesError(false);
+    } catch {
+      setAccountsError(true);
+      window.alert("Failed to disconnect Google Drive account.");
+    } finally {
+      setDisconnectingAccountId("");
+    }
+  };
+
   useEffect(() => {
+
     let cancelled = false;
 
     const loadFiles = async () => {
+
       setFilesLoading(true);
       setFilesError(false);
 
@@ -358,9 +419,10 @@ export function GDrive() {
                 Manage connected Google Drive accounts and browse synced files.
               </p>
             </div>
+            </div>
+
           </div>
 
-        </div>
 
         {/* Two columns layout */}
         <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-4 h-full">
@@ -422,6 +484,7 @@ export function GDrive() {
                       }}
                     >
                       <div className="flex items-start justify-between gap-3">
+
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <HardDrive size={13} style={{ color: accentColor }} />
@@ -444,6 +507,26 @@ export function GDrive() {
                         >
                           {statusText}
                         </div>
+
+                        {acc.is_connected && (
+                          <button
+                            type="button"
+                            disabled={disconnectingAccountId === acc.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDisconnectAccount(acc.id);
+                            }}
+                            className="text-[11px] font-semibold px-2 py-1 rounded-lg"
+                            style={{
+                              background: disconnectingAccountId === acc.id ? "rgba(148,163,184,0.12)" : `${accentColor}14`,
+                              border: `1px solid ${disconnectingAccountId === acc.id ? colors.borderSoft : `${accentColor}55`}`,
+                              color: disconnectingAccountId === acc.id ? colors.muted2 : colors.title,
+                            }}
+                          >
+                            {disconnectingAccountId === acc.id ? "Disconnecting..." : "Disconnect"}
+                          </button>
+                        )}
+
                       </div>
                     </button>
                   );
