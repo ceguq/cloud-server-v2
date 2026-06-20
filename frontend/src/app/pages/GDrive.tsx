@@ -440,6 +440,134 @@ export function GDrive() {
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
   const ACTION_MENU_WIDTH = 176;
 
+  const getGDriveFileExtension = (fileName: string): string => {
+    const safe = (fileName || "").trim();
+    if (!safe) return "";
+
+    const idx = safe.lastIndexOf(".");
+    if (idx < 0) return "";
+    return safe.slice(idx + 1).toLowerCase();
+  };
+
+  const getGDriveFileTypeInfo = (file: GDriveFileUI): {
+    label: string;
+    detail: string;
+  } => {
+    const mime = (file.mime || "").toLowerCase();
+    const name = file.name || "";
+
+    const extension = getGDriveFileExtension(name);
+
+    // Workspace types
+    if (mime === "application/vnd.google-apps.document") {
+      return { label: "Google Docs", detail: "Workspace file (Docs)" };
+    }
+    if (mime === "application/vnd.google-apps.spreadsheet") {
+      return {
+        label: "Google Sheets",
+        detail: "Workspace file (Sheets)",
+      };
+    }
+    if (mime === "application/vnd.google-apps.presentation") {
+      return { label: "Google Slides", detail: "Workspace file (Slides)" };
+    }
+    if (mime === "application/vnd.google-apps.drawing") {
+      return {
+        label: "Google Drawing",
+        detail: "Workspace file (Drawing)",
+      };
+    }
+    if (mime.includes("application/vnd.google-apps.folder") || mime === "application/vnd.google-apps.folder") {
+      return { label: "Folder", detail: "Google Drive folder" };
+    }
+
+    // Folder icon is driven by mime containing 'folder'
+    if (mime.includes("folder")) {
+      return { label: "Folder", detail: "Google Drive folder" };
+    }
+
+    // Archive by common extensions
+    const archiveExt = [
+      "zip",
+      "rar",
+      "7z",
+      "tar",
+      "gz",
+      "gzip",
+      "tgz",
+    ];
+    if (mime.includes("zip") || mime.includes("rar") || mime.includes("7z") || mime.includes("tar") || mime.includes("gzip") || archiveExt.includes(extension)) {
+      return { label: "Archive", detail: `.${extension || "archive"}` };
+    }
+
+    // PDFs
+    if (mime === "application/pdf" || mime.includes("pdf")) {
+      return { label: "PDF", detail: `application/pdf` };
+    }
+
+    // Image
+    if (mime.startsWith("image/")) {
+      return { label: "Image", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Image file" };
+    }
+
+    // Video
+    if (mime.startsWith("video/")) {
+      return { label: "Video", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Video file" };
+    }
+
+    // Audio
+    if (mime.startsWith("audio/")) {
+      return { label: "Audio", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Audio file" };
+    }
+
+    // Text-ish
+    const isTextMime =
+      mime.startsWith("text/") ||
+      [
+        "csv",
+        "md",
+        "markdown",
+        "json",
+        "xml",
+        "js",
+        "ts",
+        "css",
+        "html",
+        "log",
+        "txt",
+      ].includes(extension);
+
+    if (isTextMime || mime.includes("text")) {
+      const short = extension ? extension.toUpperCase() : "TEXT";
+      return { label: "Text", detail: short };
+    }
+
+    // Fallback by extension
+    if (extension) {
+      if (['png','jpg','jpeg','gif','webp','bmp'].includes(extension)) {
+        return { label: "Image", detail: extension.toUpperCase() };
+      }
+      if (['mp4','mov','mkv','webm','avi','mpeg'].includes(extension)) {
+        return { label: "Video", detail: extension.toUpperCase() };
+      }
+      if (['mp3','wav','ogg','flac','aac'].includes(extension)) {
+        return { label: "Audio", detail: extension.toUpperCase() };
+      }
+      if (["pdf"].includes(extension)) {
+        return { label: "PDF", detail: extension.toUpperCase() };
+      }
+      if (archiveExt.includes(extension)) {
+        return { label: "Archive", detail: extension.toUpperCase() };
+      }
+      if (["txt","md","csv","json","xml","js","ts","css","html"].includes(extension)) {
+        return { label: "Text", detail: extension.toUpperCase() };
+      }
+    }
+
+    return { label: "File", detail: mime ? mime.slice(0, 48) : "" };
+  };
+
+
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -780,6 +908,7 @@ export function GDrive() {
   ];
 
   const tableGridTemplate = "minmax(280px,1fr) 140px 170px 112px 132px";
+
 
   const selectAccount = (account: GDriveAccount) => {
     if (!account.is_connected) return;
@@ -1549,9 +1678,11 @@ export function GDrive() {
                       >
                         <span>Name</span>
                         <span>Visibility</span>
+                        <span>Type</span>
                         <span>Modified</span>
                         <span>Size</span>
                         <span />
+
                       </div>
 
                       {filteredFiles.map((file) => (
@@ -1581,42 +1712,6 @@ export function GDrive() {
                                 >
                                   {file.name}
                                 </span>
-                                {file.mime === "application/vnd.google-apps.document" ? (
-                                  <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                    style={{ background: `${accentColor}12`, color: accentColor }}
-                                    title="Google Docs"
-                                  >
-                                    Google Docs
-                                  </span>
-                                ) : null}
-                                {file.mime === "application/vnd.google-apps.spreadsheet" ? (
-                                  <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                    style={{ background: `${accentColor}12`, color: accentColor }}
-                                    title="Google Sheets"
-                                  >
-                                    Google Sheets
-                                  </span>
-                                ) : null}
-                                {file.mime === "application/vnd.google-apps.presentation" ? (
-                                  <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                    style={{ background: `${accentColor}12`, color: accentColor }}
-                                    title="Google Slides"
-                                  >
-                                    Google Slides
-                                  </span>
-                                ) : null}
-                                {file.mime === "application/vnd.google-apps.drawing" ? (
-                                  <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                    style={{ background: `${accentColor}12`, color: accentColor }}
-                                    title="Google Drawing"
-                                  >
-                                    Google Drawing
-                                  </span>
-                                ) : null}
                                 {file.starred ? (
                                   <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
                                 ) : null}
@@ -1624,7 +1719,21 @@ export function GDrive() {
                             </div>
                           </div>
 
+                          <div className="min-w-0">
+                            <div className="truncate text-[11px] font-semibold" style={{ color: colors.title }}>
+                              {getGDriveFileTypeInfo(file).label}
+                            </div>
+                            <div
+                              className="mt-1 truncate text-[10px]"
+                              style={{ color: colors.muted2 }}
+                              title={getGDriveFileTypeInfo(file).detail}
+                            >
+                              {getGDriveFileTypeInfo(file).detail}
+                            </div>
+                          </div>
+
                           <div>
+
                             {file.shared ? (
                               <span
                                 className="rounded-full px-2 py-1 text-[10px] font-semibold"
