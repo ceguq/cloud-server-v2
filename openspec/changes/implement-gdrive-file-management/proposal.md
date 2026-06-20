@@ -18,13 +18,15 @@ Menyediakan fitur “Google Drive file management” untuk NimbusDrive, dimulai 
 - rename file
 - delete/trash file
 - upload file ke Google Drive
-- move file/folder
+- move file/folder (jika diperlukan)
 
 ## Non-goals
-- Tidak mengubah backend/frontend sekarang (OpenSpec ini hanya dokumen desain).
-- Tidak mengimplementasikan fitur write pada fase awal.
-- Tidak mengelola permission detail multi-user di Google Drive (mis. ACL fine-grained) pada dokumen ini.
-- Tidak mengubah mekanisme OAuth connector yang sudah ada, kecuali penyesuaian scope yang akan berdampak pada reconnect/consent ulang.
+- Belum implement write endpoint.
+- Belum ubah OAuth scope.
+- Belum ubah frontend untuk mendukung write actions.
+- Belum reconnect/consent ulang otomatis.
+- Dokumen ini hanya mendefinisikan blueprint desain dan gating konseptual untuk fase write berikutnya.
+
 
 ## Scope fase awal dan fase lanjutan
 ### Scope fase awal (Read-only)

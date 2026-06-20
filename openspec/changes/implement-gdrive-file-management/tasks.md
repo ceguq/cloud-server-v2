@@ -45,15 +45,22 @@
 
 
 ## 5) Siapkan blueprint write actions (tanpa implementasi)
-- [ ] Tambahkan daftar endpoint write yang direncanakan (rename/delete/upload/move).
-- [ ] Tetapkan requirement scope write tambahan:
-  - kemungkinan `https://www.googleapis.com/auth/drive`
-- [ ] Tetapkan strategi gating:
-  - jika scope write tidak ada → tolak write endpoints + rekomendasikan reconnect.
+- [x] Tambahkan daftar endpoint write yang direncanakan:
+  - rename file
+  - delete/trash file
+  - upload file
+  - move file/folder (jika diperlukan)
+- [x] Tetapkan requirement scope write tambahan:
+  - `https://www.googleapis.com/auth/drive`
+- [x] Tetapkan strategi gating:
+  - jika account hanya punya `drive.readonly` → write endpoint harus return error jelas dan minta reconnect/consent ulang
+  - read-only tetap jalan meski user belum reconnect.
+
 
 ## 6) Validasi dampak perubahan scope
-- [ ] Dokumentasikan bahwa perubahan scope menyebabkan reconnect/consent ulang.
-- [ ] Definisikan behavior read-only tetap jalan meski user belum reconnect.
+- [x] Dokumentasikan bahwa perubahan scope OAuth butuh consent/reconnect ulang.
+- [x] Token lama read-only tidak dianggap cukup untuk write; read-only tetap jalan meski user belum reconnect.
+
 
 ## 7) Final consistency check dokumen
 - [ ] Pastikan proposal mencakup problem/goal/non-goals dan scope fase awal vs fase lanjutan.

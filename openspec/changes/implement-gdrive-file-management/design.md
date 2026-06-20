@@ -52,21 +52,34 @@ Karena fitur list file bisa aggregate multi-account, desain perlu menyelesaikan 
   - atau backend endpoint metadata/download menerima `account_id` secara eksplisit
 
 ### Write management (Fase lanjutan)
-Endpoint yang direncanakan (tanpa detail implementasi sekarang):
+Planned write endpoints (tanpa detail implementasi sekarang):
 - rename:
   - `PATCH /api/gdrive/files/{fileId}` (atau `/rename`)
 - delete/trash:
   - `DELETE /api/gdrive/files/{fileId}` atau endpoint khusus `trash/restore`
 - upload:
   - `POST /api/gdrive/files/upload`
-- move:
+- move (jika diperlukan):
   - `PATCH /api/gdrive/files/{fileId}/move`
   - `PATCH /api/gdrive/folders/{folderId}/move`
 
-Semua write actions harus:
-- memerlukan OAuth scope write
-- menggunakan token account yang sesuai
-- divalidasi ownership/user_id-nya
+## Scope requirement untuk read-only vs write
+- Read-only tetap memakai: `https://www.googleapis.com/auth/drive.readonly`.
+- Write butuh scope tambahan kemungkinan: `https://www.googleapis.com/auth/drive`.
+
+## Gating read-only vs write
+- Jika account hanya punya `drive.readonly`, endpoint write harus return error jelas.
+- Error harus meminta user untuk melakukan reconnect/consent ulang.
+- Read-only tetap jalan walau user belum reconnect.
+
+## Security untuk write endpoints (konseptual)
+- Token tetap tidak dikirim ke frontend.
+- Jangan log token/secret.
+- Write endpoint wajib memvalidasi:
+  - account milik user login
+  - account tidak revoked
+  - request operation hanya menggunakan token yang sesuai scope write
+
 
 ## Service method yang direncanakan
 Penambahan method pada service layer (mis. `GoogleDriveService`), dengan fokus read-only terlebih dahulu.
