@@ -69,7 +69,9 @@
 
 ## 7. Connect React GDrive UI to API
 - [x] Load connected Google Drive accounts in frontend.
+- [x] Load aggregate Google Drive file list in frontend.
 - [ ] Hubungkan halaman `/gdrive` dengan API internal:
+
   - load akun terhubung,
   - load list file,
   - switch antara per akun dan semua akun.
