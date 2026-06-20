@@ -142,4 +142,49 @@ export async function getGDriveConnectUrl(): Promise<string> {
   return url;
 }
 
+export async function downloadGDriveFile(
+  accountId: string,
+  fileId: string,
+  fallbackName?: string,
+): Promise<void> {
+  const res = await api.get(
+    `/gdrive/accounts/${accountId}/files/${fileId}/download`,
+    {
+      responseType: "blob",
+    },
+  );
+
+  const blob = res.data as Blob;
+
+  const cd: string | undefined =
+    typeof res.headers?.["content-disposition"] === "string"
+      ? (res.headers?.["content-disposition"] as string)
+      : undefined;
+
+  let fileName: string | undefined;
+  if (cd) {
+    // content-disposition: attachment; filename="..."
+    const match = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
+    if (match?.[1]) fileName = match[1].trim();
+  }
+
+  const nameToUse = fileName || fallbackName || `gdrive-file`;
+
+  const url = window.URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nameToUse;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    window.URL.revokeObjectURL(url);
+  }
+}
+
+
+
+
+
 

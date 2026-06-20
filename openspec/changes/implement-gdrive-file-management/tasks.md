@@ -19,10 +19,15 @@
 - [ ] Desain endpoint open file:
   - pastikan tidak membocorkan access token ke browser
   - tentukan apakah berupa redirect atau proxy open
-- [ ] Desain endpoint download via backend proxy:
-  - streaming download
-  - header `Content-Type` & `Content-Disposition`
-  - validasi bahwa account tidak revoked
+- [x] Desain endpoint download via backend proxy:
+  - [x] Endpoint: `GET /api/gdrive/accounts/{account}/files/{fileId}/download`
+  - [x] Streaming download (fase binary)
+  - [x] Header `Content-Type` & `Content-Disposition`
+  - [x] Validasi account tidak revoked
+  - [x] Workspace export belum didukung (return JSON 422)
+  - [x] Endpoint berada di group `auth:sanctum`
+
+
 
 ## 4) Keamanan OAuth untuk read-only
 - [ ] Tulis prinsip “token tidak ke frontend” untuk setiap endpoint baru.

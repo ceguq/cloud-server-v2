@@ -29,6 +29,7 @@ import { GDriveIcon } from "../components/GDriveIcon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import {
   disconnectGDriveAccount,
+  downloadGDriveFile,
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
@@ -36,6 +37,7 @@ import {
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -307,6 +309,9 @@ export function GDrive() {
     resolveAppearanceTheme(safeReadAppearanceTheme()),
   );
 
+  const [connectSuccessMessage, setConnectSuccessMessage] = useState<string>("");
+
+
   const syncThemeFromStorage = () => {
     const nextTheme = safeReadAppearanceTheme();
     setAccentColor(safeReadAccentColor());
@@ -391,6 +396,16 @@ export function GDrive() {
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState<string>("");
   const [copiedFileId, setCopiedFileId] = useState<string>("");
+  const [downloadingFileId, setDownloadingFileId] = useState<string>("");
+
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gdrive") === "connected") {
+      setConnectSuccessMessage("Google Drive connected successfully.");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -607,11 +622,20 @@ export function GDrive() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const downloadFile = (file: GDriveFileUI) => {
-    const url = file.webContentLink || file.webViewLink;
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const downloadFile = async (file: GDriveFileUI) => {
+    if (downloadingFileId) return;
+    if (!file.accountId || !file.id) return;
+
+    setDownloadingFileId(file.id);
+    try {
+      await downloadGDriveFile(file.accountId, file.id, file.name);
+    } catch {
+      window.alert("Failed to download Google Drive file.");
+    } finally {
+      setDownloadingFileId("");
+    }
   };
+
 
   const copyFileLink = async (file: GDriveFileUI) => {
     const url = file.webViewLink || file.webContentLink;
@@ -793,16 +817,23 @@ export function GDrive() {
         <button
           type="button"
           title="Download"
-          disabled={!hasDownloadUrl}
-          onClick={() => downloadFile(file)}
+          disabled={downloadingFileId === file.id || !file.accountId || !file.id}
+          onClick={() => void downloadFile(file)}
           style={{
             ...actionBase,
-            opacity: hasDownloadUrl ? 1 : 0.35,
-            cursor: hasDownloadUrl ? "pointer" : "not-allowed",
+            opacity:
+              downloadingFileId === file.id || !file.accountId || !file.id
+                ? 0.45
+                : 1,
+            cursor:
+              downloadingFileId === file.id || !file.accountId || !file.id
+                ? "not-allowed"
+                : "pointer",
           }}
         >
           <Download size={14} />
         </button>
+
 
         <button
           type="button"
@@ -909,6 +940,19 @@ export function GDrive() {
 
         <main className="min-h-0 min-w-0 overflow-hidden" style={{ background: colors.shellBg }}>
           <div className="flex h-full min-h-0 flex-col">
+            {connectSuccessMessage ? (
+              <div
+                className="mb-3 rounded-xl border px-4 py-3 text-xs font-semibold"
+                style={{
+                  background: `${accentColor}14`,
+                  borderColor: `${accentColor}33`,
+                  color: colors.title,
+                }}
+              >
+                {connectSuccessMessage}
+              </div>
+            ) : null}
+
             <div
               className="flex shrink-0 flex-col gap-3 border-b px-5 py-3 md:flex-row md:items-center md:justify-between"
               style={{ background: colors.surfaceBg, borderColor: colors.border }}
