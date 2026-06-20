@@ -52,14 +52,7 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-type GDriveApiAccount = {
-  id: string;
-  label: string | null;
-  email: string;
-  status: "connected" | "revoked";
-  connected_at: string | null;
-  last_synced_at: string | null;
-};
+
 
 
 type GDriveFile = {
