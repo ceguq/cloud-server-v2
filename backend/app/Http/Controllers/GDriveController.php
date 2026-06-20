@@ -259,7 +259,7 @@ class GDriveController extends Controller
 
             $account->save();
 
-            return response()->json([
+            $payload = [
                 'message' => 'Google Drive account connected.',
                 'data' => [
                     'id' => $account->id,
@@ -276,7 +276,14 @@ class GDriveController extends Controller
                     'is_connected' => true,
                     'is_revoked' => false,
                 ],
-            ]);
+            ];
+
+            if (! $request->expectsJson()) {
+                return redirect()->away('http://localhost:5173/gdrive?gdrive=connected');
+            }
+
+            return response()->json($payload);
+
 
         } catch (Throwable $e) {
             $context = [
