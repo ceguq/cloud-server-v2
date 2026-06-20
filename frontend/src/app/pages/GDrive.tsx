@@ -15,11 +15,13 @@ import {
 
 import { GDriveIcon } from "../components/GDriveIcon";
 import {
+  getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveFiles,
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -171,6 +173,8 @@ export function GDrive() {
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(false);
+  const [fileScope, setFileScope] = useState<"all" | "account">("all");
+
 
   useEffect(() => {
 
@@ -213,8 +217,23 @@ export function GDrive() {
     const loadFiles = async () => {
       setFilesLoading(true);
       setFilesError(false);
+
       try {
-        const res = await getGDriveFiles({ page_size: 50 });
+        if (fileScope === "all") {
+          const res = await getGDriveFiles({ page_size: 50 });
+          if (cancelled) return;
+          const list = res?.data ?? [];
+          setGdriveFiles(list);
+          return;
+        }
+
+        // fileScope === "account"
+        if (!activeAccountId) {
+          setGdriveFiles([]);
+          return;
+        }
+
+        const res = await getGDriveAccountFiles(activeAccountId, { page_size: 50 });
         if (cancelled) return;
         const list = res?.data ?? [];
         setGdriveFiles(list);
@@ -232,7 +251,8 @@ export function GDrive() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fileScope, activeAccountId]);
+
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     const toSizeGB = (size: string | number | null | undefined): number => {
@@ -487,10 +507,37 @@ export function GDrive() {
               </div>
 
               <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                    style={{
+                      background: fileScope === "all" ? `${accentColor}18` : "transparent",
+                      border: fileScope === "all" ? `1px solid ${accentColor}55` : `1px solid transparent`,
+                      color: fileScope === "all" ? colors.title : colors.muted,
+                    }}
+                    onClick={() => setFileScope("all")}
+                  >
+                    All accounts
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                    style={{
+                      background: fileScope === "account" ? `${accentColor}18` : "transparent",
+                      border: fileScope === "account" ? `1px solid ${accentColor}55` : `1px solid transparent`,
+                      color: fileScope === "account" ? colors.title : colors.muted,
+                    }}
+                    onClick={() => setFileScope("account")}
+                  >
+                    Selected account
+                  </button>
+                </div>
+
                 <div className="relative flex-1 max-w-md">
 
-
                   <Search
+
                     size={13}
                     className="absolute left-3 top-1/2 -translate-y-1/2"
                     style={{ color: colors.muted2 }}
