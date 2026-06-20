@@ -68,11 +68,13 @@
 - [x] Pastikan perilaku read-only dan mendukung paging sederhana bila diperlukan.
 
 ## 7. Connect React GDrive UI to API
+- [x] Load connected Google Drive accounts in frontend.
 - [ ] Hubungkan halaman `/gdrive` dengan API internal:
   - load akun terhubung,
   - load list file,
   - switch antara per akun dan semua akun.
 - [ ] Pastikan UI hanya menerima data non-sensitif.
+
 
 ## 8. Add disconnect/revoke
 - [ ] Implement `DELETE /api/gdrive/accounts/{account}`.
