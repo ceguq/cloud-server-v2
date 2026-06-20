@@ -124,17 +124,15 @@ export async function disconnectGDriveAccount(accountId: string) {
   return res.data;
 }
 
-export function getGDriveConnectUrl(): string {
+export async function getGDriveConnectUrl(): Promise<string> {
+  const res = await api.get("/gdrive/connect");
+  const url = res.data?.url;
 
-  const apiBase = (import.meta as any).env?.VITE_API_BASE_URL;
-  if (!apiBase) {
-    // Keep behavior deterministic even if env is missing.
-    // This path is only used for redirect, so returning relative URL is still valid.
-    return `/api/gdrive/connect`;
+  if (typeof url !== "string" || url.trim() === "") {
+    throw new Error("Invalid OAuth connect URL from backend.");
   }
 
-  // Ensure no double slashes.
-  const base = String(apiBase).replace(/\/+$/, "");
-  return `${base}/gdrive/connect`;
+  return url;
 }
+
 
