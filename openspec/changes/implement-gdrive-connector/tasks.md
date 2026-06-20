@@ -82,9 +82,10 @@
 
 
 ## 8. Add disconnect/revoke
-- [ ] Implement `DELETE /api/gdrive/accounts/{account}`.
-- [ ] Best-effort revoke di Google, lalu set `revoked_at`.
+- [x] Implement `DELETE /api/gdrive/accounts/{account}`.
+- [x] Best-effort revoke di Google, lalu set `revoked_at`.
 - [ ] Setelah disconnect, UI refresh status koneksi.
+
 
 ## 9. Add cache/queue later
 - [ ] Rencanakan peningkatan performa:
