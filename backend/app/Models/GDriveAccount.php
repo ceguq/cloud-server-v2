@@ -13,6 +13,9 @@ class GDriveAccount extends Model
     use HasFactory;
     use HasUuids;
 
+    protected $table = 'gdrive_accounts';
+
+
     protected $keyType = 'string';
     public $incrementing = false;
 
