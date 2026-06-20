@@ -21,8 +21,11 @@ use Throwable;
 
 
 
+
 class GDriveController extends Controller
 {
+
+
     public function index(Request $request, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
@@ -391,11 +394,12 @@ class GDriveController extends Controller
     {
         $user = $request->user();
 
-        if ($account->user_id !== $user->id) {
+        if ((string) $account->user_id !== (string) $user->id) {
             return response()->json([
                 'message' => 'Google Drive account not found.',
             ], 404);
         }
+
 
         if ($account->revoked_at !== null) {
             return response()->json([
@@ -445,19 +449,49 @@ class GDriveController extends Controller
                 ],
             ]);
         } catch (Throwable $e) {
+            $exceptionClass = $e::class;
+            $shortMessage = $e->getMessage();
+            if (!is_string($shortMessage)) {
+                $shortMessage = '';
+            }
+
+            $context = [
+                'user_id' => $user?->id,
+                'gdrive_account_id' => $account?->id,
+                'gdrive_account_email' => $account?->email,
+                'exception_class' => $exceptionClass,
+                'message' => (string) $shortMessage,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ];
+
+            // Avoid logging any tokens/secrets.
+            // If this is an HTTP client exception, avoid dumping full response body.
+            if ($e instanceof RequestException && $e->response !== null) {
+                $context['http_status'] = $e->response->status();
+            }
+
+            Log::error('GDrive files load failed', $context);
+
             return response()->json([
                 'message' => 'Failed to load Google Drive files.',
+                'error_code' => 'gdrive_files_load_failed',
+                'reconnect_recommended' => true,
             ], 502);
+
         }
     }
+
 
     public function downloadFile(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService)
     {
         $user = $request->user();
 
-        if (!$user || $account->user_id !== $user->id) {
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
             return response()->json(['message' => 'Google Drive account not found.'], 404);
         }
+
+
 
         if ($account->revoked_at !== null) {
             return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
@@ -480,9 +514,10 @@ class GDriveController extends Controller
     public function destroy(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
-        if (!$user || $account->user_id !== $user->id) {
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
             return response()->json(['message' => 'Not found.'], 404);
         }
+
 
         $token = $account->refresh_token ?: $account->access_token;
         $googleRevoked = false;
