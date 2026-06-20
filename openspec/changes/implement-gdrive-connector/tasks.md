@@ -71,13 +71,14 @@
 - [x] Load connected Google Drive accounts in frontend.
 - [x] Load aggregate Google Drive file list in frontend.
 - [x] Add frontend file scope switch for all accounts vs selected account.
-- [ ] Hubungkan halaman `/gdrive` dengan API internal:
+- [x] Hubungkan halaman `/gdrive` dengan API internal:
 
 
   - load akun terhubung,
   - load list file,
   - switch antara per akun dan semua akun.
-- [ ] Pastikan UI hanya menerima data non-sensitif.
+- [x] Pastikan UI hanya menerima data non-sensitif.
+
 
 
 ## 8. Add disconnect/revoke
