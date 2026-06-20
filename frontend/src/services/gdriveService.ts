@@ -16,6 +16,12 @@ export type GDriveAccount = {
   status: "connected" | "revoked";
   is_connected: boolean;
   is_revoked: boolean;
+  storage_quota?: {
+    limit: string | number | null;
+    usage: string | number | null;
+    usage_in_drive: string | number | null;
+    usage_in_drive_trash: string | number | null;
+  } | null;
 };
 
 export type GDriveFile = {
@@ -31,6 +37,7 @@ export type GDriveFile = {
   created_time: string | null;
   modified_time: string | null;
   shared: boolean | null;
+  starred?: boolean | null;
   owner_name: string | null;
   owner_email: string | null;
   source: "gdrive";

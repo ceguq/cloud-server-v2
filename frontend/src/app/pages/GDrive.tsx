@@ -1,19 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  Plus,
-  HardDrive,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
+import {
+  Archive,
+  CheckCircle2,
   Database,
-  Star,
-  Folder,
+  Download,
+  Eye,
   FileText,
-  Users,
-  Share2,
-  Grid3X3,
-  LayoutList,
+  Film,
+  Folder,
+  HardDrive,
+  Image,
+  Music,
+  Plus,
   Search,
+  Share2,
+  Star,
+  Trash2,
+  Users,
 } from "lucide-react";
 
 import { GDriveIcon } from "../components/GDriveIcon";
+import { LoadingSpinner } from "../components/LoadingSpinner";
 import {
   disconnectGDriveAccount,
   getGDriveAccountFiles,
@@ -24,16 +37,26 @@ import {
   type GDriveFile,
 } from "../../services/gdriveService";
 
-
-
-
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
+type TabKey = "all" | "starred" | "shared" | "recent";
+type IconComponent = typeof FileText;
 
-
+type GDriveFileUI = {
+  id: string;
+  accountId: string;
+  name: string;
+  mime: string;
+  starred: boolean;
+  shared: boolean;
+  recentAt: string;
+  sizeBytes: number | null;
+  owner: string;
+  webViewLink: string;
+  webContentLink: string;
+};
 
 function safeReadAppearanceTheme(): AppearanceTheme {
-
   if (typeof window === "undefined") return "dark";
   try {
     const raw = window.localStorage.getItem("nimbus_appearance_theme");
@@ -65,51 +88,220 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
+function parseByteValue(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(n) ? n : null;
+}
 
+function formatBytes(bytes: number | null | undefined, fallback = "-"): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) {
+    return fallback;
+  }
+  if (bytes <= 0) return "0 B";
 
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / Math.pow(1024, index);
+  const fixed = value >= 10 ? 1 : 2;
+  return `${value.toFixed(fixed)} ${units[index]}`;
+}
 
+function formatDate(iso: string): string {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
 
-type GDriveFileUI = {
-  id: string;
-  name: string;
-  mime: string;
-  starred?: boolean;
-  shared?: boolean;
-  recentAt: string;
-  sizeGB: number;
-  owner: string;
-};
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
-type TabKey = "all" | "starred" | "shared" | "recent";
+function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return "not synced yet";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "not synced yet";
 
-type GDriveFileIconProps = {
-  mime: string;
-  size?: number;
-};
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60 * 1000) return "just now";
 
+  const minutes = Math.floor(diffMs / (60 * 1000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
 
-function renderGDriveFileIcon({ mime, size = 16 }: GDriveFileIconProps) {
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+
+  return formatDate(iso);
+}
+
+function getAccountName(account: GDriveAccount): string {
+  return account.label || account.email || "Google Drive";
+}
+
+function getAccountInitials(account: GDriveAccount): string {
+  const label = getAccountName(account).trim();
+  const words = label.split(/[\s._-]+/).filter(Boolean);
+
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return "GD";
+}
+
+function getQuotaDisplay(account: GDriveAccount) {
+  const quota = account.storage_quota ?? null;
+  const usage =
+    parseByteValue(quota?.usage_in_drive) ?? parseByteValue(quota?.usage);
+  const limit = parseByteValue(quota?.limit);
+
+  if (usage !== null && limit !== null && limit > 0) {
+    const percent = Math.min(100, Math.max(0, Math.round((usage / limit) * 100)));
+    return {
+      label: `${formatBytes(usage, "0 B")} of ${formatBytes(limit, "0 B")} used`,
+      value: `${percent}%`,
+      percent,
+      hasQuota: true,
+    };
+  }
+
+  if (usage !== null) {
+    return {
+      label: `${formatBytes(usage, "0 B")} used`,
+      value: "",
+      percent: 0,
+      hasQuota: false,
+    };
+  }
+
+  return {
+    label: "Storage unavailable",
+    value: "",
+    percent: 0,
+    hasQuota: false,
+  };
+}
+
+function getAvatarColor(index: number, active: boolean, accentColor: string) {
+  if (active) return accentColor;
+  const palette = ["#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#14b8a6"];
+  return palette[index % palette.length];
+}
+
+function getFileVisual(mime: string): {
+  Icon: IconComponent;
+  color: string;
+  bg: string;
+  border: string;
+} {
   const m = (mime || "").toLowerCase();
-  const commonStyle: React.CSSProperties = { color: "rgba(148,163,184,0.9)" };
 
-  if (m.includes("folder")) return <Folder size={size} style={commonStyle} />;
-  if (m.includes("pdf")) return <FileText size={size} style={{ color: "#ef4444" }} />;
-  if (m.includes("spreadsheet")) return <Database size={size} style={{ color: "#22c55e" }} />;
-  if (m.includes("presentation")) return <Users size={size} style={{ color: "#3b82f6" }} />;
-  if (m.includes("image")) return <span style={{ fontSize: size, lineHeight: 1 }}>🖼️</span>;
-  if (m.includes("video")) return <span style={{ fontSize: size, lineHeight: 1 }}>🎬</span>;
-  if (m.includes("audio")) return <span style={{ fontSize: size, lineHeight: 1 }}>🎵</span>;
-  if (m.includes("zip") || m.includes("compressed"))
-    return <span style={{ fontSize: size, lineHeight: 1 }}>🗜️</span>;
-  if (m.includes("text") || m.includes("json") || m.includes("xml"))
-    return <span style={{ fontSize: size, lineHeight: 1 }}>📄</span>;
-  return <FileText size={size} style={commonStyle} />;
+  if (m.includes("folder")) {
+    return {
+      Icon: Folder,
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.12)",
+      border: "rgba(245,158,11,0.20)",
+    };
+  }
+
+  if (m.includes("image")) {
+    return {
+      Icon: Image,
+      color: "#22c55e",
+      bg: "rgba(34,197,94,0.12)",
+      border: "rgba(34,197,94,0.20)",
+    };
+  }
+
+  if (m.includes("video")) {
+    return {
+      Icon: Film,
+      color: "#a855f7",
+      bg: "rgba(168,85,247,0.12)",
+      border: "rgba(168,85,247,0.20)",
+    };
+  }
+
+  if (m.includes("audio")) {
+    return {
+      Icon: Music,
+      color: "#06b6d4",
+      bg: "rgba(6,182,212,0.12)",
+      border: "rgba(6,182,212,0.20)",
+    };
+  }
+
+  if (m.includes("spreadsheet")) {
+    return {
+      Icon: Database,
+      color: "#10b981",
+      bg: "rgba(16,185,129,0.12)",
+      border: "rgba(16,185,129,0.20)",
+    };
+  }
+
+  if (m.includes("presentation")) {
+    return {
+      Icon: Users,
+      color: "#f97316",
+      bg: "rgba(249,115,22,0.12)",
+      border: "rgba(249,115,22,0.20)",
+    };
+  }
+
+  if (m.includes("pdf")) {
+    return {
+      Icon: FileText,
+      color: "#ef4444",
+      bg: "rgba(239,68,68,0.12)",
+      border: "rgba(239,68,68,0.20)",
+    };
+  }
+
+  if (m.includes("zip") || m.includes("compressed") || m.includes("tar")) {
+    return {
+      Icon: Archive,
+      color: "#64748b",
+      bg: "rgba(100,116,139,0.12)",
+      border: "rgba(100,116,139,0.20)",
+    };
+  }
+
+  return {
+    Icon: FileText,
+    color: "#3b82f6",
+    bg: "rgba(59,130,246,0.12)",
+    border: "rgba(59,130,246,0.20)",
+  };
+}
+
+function renderFileIcon(file: GDriveFileUI) {
+  const { Icon, color, bg, border } = getFileVisual(file.mime);
+
+  return (
+    <div
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+      style={{ background: bg, border: `1px solid ${border}` }}
+    >
+      <Icon size={15} strokeWidth={2} style={{ color }} />
+    </div>
+  );
 }
 
 export function GDrive() {
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
-    safeReadAppearanceTheme,
-  );
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
     resolveAppearanceTheme(safeReadAppearanceTheme()),
@@ -117,9 +309,7 @@ export function GDrive() {
 
   const syncThemeFromStorage = () => {
     const nextTheme = safeReadAppearanceTheme();
-    const nextAccent = safeReadAccentColor();
-    setAppearanceTheme(nextTheme);
-    setAccentColor(nextAccent);
+    setAccentColor(safeReadAccentColor());
     setResolvedTheme(resolveAppearanceTheme(nextTheme));
   };
 
@@ -132,40 +322,59 @@ export function GDrive() {
     window.addEventListener("storage", syncThemeFromStorage);
     window.addEventListener("focus", syncThemeFromStorage);
 
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      mq?.addEventListener?.("change", syncThemeFromStorage);
+    } catch {
+      // ignore
+    }
+
     return () => {
       window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
       window.removeEventListener("storage", syncThemeFromStorage);
       window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
     };
   }, []);
 
   const colors = useMemo(() => {
     if (resolvedTheme === "light") {
       return {
-        pageBg: "#f8fafc",
-        cardBg: "#ffffff",
-        panelBg: "#f1f5f9",
-        border: "#dbe3ef",
-        borderSoft: "#e5eaf1",
-        title: "#0f172a",
+        shellBg: "#f8fafc",
+        sidebarBg: "#ffffff",
+        surfaceBg: "#ffffff",
+        panelBg: "#f8fafc",
+        softBg: "#f1f5f9",
+        border: "#edf2f7",
+        borderStrong: "#dbeafe",
+        title: "#111827",
         text: "#334155",
         muted: "#64748b",
         muted2: "#94a3b8",
-        divider: "#e5eaf1",
+        header: "#8793a8",
+        rowHover: "#f8fbff",
+        shadow: "0 18px 45px rgba(15, 23, 42, 0.04)",
+        inputBg: "#ffffff",
       };
     }
 
     return {
-      pageBg: "#111c2f",
-      cardBg: "#0f1729",
-      panelBg: "#0d1829",
-      border: "#1a2540",
-      borderSoft: "#0a1020",
-      title: "#e2e8f0",
+      shellBg: "#111827",
+      sidebarBg: "#0f172a",
+      surfaceBg: "#111c2f",
+      panelBg: "#0b1324",
+      softBg: "#1f2937",
+      border: "#1f2a44",
+      borderStrong: "rgba(96,165,250,0.45)",
+      title: "#e5e7eb",
       text: "#cbd5e1",
-      muted: "rgba(148,163,184,0.62)",
-      muted2: "rgba(148,163,184,0.48)",
-      divider: "#122043",
+      muted: "#94a3b8",
+      muted2: "#64748b",
+      header: "#718096",
+      rowHover: "#162238",
+      shadow: "0 22px 60px rgba(0, 0, 0, 0.28)",
+      inputBg: "#0b1324",
     };
   }, [resolvedTheme]);
 
@@ -177,13 +386,13 @@ export function GDrive() {
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(false);
-  const [fileScope, setFileScope] = useState<"all" | "account">("all");
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
   const [connectingAccount, setConnectingAccount] = useState(false);
+  const [tab, setTab] = useState<TabKey>("all");
+  const [search, setSearch] = useState<string>("");
+  const [copiedFileId, setCopiedFileId] = useState<string>("");
 
   useEffect(() => {
-
-
     let cancelled = false;
 
     const load = async () => {
@@ -192,11 +401,15 @@ export function GDrive() {
       try {
         const res = await getGDriveAccounts();
         if (cancelled) return;
+
         const list = res?.data ?? [];
         setGdriveAccounts(list);
         setActiveAccountId((prev) => {
-          if (prev && list.some((a) => a.id === prev)) return prev;
-          return list[0]?.id ?? "";
+          if (prev && list.some((account) => account.id === prev && account.is_connected)) {
+            return prev;
+          }
+
+          return list.find((account) => account.is_connected)?.id ?? "";
         });
       } catch {
         if (cancelled) return;
@@ -204,18 +417,16 @@ export function GDrive() {
         setActiveAccountId("");
         setAccountsError(true);
       } finally {
-        if (cancelled) return;
-        setAccountsLoading(false);
+        if (!cancelled) setAccountsLoading(false);
       }
     };
 
     void load();
+
     return () => {
       cancelled = true;
     };
   }, []);
-
-
 
   const handleConnectAccount = async () => {
     if (connectingAccount) return;
@@ -233,15 +444,7 @@ export function GDrive() {
   };
 
   const handleDisconnectAccount = async (accountId: string) => {
-
-    if (!accountId) return;
-    if (!disconnectingAccountId || disconnectingAccountId === accountId) {
-      // ok
-    } else {
-      return;
-    }
-
-    if (disconnectingAccountId === accountId) return;
+    if (!accountId || disconnectingAccountId) return;
 
     const confirmed = window.confirm("Disconnect this Google Drive account?");
     if (!confirmed) return;
@@ -254,28 +457,16 @@ export function GDrive() {
       const res = await getGDriveAccounts();
       const list = res?.data ?? [];
       setGdriveAccounts(list);
-
-      const disconnectedIsActive = activeAccountId === accountId;
-      if (disconnectedIsActive) {
-        const next = list.find((a) => a.is_connected && a.id !== accountId);
-        const nextId = next?.id ?? "";
-        setActiveAccountId(nextId);
-
-        if (fileScope === "account") {
-          setGdriveFiles(nextId ? [] : []);
+      setActiveAccountId((prev) => {
+        if (prev !== accountId && list.some((account) => account.id === prev && account.is_connected)) {
+          return prev;
         }
-      }
 
-      if (fileScope === "all") {
-        const filesRes = await getGDriveFiles({ page_size: 50 });
-        setGdriveFiles(filesRes?.data ?? []);
-      } else {
-        if (!disconnectedIsActive) {
-          const filesRes = await getGDriveAccountFiles(activeAccountId, { page_size: 50 });
-          setGdriveFiles(filesRes?.data ?? []);
-        } else {
-          setGdriveFiles([]);
-        }
+        return list.find((account) => account.is_connected)?.id ?? "";
+      });
+
+      if (activeAccountId === accountId) {
+        setGdriveFiles([]);
       }
 
       setFilesError(false);
@@ -288,522 +479,627 @@ export function GDrive() {
   };
 
   useEffect(() => {
-
     let cancelled = false;
 
     const loadFiles = async () => {
-
+      const accountId = activeAccountId;
       setFilesLoading(true);
       setFilesError(false);
 
       try {
-        if (fileScope === "all") {
-          const res = await getGDriveFiles({ page_size: 50 });
-          if (cancelled) return;
-          const list = res?.data ?? [];
-          setGdriveFiles(list);
-          return;
+        let res;
+
+        try {
+          res = await getGDriveFiles({ page_size: 50 });
+        } catch {
+          if (!accountId) throw new Error("Failed to load all Google Drive files.");
+          res = await getGDriveAccountFiles(accountId, { page_size: 50 });
         }
 
-        // fileScope === "account"
-        if (!activeAccountId) {
-          setGdriveFiles([]);
-          return;
-        }
-
-        const res = await getGDriveAccountFiles(activeAccountId, { page_size: 50 });
         if (cancelled) return;
+
         const list = res?.data ?? [];
         setGdriveFiles(list);
+        const syncedAccountIds = new Set(
+          list
+            .map((file) => file.account_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0),
+        );
+
+        setGdriveAccounts((prev) =>
+          prev.map((account) => {
+            const wasSynced =
+              syncedAccountIds.has(account.id) ||
+              (syncedAccountIds.size === 0 && account.id === accountId);
+
+            return wasSynced
+              ? { ...account, last_synced_at: new Date().toISOString() }
+              : account;
+          }),
+        );
       } catch {
         if (cancelled) return;
         setGdriveFiles([]);
         setFilesError(true);
       } finally {
-        if (cancelled) return;
-        setFilesLoading(false);
+        if (!cancelled) setFilesLoading(false);
       }
     };
 
     void loadFiles();
+
     return () => {
       cancelled = true;
     };
-  }, [fileScope, activeAccountId]);
-
+  }, [activeAccountId]);
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
-    const toSizeGB = (size: string | number | null | undefined): number => {
-      if (size === null || size === undefined) return 0;
-      const n = typeof size === "string" ? Number(size) : size;
-      if (!Number.isFinite(n)) return 0;
-      return n / (1024 * 1024 * 1024);
-    };
-
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
-      const id = String(file.id ?? "");
-      const name = file.name || "Untitled";
-      const mime = file.mime_type || "";
-      const recentAt = file.modified_time || "";
-      const sizeGB = toSizeGB(file.size);
-      const owner = (file.owner_email || file.owner_name || file.account_email || "") as string;
-      const shared = !!file.shared;
+      const id =
+        String(file.id ?? "") ||
+        `${file.account_id}-${file.name ?? "untitled"}-${file.modified_time ?? ""}`;
 
       return {
         id,
-        name,
-        mime,
-        recentAt,
-        sizeGB,
-        owner,
-        shared,
-        starred: false,
+        accountId: file.account_id,
+        name: file.name || "Untitled",
+        mime: file.mime_type || "",
+        recentAt: file.modified_time || "",
+        sizeBytes: parseByteValue(file.size),
+        owner: (file.owner_email || file.owner_name || file.account_email || "") as string,
+        shared: !!file.shared,
+        starred: !!file.starred,
+        webViewLink: file.web_view_link || "",
+        webContentLink: file.web_content_link || "",
       };
     });
   }, [gdriveFiles]);
 
-  const [tab, setTab] = useState<TabKey>("all");
-
-  const [search, setSearch] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-
   const filteredFiles = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
+    const query = search.trim().toLowerCase();
     let base = [...gdriveAllFiles];
-    if (tab === "starred") base = base.filter((f) => !!f.starred);
-    if (tab === "shared") base = base.filter((f) => !!f.shared);
+
+    if (tab === "starred") base = base.filter((file) => file.starred);
+    if (tab === "shared") base = base.filter((file) => file.shared);
     if (tab === "recent") {
       base = [...base]
         .sort((a, b) => (b.recentAt || "").localeCompare(a.recentAt || ""))
-        .slice(0, 4);
+        .slice(0, 10);
     }
 
-    if (q) base = base.filter((f) => f.name.toLowerCase().includes(q));
+    if (query) {
+      base = base.filter((file) => file.name.toLowerCase().includes(query));
+    }
 
-    // UI-only anchor
-    void activeAccountId;
     return base;
-  }, [gdriveAllFiles, tab, search, activeAccountId]);
+  }, [gdriveAllFiles, tab, search]);
 
-
+  const activeAccount =
+    gdriveAccounts.find((account) => account.id === activeAccountId) ?? null;
   const anyFiles = filteredFiles.length > 0;
 
-  const formatGB = (n: number) => {
-
-    if (!Number.isFinite(n)) return "0 GB";
-    if (n < 1) return `${Math.round(n * 1024)} MB`;
-    return `${n.toFixed(n >= 10 ? 0 : 1)} GB`;
-  };
-
-
-  const activeAccount = gdriveAccounts.find((a) => a.id === activeAccountId) ?? gdriveAccounts[0];
-
-
-  const tabs: Array<{ key: TabKey; label: string; icon?: any }> = [
+  const tabs: Array<{ key: TabKey; label: string; Icon?: IconComponent }> = [
     { key: "all", label: "All Files" },
-    { key: "starred", label: "Starred" },
-    { key: "shared", label: "Shared" },
-    { key: "recent", label: "Recent" },
+    { key: "starred", label: "Starred", Icon: Star },
+    { key: "shared", label: "Shared", Icon: Share2 },
+    { key: "recent", label: "Recent", Icon: HardDrive },
   ];
 
-  const tabButtonStyle = (isActive: boolean) => ({
-    background: isActive ? `${accentColor}18` : "transparent",
-    border: isActive ? `1px solid ${accentColor}55` : `1px solid transparent`,
-    color: isActive ? colors.title : colors.muted,
-  });
+  const tableGridTemplate = "minmax(280px,1fr) 140px 170px 112px 132px";
 
-  return (
-    <div className="flex-1 min-h-0 overflow-hidden" style={{ background: colors.pageBg }}>
-      <div className="h-full min-h-0 overflow-y-auto p-6 nimbus-scrollbar">
-        {/* Top header */}
-        <div className="flex items-start justify-between gap-4 mb-5">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{
-                background: `${accentColor}14`,
-                border: `1px solid ${accentColor}33`,
-              }}
-            >
-              <GDriveIcon size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold" style={{ color: colors.title }}>
-                Google Drive
-              </h1>
-              <p className="text-xs mt-0.5" style={{ color: colors.muted }}>
-                Manage connected Google Drive accounts and browse synced files.
-              </p>
-            </div>
-            </div>
+  const selectAccount = (account: GDriveAccount) => {
+    if (!account.is_connected) return;
+    setActiveAccountId(account.id);
+  };
 
+  const handleAccountKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    account: GDriveAccount,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    selectAccount(account);
+  };
+
+  const openFile = (file: GDriveFileUI) => {
+    const url = file.webViewLink || file.webContentLink;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const downloadFile = (file: GDriveFileUI) => {
+    const url = file.webContentLink || file.webViewLink;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const copyFileLink = async (file: GDriveFileUI) => {
+    const url = file.webViewLink || file.webContentLink;
+    if (!url) return;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedFileId(file.id);
+      window.setTimeout(() => setCopiedFileId(""), 1400);
+    } catch {
+      window.prompt("Copy Google Drive link", url);
+    }
+  };
+
+  const renderAccountCard = (account: GDriveAccount, index: number) => {
+    const isActive = account.id === activeAccountId;
+    const avatarColor = getAvatarColor(index, isActive, accentColor);
+    const statusColor = account.is_connected ? "#22c55e" : "#ef4444";
+    const quota = getQuotaDisplay(account);
+    const cardBg =
+      resolvedTheme === "light"
+        ? isActive
+          ? "#f8fbff"
+          : "#ffffff"
+        : isActive
+          ? "rgba(37,99,235,0.10)"
+          : colors.panelBg;
+
+    return (
+      <div
+        key={account.id}
+        role="button"
+        tabIndex={account.is_connected ? 0 : -1}
+        onClick={() => selectAccount(account)}
+        onKeyDown={(event) => handleAccountKeyDown(event, account)}
+        className="rounded-2xl border p-4 transition-colors"
+        style={{
+          background: cardBg,
+          borderColor: isActive ? accentColor : colors.border,
+          cursor: account.is_connected ? "pointer" : "default",
+          boxShadow: isActive ? "0 10px 24px rgba(37, 99, 235, 0.08)" : "none",
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white"
+            style={{ background: avatarColor }}
+          >
+            <span>{getAccountInitials(account)}</span>
+            {account.avatar_url ? (
+              <img
+                src={account.avatar_url}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
+              />
+            ) : null}
           </div>
 
-
-        {/* Two columns layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-4 h-full">
-          {/* Left panel: accounts */}
-          <div
-            className="rounded-2xl p-4 border overflow-hidden"
-            style={{ background: colors.cardBg, borderColor: colors.border }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="text-sm font-semibold" style={{ color: colors.title }}>
-                  Google Drive
-                </div>
-                <div className="text-[11px] mt-0.5" style={{ color: colors.muted2 }}>
-                  {accountsLoading ? "" : `${gdriveAccounts.length} accounts connected`}
-                </div>
-
-              </div>
-              <button
-                type="button"
-                title="Connect Google Drive"
-                disabled={connectingAccount}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg text-xs"
-                style={{
-                  background: connectingAccount ? "rgba(148,163,184,0.12)" : `${accentColor}14`,
-                  border: `1px solid ${connectingAccount ? colors.borderSoft : `${accentColor}33`}`,
-                  color: colors.title,
-                  opacity: connectingAccount ? 0.7 : 1,
-                  cursor: connectingAccount ? "not-allowed" : "pointer",
-                }}
-                onClick={handleConnectAccount}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="truncate text-sm font-semibold"
+                style={{ color: colors.title }}
+                title={getAccountName(account)}
               >
-                <Plus size={13} />
-              </button>
-
+                {getAccountName(account)}
+              </div>
+              <CheckCircle2 size={13} style={{ color: statusColor }} />
+              <span className="text-[10px]" style={{ color: colors.muted }}>
+                {account.is_connected ? "Connected" : "Revoked"}
+              </span>
             </div>
 
-            <div className="space-y-3">
-              {accountsLoading ? (
-                <div className="text-[11px]" style={{ color: colors.muted2 }}>
-                  Loading accounts...
-                </div>
-              ) : accountsError ? (
-                <div className="text-[11px]" style={{ color: "#fb7185" }}>
-                  Failed to load Google Drive accounts.
-                </div>
-              ) : gdriveAccounts.length === 0 ? (
-                <div className="text-[11px]" style={{ color: colors.muted2 }}>
-                  No Google Drive accounts connected yet.
-                </div>
-              ) : (
-                gdriveAccounts.map((acc) => {
-                  const isActive = acc.id === activeAccountId;
-                  const label = acc.label || acc.email;
-                  const statusText = acc.is_connected ? "Connected" : "Revoked";
+            <div
+              className="mt-1 truncate text-[11px]"
+              style={{ color: colors.text }}
+              title={account.email}
+            >
+              {account.email}
+            </div>
+
+            <div className="mt-1 text-[10px]" style={{ color: colors.muted2 }}>
+              Last sync: {formatRelativeTime(account.last_synced_at ?? account.connected_at)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <span className="truncate text-[10px]" style={{ color: colors.muted }}>
+              {quota.label}
+            </span>
+            <span className="shrink-0 text-[10px] font-semibold" style={{ color: colors.title }}>
+              {quota.value}
+            </span>
+          </div>
+
+          <div
+            className="h-1.5 overflow-hidden rounded-full"
+            style={{ background: resolvedTheme === "light" ? "#e5eaf1" : "#263244" }}
+          >
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${quota.percent}%`,
+                background: quota.hasQuota ? avatarColor : colors.muted2,
+                opacity: quota.hasQuota ? 1 : 0.35,
+              }}
+            />
+          </div>
+        </div>
+
+        {isActive ? (
+          <div
+            className="mt-4 flex items-center justify-between border-t pt-3"
+            style={{ borderColor: colors.border }}
+          >
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: accentColor }}>
+              <Folder size={12} />
+              Browsing files
+            </div>
+
+            <button
+              type="button"
+              disabled={disconnectingAccountId === account.id}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleDisconnectAccount(account.id);
+              }}
+              className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+              style={{
+                color: "#ef4444",
+                background: "transparent",
+                opacity: disconnectingAccountId === account.id ? 0.55 : 1,
+              }}
+            >
+              {disconnectingAccountId === account.id ? "Disconnecting" : "Disconnect"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderFileActions = (file: GDriveFileUI) => {
+    const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
+    const hasDownloadUrl = !!(file.webContentLink || file.webViewLink);
+    const actionBase: CSSProperties = {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      border: `1px solid transparent`,
+      background: "transparent",
+      color: colors.muted,
+    };
+
+    return (
+      <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <button
+          type="button"
+          title="Open"
+          disabled={!hasOpenUrl}
+          onClick={() => openFile(file)}
+          style={{
+            ...actionBase,
+            opacity: hasOpenUrl ? 1 : 0.35,
+            cursor: hasOpenUrl ? "pointer" : "not-allowed",
+          }}
+        >
+          <Eye size={14} />
+        </button>
+
+        <button
+          type="button"
+          title="Download"
+          disabled={!hasDownloadUrl}
+          onClick={() => downloadFile(file)}
+          style={{
+            ...actionBase,
+            opacity: hasDownloadUrl ? 1 : 0.35,
+            cursor: hasDownloadUrl ? "pointer" : "not-allowed",
+          }}
+        >
+          <Download size={14} />
+        </button>
+
+        <button
+          type="button"
+          title={copiedFileId === file.id ? "Copied" : "Copy link"}
+          disabled={!hasOpenUrl}
+          onClick={() => void copyFileLink(file)}
+          style={{
+            ...actionBase,
+            color: copiedFileId === file.id ? "#22c55e" : colors.muted,
+            opacity: hasOpenUrl ? 1 : 0.35,
+            cursor: hasOpenUrl ? "pointer" : "not-allowed",
+          }}
+        >
+          <Share2 size={14} />
+        </button>
+
+        <button
+          type="button"
+          title="Delete from Drive is not available"
+          disabled
+          style={{
+            ...actionBase,
+            opacity: 0.35,
+            cursor: "not-allowed",
+          }}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
+      <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside
+          className="min-h-0 overflow-y-auto border-r p-3 nimbus-scrollbar"
+          style={{ background: colors.sidebarBg, borderColor: colors.border }}
+        >
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold" style={{ color: colors.title }}>
+                Google Drive
+              </div>
+              <div className="text-[11px]" style={{ color: colors.muted2 }}>
+                {accountsLoading
+                  ? "Loading accounts"
+                  : `${gdriveAccounts.filter((account) => account.is_connected).length} connected`}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              title="Connect Google Drive"
+              disabled={connectingAccount}
+              onClick={handleConnectAccount}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity"
+              style={{
+                background: `${accentColor}12`,
+                border: `1px solid ${accentColor}33`,
+                color: accentColor,
+                cursor: connectingAccount ? "not-allowed" : "pointer",
+                opacity: connectingAccount ? 0.65 : 1,
+              }}
+            >
+              {connectingAccount ? <LoadingSpinner size={12} color={accentColor} /> : <Plus size={15} />}
+            </button>
+          </div>
+
+          {accountsLoading ? (
+            <div
+              className="rounded-xl border px-3 py-4 text-xs"
+              style={{ background: colors.panelBg, borderColor: colors.border, color: colors.muted }}
+            >
+              <div className="flex items-center gap-2">
+                <LoadingSpinner size={12} color={accentColor} />
+                Loading Drive accounts...
+              </div>
+            </div>
+          ) : accountsError ? (
+            <div
+              className="rounded-xl border px-3 py-4 text-xs"
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                borderColor: "rgba(239,68,68,0.24)",
+                color: "#ef4444",
+              }}
+            >
+              Failed to load Google Drive accounts.
+            </div>
+          ) : gdriveAccounts.length === 0 ? (
+            <div
+              className="rounded-xl border px-3 py-5 text-xs"
+              style={{ background: colors.panelBg, borderColor: colors.border, color: colors.muted }}
+            >
+              No connected accounts yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {gdriveAccounts.map((account, index) => renderAccountCard(account, index))}
+            </div>
+          )}
+        </aside>
+
+        <main className="min-h-0 min-w-0 overflow-hidden" style={{ background: colors.shellBg }}>
+          <div className="flex h-full min-h-0 flex-col">
+            <div
+              className="flex shrink-0 flex-col gap-3 border-b px-5 py-3 md:flex-row md:items-center md:justify-between"
+              style={{ background: colors.surfaceBg, borderColor: colors.border }}
+            >
+              <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto">
+                {tabs.map((item) => {
+                  const isActive = tab === item.key;
+                  const Icon = item.Icon;
 
                   return (
                     <button
-                      key={acc.id}
+                      key={item.key}
                       type="button"
-                      onClick={() => setActiveAccountId(acc.id)}
-                      className="w-full text-left rounded-xl p-3 transition-all"
+                      onClick={() => setTab(item.key)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold"
                       style={{
-                        background: isActive ? `${accentColor}12` : colors.panelBg,
-                        border: `1px solid ${isActive ? `${accentColor}55` : colors.borderSoft}`,
+                        background: isActive ? `${accentColor}14` : "transparent",
+                        color: isActive ? accentColor : colors.muted,
+                        border: `1px solid ${isActive ? `${accentColor}22` : "transparent"}`,
                       }}
                     >
-                      <div className="flex items-start justify-between gap-3">
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <HardDrive size={13} style={{ color: accentColor }} />
-                            <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
-                              {label}
-                            </div>
-                          </div>
-                          <div className="text-[11px] mt-1 truncate" style={{ color: colors.muted2 }}>
-                            {acc.email}
-                          </div>
-                        </div>
-
-                        <div
-                          className="text-[11px] font-semibold px-2 py-1 rounded-full"
-                          style={{
-                            background: acc.is_connected ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
-                            color: acc.is_connected ? "#34d399" : "#fb7185",
-                            border: `1px solid ${acc.is_connected ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)"}`,
-                          }}
-                        >
-                          {statusText}
-                        </div>
-
-                        {acc.is_connected && (
-                          <button
-                            type="button"
-                            disabled={disconnectingAccountId === acc.id}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDisconnectAccount(acc.id);
-                            }}
-                            className="text-[11px] font-semibold px-2 py-1 rounded-lg"
-                            style={{
-                              background: disconnectingAccountId === acc.id ? "rgba(148,163,184,0.12)" : `${accentColor}14`,
-                              border: `1px solid ${disconnectingAccountId === acc.id ? colors.borderSoft : `${accentColor}55`}`,
-                              color: disconnectingAccountId === acc.id ? colors.muted2 : colors.title,
-                            }}
-                          >
-                            {disconnectingAccountId === acc.id ? "Disconnecting..." : "Disconnect"}
-                          </button>
-                        )}
-
-                      </div>
+                      {Icon ? <Icon size={12} fill={item.key === "starred" ? "currentColor" : "none"} /> : null}
+                      {item.label}
                     </button>
                   );
-                })
-              )}
-            </div>
-
-          </div>
-
-          {/* Right panel: file browser */}
-          <div
-            className="rounded-2xl border overflow-hidden flex flex-col"
-            style={{ background: colors.cardBg, borderColor: colors.border }}
-          >
-            {/* Tabs + controls */}
-            <div className="p-4 border-b" style={{ borderColor: colors.borderSoft }}>
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {tabs.map((t) => {
-                    const isActive = tab === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        type="button"
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                        style={{ ...tabButtonStyle(isActive), color: isActive ? colors.title : colors.muted }}
-                        onClick={() => setTab(t.key)}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${colors.borderSoft}`, background: colors.panelBg }}>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("list")}
-                      className="px-3 py-2 text-xs flex items-center"
-                      style={{
-                        color: viewMode === "list" ? colors.title : colors.muted,
-                        background: viewMode === "list" ? `${accentColor}16` : "transparent",
-                      }}
-                    >
-                      <LayoutList size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("grid")}
-                      className="px-3 py-2 text-xs flex items-center"
-                      style={{
-                        color: viewMode === "grid" ? colors.title : colors.muted,
-                        background: viewMode === "grid" ? `${accentColor}16` : "transparent",
-                      }}
-                    >
-                      <Grid3X3 size={14} />
-                    </button>
-                  </div>
-                </div>
+                })}
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                    style={{
-                      background: fileScope === "all" ? `${accentColor}18` : "transparent",
-                      border: fileScope === "all" ? `1px solid ${accentColor}55` : `1px solid transparent`,
-                      color: fileScope === "all" ? colors.title : colors.muted,
-                    }}
-                    onClick={() => setFileScope("all")}
-                  >
-                    All accounts
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                    style={{
-                      background: fileScope === "account" ? `${accentColor}18` : "transparent",
-                      border: fileScope === "account" ? `1px solid ${accentColor}55` : `1px solid transparent`,
-                      color: fileScope === "account" ? colors.title : colors.muted,
-                    }}
-                    onClick={() => setFileScope("account")}
-                  >
-                    Selected account
-                  </button>
-                </div>
-
-                <div className="relative flex-1 max-w-md">
-
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative w-full min-w-[180px] max-w-xs">
                   <Search
-
                     size={13}
                     className="absolute left-3 top-1/2 -translate-y-1/2"
                     style={{ color: colors.muted2 }}
                   />
                   <input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search Drive files..."
-                    className="w-full pl-9 pr-3 py-2 rounded-lg text-xs outline-none"
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search Drive"
+                    className="h-9 w-full rounded-full pl-8 pr-3 text-xs outline-none"
                     style={{
-                      background: colors.panelBg,
-                      border: `1px solid ${colors.borderSoft}`,
+                      background: colors.inputBg,
+                      border: `1px solid ${colors.border}`,
                       color: colors.text,
                     }}
                   />
                 </div>
 
-                  <div className="text-xs" style={{ color: colors.muted2 }}>
-                    {activeAccount ? `Showing ${filteredFiles.length} item(s)` : ""}
-                  </div>
-
+                <div className="hidden shrink-0 text-[11px] md:block" style={{ color: colors.muted2 }}>
+                  {activeAccount || anyFiles ? `${filteredFiles.length} item(s)` : ""}
+                </div>
               </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              {filesLoading ? (
-                <div className="flex flex-col items-center justify-center py-14">
-                  <div className="text-sm font-semibold" style={{ color: colors.title }}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 nimbus-scrollbar">
+              <div
+                className="overflow-hidden rounded-2xl border"
+                style={{
+                  background: colors.surfaceBg,
+                  borderColor: colors.border,
+                  boxShadow: colors.shadow,
+                }}
+              >
+                {filesLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-16 text-sm" style={{ color: colors.muted }}>
+                    <LoadingSpinner size={14} color={accentColor} />
                     Loading Google Drive files...
                   </div>
-                </div>
-              ) : filesError ? (
-                <div className="flex flex-col items-center justify-center py-14">
-                  <div className="text-sm font-semibold" style={{ color: "#fb7185" }}>
+                ) : filesError ? (
+                  <div className="flex items-center justify-center py-16 text-sm" style={{ color: "#ef4444" }}>
                     Failed to load Google Drive files.
                   </div>
-                </div>
-              ) : !anyFiles ? (
-                <div className="flex flex-col items-center justify-center py-14">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}33` }}>
-                    <Share2 size={18} style={{ color: accentColor }} />
-                  </div>
-                  <div className="mt-4 text-sm font-semibold" style={{ color: colors.title }}>
-                    No Google Drive files found.
-                  </div>
-                </div>
-              ) : viewMode === "grid" ? (
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredFiles.map((f) => (
+                ) : !activeAccount && !anyFiles ? (
+                  <div className="flex flex-col items-center justify-center py-16">
                     <div
-                      key={f.id}
-                      className="rounded-xl p-3 border transition-all"
-                      style={{
-                        background: colors.panelBg,
-                        borderColor: colors.borderSoft,
-                      }}
+                      className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}24` }}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}33` }}>
-                            {renderGDriveFileIcon({ mime: f.mime, size: 18 })}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
-                              {f.name}
-                            </div>
-                          <div className="text-[11px] mt-1" style={{ color: colors.muted2 }}>
-                            {f.recentAt ? new Date(f.recentAt).toLocaleDateString() : "-"}
-                          </div>
-
-                          </div>
-                        </div>
-                        {f.starred && (
-                          <Star size={14} style={{ color: "#fbbf24" }} />
-                        )}
-                      </div>
-
-                      <div className="mt-3 flex justify-between text-[11px]" style={{ color: colors.muted2 }}>
-                        <span>{f.owner || "Unknown"}</span>
-                        <span>{formatGB(f.sizeGB)}</span>
-                      </div>
-
-
-                      {f.shared && (
-                        <div className="mt-2 text-[11px] font-semibold px-2 py-1 rounded-full inline-flex" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}33`, color: accentColor }}>
-                          Shared
-                        </div>
-                      )}
+                      <GDriveIcon size={22} />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div>
-                  {/* Header */}
-                  <div
-                    className="grid px-2 py-2 text-[11px] font-semibold uppercase tracking-wider"
-                    style={{
-                      gridTemplateColumns: "28px 1fr 140px 120px 110px 80px",
-                      color: colors.muted2,
-                      borderBottom: `1px solid ${colors.borderSoft}`,
-                    }}
-                  >
-                    <span />
-                    <span>Name</span>
-                    <span>Modified</span>
-                    <span>Size</span>
-                    <span>Owner</span>
-                    <span>Star</span>
+                    <div className="mt-3 text-sm font-semibold" style={{ color: colors.title }}>
+                      Connect a Drive account
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: colors.muted }}>
+                      Add an account to browse Google Drive files.
+                    </div>
                   </div>
-
-                  <div className="flex flex-col">
-                    {filteredFiles.map((f) => (
+                ) : !anyFiles ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}24` }}
+                    >
+                      <Folder size={21} style={{ color: accentColor }} />
+                    </div>
+                    <div className="mt-3 text-sm font-semibold" style={{ color: colors.title }}>
+                      No Drive files found.
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: colors.muted }}>
+                      Try another tab or search query.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <div style={{ minWidth: 820 }}>
                       <div
-                        key={f.id}
-                        className="grid px-2 py-2.5 items-center rounded-lg mb-1"
+                        className="grid items-center px-4 py-3 text-[11px] font-semibold"
                         style={{
-                          gridTemplateColumns: "28px 1fr 140px 120px 110px 80px",
-                          border: `1px solid transparent`,
-                          background: "transparent",
-                          color: colors.title,
+                          gridTemplateColumns: tableGridTemplate,
+                          color: colors.header,
+                          borderBottom: `1px solid ${colors.border}`,
                         }}
                       >
-                        <div className="flex items-center justify-center">
-                          {renderGDriveFileIcon({ mime: f.mime, size: 16 })}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold truncate" style={{ color: colors.title }}>
-                            {f.name}
-                          </div>
-                          <div className="text-[11px] mt-0.5" style={{ color: colors.muted2 }}>
-                            {f.shared ? "Shared file" : ""}
-                          </div>
-                        </div>
-                        <div className="text-xs" style={{ color: colors.muted2 }}>
-                          {f.recentAt ? new Date(f.recentAt).toLocaleString() : "-"}
-                        </div>
-
-                        <div className="text-xs" style={{ color: colors.muted2 }}>
-                          {formatGB(f.sizeGB)}
-                        </div>
-                        <div className="text-xs" style={{ color: colors.muted2 }}>
-                          {f.owner || "Unknown"}
-
-                        </div>
-                        <div className="flex items-center justify-start">
-                          {f.starred ? <Star size={16} style={{ color: "#fbbf24" }} /> : null}
-                        </div>
+                        <span>Name</span>
+                        <span>Visibility</span>
+                        <span>Modified</span>
+                        <span>Size</span>
+                        <span />
                       </div>
-                    ))}
+
+                      {filteredFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          className="group grid items-center px-4 py-3 transition-colors"
+                          style={{
+                            gridTemplateColumns: tableGridTemplate,
+                            borderBottom: `1px solid ${colors.border}`,
+                            color: colors.text,
+                          }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.background = colors.rowHover;
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            {renderFileIcon(file)}
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="truncate text-xs font-medium"
+                                  style={{ color: colors.title }}
+                                  title={file.name}
+                                >
+                                  {file.name}
+                                </span>
+                                {file.starred ? (
+                                  <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            {file.shared ? (
+                              <span
+                                className="rounded-full px-2 py-1 text-[10px] font-semibold"
+                                style={{
+                                  background: `${accentColor}12`,
+                                  color: accentColor,
+                                }}
+                              >
+                                Shared
+                              </span>
+                            ) : (
+                              <span className="text-[11px]" style={{ color: colors.muted2 }}>
+                                Private
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-xs" style={{ color: colors.muted }}>
+                            {formatDate(file.recentAt)}
+                          </div>
+
+                          <div className="text-xs" style={{ color: colors.muted }}>
+                            {formatBytes(file.sizeBytes)}
+                          </div>
+
+                          {renderFileActions(file)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
 }
-

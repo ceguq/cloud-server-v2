@@ -44,7 +44,7 @@ class GoogleDriveService
 
         $query = [
             'pageSize' => min(max($pageSize, 1), 100),
-            'fields' => 'nextPageToken,files(id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared)',
+            'fields' => 'nextPageToken,files(id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred)',
             'orderBy' => 'modifiedTime desc',
             'q' => 'trashed = false',
         ];
@@ -57,6 +57,9 @@ class GoogleDriveService
             ->get(self::DRIVE_FILES_ENDPOINT, $query)
             ->throw()
             ->json();
+
+        $account->last_synced_at = now();
+        $account->save();
 
         return is_array($response) ? $response : [];
     }

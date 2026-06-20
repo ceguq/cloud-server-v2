@@ -23,7 +23,7 @@ use Throwable;
 
 class GDriveController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
 
@@ -38,6 +38,8 @@ class GDriveController extends Controller
                 'email',
                 'google_account_id',
                 'avatar_url',
+                'access_token',
+                'refresh_token',
                 'token_expires_at',
                 'scopes',
                 'connected_at',
@@ -47,8 +49,28 @@ class GDriveController extends Controller
                 'updated_at',
             ]);
 
-        $data = $accounts->map(function (GDriveAccount $account) {
+        $data = $accounts->map(function (GDriveAccount $account) use ($googleDriveService) {
             $isRevoked = $account->revoked_at !== null;
+            $storageQuota = null;
+
+            if (! $isRevoked) {
+                try {
+                    $freshAccount = $googleDriveService->ensureFreshAccessToken($account);
+                    $about = $googleDriveService->getAccountAbout((string) $freshAccount->access_token);
+                    $quota = $about['storageQuota'] ?? null;
+
+                    if (is_array($quota)) {
+                        $storageQuota = [
+                            'limit' => isset($quota['limit']) ? (string) $quota['limit'] : null,
+                            'usage' => isset($quota['usage']) ? (string) $quota['usage'] : null,
+                            'usage_in_drive' => isset($quota['usageInDrive']) ? (string) $quota['usageInDrive'] : null,
+                            'usage_in_drive_trash' => isset($quota['usageInDriveTrash']) ? (string) $quota['usageInDriveTrash'] : null,
+                        ];
+                    }
+                } catch (Throwable $e) {
+                    $storageQuota = null;
+                }
+            }
 
             return [
                 'id' => $account->id,
@@ -66,6 +88,7 @@ class GDriveController extends Controller
                 'status' => $isRevoked ? 'revoked' : 'connected',
                 'is_connected' => !$isRevoked,
                 'is_revoked' => $isRevoked,
+                'storage_quota' => $storageQuota,
             ];
         });
 
@@ -330,6 +353,7 @@ class GDriveController extends Controller
                         'created_time' => $file['createdTime'] ?? null,
                         'modified_time' => $file['modifiedTime'] ?? null,
                         'shared' => $file['shared'] ?? null,
+                        'starred' => $file['starred'] ?? null,
                         'owner_name' => $owner['displayName'] ?? null,
                         'owner_email' => $owner['emailAddress'] ?? null,
                         'source' => 'gdrive',
@@ -399,6 +423,7 @@ class GDriveController extends Controller
                     'created_time' => $file['createdTime'] ?? null,
                     'modified_time' => $file['modifiedTime'] ?? null,
                     'shared' => $file['shared'] ?? null,
+                    'starred' => $file['starred'] ?? null,
                     'owner_name' => $owner['displayName'] ?? null,
                     'owner_email' => $owner['emailAddress'] ?? null,
                     'source' => 'gdrive',
