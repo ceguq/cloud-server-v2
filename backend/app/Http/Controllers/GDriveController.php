@@ -288,13 +288,9 @@ class GDriveController extends Controller
 
             if ($e instanceof RequestException && $e->response !== null) {
                 $context['response_status'] = $e->response->status();
-                $context['response_body'] = $e->response->body();
             }
 
-            Log::error('Google Drive OAuth callback failed', [
-                'exception' => get_class($e),
-                'message' => $e->getMessage(),
-            ]);
+            Log::error('Google Drive OAuth callback failed', $context);
 
             return response()->json([
                 'message' => 'Failed to connect Google Drive account.',
