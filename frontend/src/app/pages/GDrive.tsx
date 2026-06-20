@@ -33,7 +33,6 @@ import {
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
-  getGDriveFiles,
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
@@ -57,6 +56,40 @@ type GDriveFileUI = {
   webViewLink: string;
   webContentLink: string;
 };
+
+const GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE = "Google Drive account not found.";
+const ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE =
+  "Selected Google Drive account is not available for this user. Please reconnect or choose another account.";
+const GENERIC_FILES_ERROR_MESSAGE = "Failed to load Google Drive files.";
+
+function normalizeAccountId(accountId: unknown): string {
+  if (accountId === null || accountId === undefined) return "";
+  return String(accountId);
+}
+
+function getErrorResponseMessage(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+
+  const responseMessage = (error as { response?: { data?: { message?: unknown } } })
+    .response?.data?.message;
+  if (typeof responseMessage === "string") return responseMessage;
+
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+}
+
+function isAccountUnavailableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const message = getErrorResponseMessage(error).trim();
+  const status = (error as { response?: { status?: unknown } }).response?.status;
+
+  return (
+    message === GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE ||
+    message.includes("No query results for model [App\\Models\\GDriveAccount]") ||
+    status === 404
+  );
+}
 
 function safeReadAppearanceTheme(): AppearanceTheme {
   if (typeof window === "undefined") return "dark";
@@ -385,12 +418,14 @@ export function GDrive() {
 
   const [gdriveAccounts, setGdriveAccounts] = useState<GDriveAccount[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [accountsError, setAccountsError] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string>("");
 
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(false);
+  const [filesErrorMessage, setFilesErrorMessage] = useState<string>("");
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
   const [connectingAccount, setConnectingAccount] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
@@ -398,6 +433,25 @@ export function GDrive() {
   const [copiedFileId, setCopiedFileId] = useState<string>("");
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
+
+  const connectedAccountIdsKey = useMemo(
+    () =>
+      gdriveAccounts
+        .filter((account) => account.is_connected)
+        .map((account) => normalizeAccountId(account.id))
+        .filter(Boolean)
+        .join("|"),
+    [gdriveAccounts],
+  );
+
+  // Ensure we only auto-pick the first connected account once per page load.
+  // This prevents unexpected account switching during errors/retries.
+  const [didInitialAutoSwitch, setDidInitialAutoSwitch] = useState(false);
+
+
+
+
+
 
 
 
@@ -414,6 +468,7 @@ export function GDrive() {
 
     const load = async () => {
       setAccountsLoading(true);
+      setAccountsLoaded(false);
       setAccountsError(false);
       try {
         const res = await getGDriveAccounts();
@@ -422,11 +477,11 @@ export function GDrive() {
         const list = res?.data ?? [];
         setGdriveAccounts(list);
         setActiveAccountId((prev) => {
-          if (prev && list.some((account) => account.id === prev && account.is_connected)) {
+          if (prev) {
             return prev;
           }
 
-          return list.find((account) => account.is_connected)?.id ?? "";
+          return normalizeAccountId(list.find((account) => account.is_connected)?.id);
         });
       } catch {
         if (cancelled) return;
@@ -434,7 +489,10 @@ export function GDrive() {
         setActiveAccountId("");
         setAccountsError(true);
       } finally {
-        if (!cancelled) setAccountsLoading(false);
+        if (!cancelled) {
+          setAccountsLoaded(true);
+          setAccountsLoading(false);
+        }
       }
     };
 
@@ -475,11 +533,11 @@ export function GDrive() {
       const list = res?.data ?? [];
       setGdriveAccounts(list);
       setActiveAccountId((prev) => {
-        if (prev !== accountId && list.some((account) => account.id === prev && account.is_connected)) {
+        if (prev && prev !== accountId) {
           return prev;
         }
 
-        return list.find((account) => account.is_connected)?.id ?? "";
+        return normalizeAccountId(list.find((account) => account.is_connected)?.id);
       });
 
       if (activeAccountId === accountId) {
@@ -487,6 +545,7 @@ export function GDrive() {
       }
 
       setFilesError(false);
+      setFilesErrorMessage("");
     } catch {
       setAccountsError(true);
       window.alert("Failed to disconnect Google Drive account.");
@@ -500,20 +559,56 @@ export function GDrive() {
 
     const loadFiles = async () => {
       const accountId = activeAccountId;
-      setFilesLoading(true);
+      const connectedAccountIds = connectedAccountIdsKey
+        ? connectedAccountIdsKey.split("|").filter(Boolean)
+        : [];
+      const firstConnectedAccountId = connectedAccountIds[0] ?? "";
+      const activeAccountIsValid =
+        !!accountId && connectedAccountIds.includes(accountId);
+
+      if (!accountsLoaded) {
+        setFilesError(false);
+        setFilesErrorMessage("");
+        setGdriveFiles([]);
+        setFilesLoading(false);
+        return;
+      }
+
       setFilesError(false);
+      setFilesErrorMessage("");
+
+      // Initial auto-switch only when activeAccountId is empty (one-time per page load).
+      if (!accountId) {
+        setGdriveFiles([]);
+        setFilesLoading(false);
+
+        if (!didInitialAutoSwitch && firstConnectedAccountId) {
+          setDidInitialAutoSwitch(true);
+
+          setActiveAccountId(firstConnectedAccountId);
+        }
+
+        return;
+      }
+
+      // If active account id no longer exists in connected list,
+      // show error and don't auto-switch.
+      if (!activeAccountIsValid) {
+        setGdriveFiles([]);
+        setFilesLoading(false);
+        setFilesError(true);
+        setFilesErrorMessage(ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE);
+
+        return;
+      }
+
+      setFilesLoading(true);
+
 
       try {
         // Load files account-specific when account selected.
         // This avoids aggregating files from all connected accounts.
-        let res;
-        if (accountId) {
-          res = await getGDriveAccountFiles(accountId, { page_size: 50 });
-        } else {
-          // No active account selected.
-          setGdriveFiles([]);
-          return;
-        }
+        const res = await getGDriveAccountFiles(accountId, { page_size: 50 });
 
 
 
@@ -521,6 +616,7 @@ export function GDrive() {
 
         const list = res?.data ?? [];
         setGdriveFiles(list);
+        setFilesErrorMessage("");
         const syncedAccountIds = new Set(
           list
             .map((file) => file.account_id)
@@ -529,22 +625,36 @@ export function GDrive() {
 
         setGdriveAccounts((prev) =>
           prev.map((account) => {
+            const currentAccountId = normalizeAccountId(account.id);
             const wasSynced =
-              syncedAccountIds.has(account.id) ||
-              (syncedAccountIds.size === 0 && account.id === accountId);
+              syncedAccountIds.has(currentAccountId) ||
+              (syncedAccountIds.size === 0 && currentAccountId === accountId);
 
             return wasSynced
               ? { ...account, last_synced_at: new Date().toISOString() }
               : account;
           }),
         );
-      } catch {
+      } catch (error) {
         if (cancelled) return;
+
         setGdriveFiles([]);
         setFilesError(true);
+
+        const message = getErrorResponseMessage(error).trim();
+        if (message === GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE) {
+          // Account explicitly not found: keep current active selection,
+          // show clear message, and allow user to retry manually.
+          setFilesErrorMessage(GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE);
+        } else if (isAccountUnavailableError(error)) {
+          setFilesErrorMessage(ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE);
+        } else {
+          setFilesErrorMessage(GENERIC_FILES_ERROR_MESSAGE);
+        }
       } finally {
         if (!cancelled) setFilesLoading(false);
       }
+
     };
 
     void loadFiles();
@@ -552,7 +662,7 @@ export function GDrive() {
     return () => {
       cancelled = true;
     };
-  }, [activeAccountId]);
+  }, [accountsLoaded, activeAccountId, connectedAccountIdsKey]);
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
@@ -596,7 +706,7 @@ export function GDrive() {
   }, [gdriveAllFiles, tab, search]);
 
   const activeAccount =
-    gdriveAccounts.find((account) => account.id === activeAccountId) ?? null;
+    gdriveAccounts.find((account) => normalizeAccountId(account.id) === activeAccountId) ?? null;
   const anyFiles = filteredFiles.length > 0;
 
   const tabs: Array<{ key: TabKey; label: string; Icon?: IconComponent }> = [
@@ -610,8 +720,16 @@ export function GDrive() {
 
   const selectAccount = (account: GDriveAccount) => {
     if (!account.is_connected) return;
-    setActiveAccountId(account.id);
+
+    const nextActiveAccountId = normalizeAccountId(account.id);
+
+    // Manual switch should always be allowed to retry loading for that account.
+    setActiveAccountId(nextActiveAccountId);
+    setFilesError(false);
+    setFilesErrorMessage("");
+    setGdriveFiles([]);
   };
+
 
   const handleAccountKeyDown = (
     event: KeyboardEvent<HTMLDivElement>,
@@ -675,7 +793,8 @@ export function GDrive() {
   };
 
   const renderAccountCard = (account: GDriveAccount, index: number) => {
-    const isActive = account.id === activeAccountId;
+    const accountId = normalizeAccountId(account.id);
+    const isActive = accountId === activeAccountId;
     const avatarColor = getAvatarColor(index, isActive, accentColor);
     const statusColor = account.is_connected ? "#22c55e" : "#ef4444";
     const quota = getQuotaDisplay(account);
@@ -840,7 +959,17 @@ export function GDrive() {
 
         <button
           type="button"
-          title="Download"
+          title={
+            file.mime === "application/vnd.google-apps.document"
+              ? "Export as PDF"
+              : file.mime === "application/vnd.google-apps.spreadsheet"
+                ? "Export as XLSX"
+                : file.mime === "application/vnd.google-apps.presentation"
+                  ? "Export as PDF"
+                  : file.mime === "application/vnd.google-apps.drawing"
+                    ? "Export as PNG"
+                    : "Download"
+          }
           disabled={downloadingFileId === file.id || !file.accountId || !file.id}
           onClick={() => void downloadFile(file)}
           style={{
@@ -890,7 +1019,7 @@ export function GDrive() {
 
         <button
           type="button"
-          title="Delete from Drive is not available"
+          title="Coming soon: trash Google Drive file"
           disabled
           style={{
             ...actionBase,
@@ -1180,7 +1309,7 @@ export function GDrive() {
                   </div>
                 ) : filesError ? (
                   <div className="flex items-center justify-center py-16 text-sm" style={{ color: "#ef4444" }}>
-                    Failed to load Google Drive files.
+                    {filesErrorMessage || GENERIC_FILES_ERROR_MESSAGE}
                   </div>
                 ) : !activeAccount && !anyFiles ? (
                   <div className="flex flex-col items-center justify-center py-16">
@@ -1257,6 +1386,42 @@ export function GDrive() {
                                 >
                                   {file.name}
                                 </span>
+                                {file.mime === "application/vnd.google-apps.document" ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{ background: `${accentColor}12`, color: accentColor }}
+                                    title="Google Docs"
+                                  >
+                                    Google Docs
+                                  </span>
+                                ) : null}
+                                {file.mime === "application/vnd.google-apps.spreadsheet" ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{ background: `${accentColor}12`, color: accentColor }}
+                                    title="Google Sheets"
+                                  >
+                                    Google Sheets
+                                  </span>
+                                ) : null}
+                                {file.mime === "application/vnd.google-apps.presentation" ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{ background: `${accentColor}12`, color: accentColor }}
+                                    title="Google Slides"
+                                  >
+                                    Google Slides
+                                  </span>
+                                ) : null}
+                                {file.mime === "application/vnd.google-apps.drawing" ? (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{ background: `${accentColor}12`, color: accentColor }}
+                                    title="Google Drawing"
+                                  >
+                                    Google Drawing
+                                  </span>
+                                ) : null}
                                 {file.starred ? (
                                   <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
                                 ) : null}
