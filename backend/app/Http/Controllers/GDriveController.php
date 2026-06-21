@@ -550,6 +550,59 @@ class GDriveController extends Controller
             ],
         ]);
     }
+
+    public function trash(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        try {
+            $data = $googleDriveService->moveToTrash($account, $fileId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to move file to Google Drive Trash.',
+            ], 502);
+        }
+    }
+
+    public function restore(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        try {
+            $data = $googleDriveService->restoreFromTrash($account, $fileId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to restore file from Google Drive Trash.',
+            ], 502);
+        }
+    }
 }
+
 
 

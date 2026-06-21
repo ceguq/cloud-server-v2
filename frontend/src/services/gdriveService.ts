@@ -228,6 +228,29 @@ export async function getGDriveFileBlob(
   };
 }
 
+export async function trashGDriveFile(
+  accountId: string,
+  fileId: string,
+): Promise<any> {
+  const res = await api.post(
+    `/gdrive/accounts/${accountId}/files/${fileId}/trash`,
+  );
+
+  return res.data;
+}
+
+export async function restoreGDriveFile(
+  accountId: string,
+  fileId: string,
+): Promise<any> {
+  const res = await api.post(
+    `/gdrive/accounts/${accountId}/files/${fileId}/restore`,
+  );
+
+  return res.data;
+}
+
+
 
 
 

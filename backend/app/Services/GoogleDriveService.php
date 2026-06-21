@@ -24,6 +24,8 @@ class GoogleDriveService
     private const DRIVE_ABOUT_ENDPOINT = 'https://www.googleapis.com/drive/v3/about';
     private const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 
+    private const DRIVE_FILE_UPDATE_FIELDS = 'id,name,trashed,mimeType,modifiedTime';
+
 
 
     private function config(): array
@@ -209,6 +211,45 @@ class GoogleDriveService
         $clean = str_replace(['"', "'", "\\"], '', $clean);
 
         return $clean . '.' . ltrim(strtolower($extension), '.');
+    }
+
+    public function moveToTrash(GDriveAccount $account, string $fileId): array
+    {
+        return $this->updateTrashState($account, $fileId, true);
+    }
+
+    public function restoreFromTrash(GDriveAccount $account, string $fileId): array
+    {
+        return $this->updateTrashState($account, $fileId, false);
+    }
+
+    private function updateTrashState(GDriveAccount $account, string $fileId, bool $trashed): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $response = Http::withToken($account->access_token)
+            ->patch(self::DRIVE_FILES_ENDPOINT . '/' . $fileId, [
+                'trashed' => $trashed,
+            ], [
+                'fields' => self::DRIVE_FILE_UPDATE_FIELDS,
+            ])
+            ->throw()
+            ->json();
+
+        if (! is_array($response)) {
+            return [
+                'id' => $fileId,
+                'trashed' => $trashed,
+            ];
+        }
+
+        return [
+            'id' => $response['id'] ?? $fileId,
+            'name' => $response['name'] ?? null,
+            'trashed' => $response['trashed'] ?? $trashed,
+            'mimeType' => $response['mimeType'] ?? null,
+            'modifiedTime' => $response['modifiedTime'] ?? null,
+        ];
     }
 
     public function downloadFile(GDriveAccount $account, string $fileId)
