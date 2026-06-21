@@ -1472,7 +1472,7 @@ const actionBase: CSSProperties = {
         >
           <div
             className="w-full max-w-2xl rounded-2xl border p-4"
-            style={{ background: colors.surfaceBg, borderColor: colors.border }}
+            style={{ background: colors.surfaceBg, borderColor: colors.border, boxShadow: colors.shadow }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -1582,7 +1582,7 @@ const actionBase: CSSProperties = {
         >
           <div
             className="w-full max-w-xl rounded-2xl border p-4"
-            style={{ background: colors.surfaceBg, borderColor: colors.border }}
+            style={{ background: colors.surfaceBg, borderColor: colors.border, boxShadow: colors.shadow }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
