@@ -1872,10 +1872,14 @@ const actionBase: CSSProperties = {
                       <Folder size={21} style={{ color: accentColor }} />
                     </div>
                     <div className="mt-3 text-sm font-semibold" style={{ color: colors.title }}>
-                      No Drive files found.
+                      {search.trim()
+                        ? "No matching Drive files"
+                        : "No Drive files found."}
                     </div>
                     <div className="mt-1 text-xs" style={{ color: colors.muted }}>
-                      Try another tab or search query.
+                      {search.trim()
+                        ? "Try a different keyword or clear the search."
+                        : "Try another tab or search query."}
                     </div>
                   </div>
                 ) : (
