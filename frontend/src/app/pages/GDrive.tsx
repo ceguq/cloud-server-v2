@@ -1886,6 +1886,7 @@ className="grid items-center px-3 py-2 text-[11px] font-semibold"
                         style={{
                           gridTemplateColumns: tableGridTemplate,
                           color: colors.header,
+                          background: colors.rowHover,
                           borderBottom: `1px solid ${colors.border}`,
                         }}
                       >
@@ -1905,6 +1906,7 @@ className="grid items-center px-3 py-2 text-[11px] font-semibold"
 className="group grid items-center px-3 py-2 transition-colors"
                           style={{
                             gridTemplateColumns: tableGridTemplate,
+                            background: colors.surfaceBg,
                             borderBottom: `1px solid ${colors.border}`,
                             color: colors.text,
                           }}
@@ -1912,7 +1914,7 @@ className="group grid items-center px-3 py-2 transition-colors"
                             event.currentTarget.style.background = colors.rowHover;
                           }}
                           onMouseLeave={(event) => {
-                            event.currentTarget.style.background = "transparent";
+                            event.currentTarget.style.background = colors.surfaceBg;
                           }}
                         >
                           <div className="flex min-w-0 items-center gap-3">
