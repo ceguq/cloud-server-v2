@@ -126,12 +126,35 @@ export async function getGDriveAccountFiles(
   };
 }
 
+export async function getTrashedGDriveFiles(
+  accountId: string,
+  params?: {
+    page_token?: string;
+    page_size?: number;
+  },
+): Promise<GDriveFilesResponse> {
+  const res = await api.get(`/gdrive/accounts/${accountId}/trash`, {
+    params,
+  });
+
+  // Backend trashedFiles returns: { success, data, meta }
+  if (res.data && typeof res.data === "object" && "meta" in res.data) {
+    return res.data as GDriveFilesResponse;
+  }
+
+  return {
+    data: unwrapData<GDriveFile[]>(res.data),
+    meta: {},
+  };
+}
+
 export async function disconnectGDriveAccount(accountId: string) {
   const res = await api.delete(`/gdrive/accounts/${accountId}`);
   return res.data;
 }
 
 export async function getGDriveConnectUrl(): Promise<string> {
+
   const res = await api.get("/gdrive/connect");
   const url = res.data?.url;
 

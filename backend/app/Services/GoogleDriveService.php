@@ -73,6 +73,33 @@ class GoogleDriveService
         return is_array($response) ? $response : [];
     }
 
+    public function listTrashedFiles(GDriveAccount $account, ?string $pageToken = null, int $pageSize = 50): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $query = [
+            'pageSize' => min(max($pageSize, 1), 100),
+            'fields' => 'nextPageToken,files(id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred)',
+            'orderBy' => 'modifiedTime desc',
+            'q' => 'trashed = true',
+        ];
+
+        if (! empty($pageToken)) {
+            $query['pageToken'] = $pageToken;
+        }
+
+        $response = Http::withToken($account->access_token)
+            ->get(self::DRIVE_FILES_ENDPOINT, $query)
+            ->throw()
+            ->json();
+
+        $account->last_synced_at = now();
+        $account->save();
+
+        return is_array($response) ? $response : [];
+    }
+
+
     public function exchangeAuthorizationCode(string $code): array
     {
         $config = $this->config();

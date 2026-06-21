@@ -113,8 +113,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gdrive/accounts/{account}/files/{fileId}/download', [GDriveController::class, 'downloadFile']);
 
     // Google Drive trash management
+    Route::get('/gdrive/accounts/{account}/trash', [GDriveController::class, 'trashedFiles']);
     Route::post('/gdrive/accounts/{account}/files/{fileId}/trash', [GDriveController::class, 'trash']);
     Route::post('/gdrive/accounts/{account}/files/{fileId}/restore', [GDriveController::class, 'restore']);
+
 
 });
 

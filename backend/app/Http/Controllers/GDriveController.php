@@ -482,6 +482,98 @@ class GDriveController extends Controller
         }
     }
 
+    public function trashedFiles(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+
+        if ((string) $account->user_id !== (string) $user->id) {
+            return response()->json([
+                'message' => 'Google Drive account not found.',
+            ], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json([
+                'message' => 'Google Drive account is disconnected.',
+            ], 422);
+        }
+
+        $pageToken = $request->query('page_token');
+        $pageSize = (int) $request->query('page_size', 50);
+
+        try {
+            $response = $googleDriveService->listTrashedFiles(
+                $account,
+                is_string($pageToken) ? $pageToken : null,
+                $pageSize
+            );
+
+            $files = collect($response['files'] ?? [])->map(function (array $file) use ($account) {
+                $owner = $file['owners'][0] ?? [];
+
+                return [
+                    'id' => $file['id'] ?? null,
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'name' => $file['name'] ?? null,
+                    'mime_type' => $file['mimeType'] ?? null,
+                    'icon_link' => $file['iconLink'] ?? null,
+                    'web_view_link' => $file['webViewLink'] ?? null,
+                    'web_content_link' => $file['webContentLink'] ?? null,
+                    'size' => $file['size'] ?? null,
+                    'created_time' => $file['createdTime'] ?? null,
+                    'modified_time' => $file['modifiedTime'] ?? null,
+                    'shared' => $file['shared'] ?? null,
+                    'starred' => $file['starred'] ?? null,
+                    'owner_name' => $owner['displayName'] ?? null,
+                    'owner_email' => $owner['emailAddress'] ?? null,
+                    'source' => 'gdrive',
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $files,
+                'meta' => [
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'next_page_token' => $response['nextPageToken'] ?? null,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            $exceptionClass = $e::class;
+            $shortMessage = $e->getMessage();
+            if (!is_string($shortMessage)) {
+                $shortMessage = '';
+            }
+
+            $context = [
+                'user_id' => $user?->id,
+                'gdrive_account_id' => $account?->id,
+                'gdrive_account_email' => $account?->email,
+                'exception_class' => $exceptionClass,
+                'message' => (string) $shortMessage,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ];
+
+            // Avoid logging any tokens/secrets.
+            if ($e instanceof RequestException && $e->response !== null) {
+                $context['http_status'] = $e->response->status();
+            }
+
+            Log::error('GDrive trashed files load failed', $context);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load Google Drive trashed files.',
+                'error_code' => 'gdrive_trashed_files_load_failed',
+                'reconnect_recommended' => true,
+            ], 502);
+        }
+    }
+
+
 
     public function downloadFile(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService)
     {
