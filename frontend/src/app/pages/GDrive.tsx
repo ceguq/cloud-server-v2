@@ -437,6 +437,8 @@ export function GDrive() {
   const [connectingAccount, setConnectingAccount] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState<string>("");
+  const [refreshTick, setRefreshTick] = useState<number>(0);
+
   const [copiedFileId, setCopiedFileId] = useState<string>("");
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
@@ -879,7 +881,8 @@ export function GDrive() {
     return () => {
       cancelled = true;
     };
-  }, [accountsLoaded, activeAccountId, connectedAccountIdsKey]);
+  }, [accountsLoaded, activeAccountId, connectedAccountIdsKey, refreshTick]);
+
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
@@ -1824,9 +1827,27 @@ const actionBase: CSSProperties = {
                   />
                 </div>
 
+                <button
+                  type="button"
+                  title="Refresh files"
+                  disabled={!activeAccountId || filesLoading}
+                  onClick={() => setRefreshTick((value) => value + 1)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border"
+                  style={{
+                    background: colors.inputBg,
+                    borderColor: colors.border,
+                    color: !activeAccountId || filesLoading ? colors.muted2 : colors.muted,
+                    cursor: !activeAccountId || filesLoading ? "not-allowed" : "pointer",
+                    opacity: !activeAccountId || filesLoading ? 0.6 : 1,
+                  }}
+                >
+                  ↻
+                </button>
+
                 <div className="hidden shrink-0 text-[11px] md:block" style={{ color: colors.muted2 }}>
                   {activeAccount || anyFiles ? `${filteredFiles.length} item(s)` : ""}
                 </div>
+
               </div>
             </div>
 
