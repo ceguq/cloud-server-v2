@@ -7,14 +7,14 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import { createPortal } from "react-dom";
-
 import {
+
   Archive,
   CheckCircle2,
   Database,
   Download,
   Eye,
+
   FileText,
   Film,
   Folder,
@@ -37,11 +37,12 @@ import {
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
-  getGDriveFileBlob,
 
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
+
 
 
 
@@ -444,15 +445,9 @@ export function GDrive() {
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
 
-  type GDrivePreviewKind = "image" | "pdf" | "video" | "audio" | "text" | "unsupported";
-
-  const [previewFile, setPreviewFile] = useState<GDriveFileUI | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState("");
-  const [previewContentType, setPreviewContentType] = useState("");
-  const [previewKind, setPreviewKind] = useState<GDrivePreviewKind>("unsupported");
-
   const ACTION_MENU_WIDTH = 176;
+
+
 
 
   const getGDriveFileExtension = (fileName: string): string => {
@@ -1154,57 +1149,9 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
     setActionMenuPosition(null);
   };
 
-  const closePreviewModal = () => {
-    setPreviewFile(null);
-    setPreviewLoading(false);
-    setPreviewError("");
-    setPreviewContentType("");
-    setPreviewKind("unsupported");
-  };
-
-  function getGDrivePreviewKind(file: GDriveFileUI, contentType?: string): GDrivePreviewKind {
-    const type = (contentType || file.mime || "").toLowerCase();
-
-    if (type.startsWith("image/")) return "image";
-    if (type === "application/pdf") return "pdf";
-    if (type.startsWith("video/")) return "video";
-    if (type.startsWith("audio/")) return "audio";
-    if (type.startsWith("text/")) return "text";
-    if (type.includes("json")) return "text";
-    if (type.includes("xml")) return "text";
-    if (type.includes("javascript")) return "text";
-
-    return "unsupported";
-  }
-
-  const handlePreviewFile = async (file: GDriveFileUI) => {
-    closeActionMenu();
-
-    setPreviewFile(file);
-    setPreviewLoading(true);
-    setPreviewError("");
-    setPreviewContentType("");
-    setPreviewKind("unsupported");
-
-    try {
-      const result = await getGDriveFileBlob(file.accountId, file.id);
-      const contentType = result.contentType || result.blob.type || "";
-      const kind = getGDrivePreviewKind(file, contentType);
-
-      setPreviewContentType(contentType);
-      setPreviewKind(kind);
-    } catch {
-      setPreviewError("Failed to load preview.");
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-
-
   const renderFileActions = (file: GDriveFileUI) => {
-
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
+
     const isOpen = openActionFileId === file.id;
 
 
@@ -1320,39 +1267,12 @@ const actionBase: CSSProperties = {
                 closeActionMenu();
                 openFile(file);
               }}
-
             >
               <div className="flex items-center gap-2">
                 <Eye size={14} />
                 <span>Open</span>
               </div>
             </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Preview"
-              title="Preview"
-              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled={!file.id || !file.accountId}
-              style={{
-                marginTop: 4,
-                opacity: file.id && file.accountId ? 1 : 0.45,
-                cursor: file.id && file.accountId ? "pointer" : "not-allowed",
-                color: colors.text,
-                background: "transparent",
-              }}
-              onClick={() => {
-                void handlePreviewFile(file);
-              }}
-
-            >
-              <div className="flex items-center gap-2">
-                <FileText size={14} />
-                <span>Preview</span>
-              </div>
-            </button>
-
 
             <button
               type="button"
@@ -1372,13 +1292,13 @@ const actionBase: CSSProperties = {
                 closeActionMenu();
                 setDetailsFileAndReset(file);
               }}
-
             >
               <div className="flex items-center gap-2">
                 <FileText size={14} />
                 <span>Details</span>
               </div>
             </button>
+
 
             <button
               type="button"
@@ -1464,115 +1384,7 @@ const actionBase: CSSProperties = {
 
   return (
     <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
-      {previewFile !== null ? (
-        <div
 
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
-          style={{ background: resolvedTheme === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.45)" }}
-          onClick={() => closePreviewModal()}
-        >
-          <div
-            className="w-full max-w-2xl rounded-2xl border p-4"
-            style={{ background: colors.surfaceBg, borderColor: colors.border, boxShadow: colors.shadow }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold" style={{ color: colors.title }}>
-                  Preview
-                </div>
-                <div
-                  className="mt-1 truncate text-xs"
-                  style={{ color: colors.text }}
-                  title={previewFile.name}
-                >
-                  {previewFile.name}
-                </div>
-                <div className="mt-1 text-[11px]" style={{ color: colors.muted2 }}>
-                  {previewContentType || previewFile.mime || "Unknown type"}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => closePreviewModal()}
-                className="rounded-lg px-2 py-1 text-xs font-semibold"
-                style={{
-                  color: accentColor,
-                  background: `${accentColor}14`,
-                  border: `1px solid ${accentColor}33`,
-                  flexShrink: 0,
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-4">
-              {previewLoading ? (
-                <div className="text-xs font-semibold" style={{ color: colors.muted }}>
-                  Loading preview...
-                </div>
-              ) : previewError ? (
-                <div className="text-xs font-semibold" style={{ color: "#ef4444" }}>
-                  {previewError}
-                </div>
-              ) : previewKind !== "unsupported" ? (
-                <div className="text-xs" style={{ color: colors.text }}>
-                  Preview shell ready. Full inline rendering will be added next.
-                </div>
-              ) : (
-                <div className="text-xs" style={{ color: colors.text }}>
-                  Preview not available for this file yet.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: colors.border }}>
-              <button
-                type="button"
-                onClick={() => openFile(previewFile)}
-                className="rounded-lg px-3 py-1 text-xs font-semibold"
-                style={{
-                  color: colors.text,
-                  background: "transparent",
-                  border: `1px solid ${colors.border}`,
-                }}
-              >
-                Open
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void downloadFile(previewFile)}
-                className="rounded-lg px-3 py-1 text-xs font-semibold"
-                style={{
-                  color: colors.text,
-                  background: "transparent",
-                  border: `1px solid ${colors.border}`,
-                }}
-              >
-                Download
-              </button>
-
-              <button
-                type="button"
-                onClick={() => closePreviewModal()}
-                className="rounded-lg px-3 py-1 text-xs font-semibold"
-                style={{
-                  color: accentColor,
-                  background: `${accentColor}14`,
-                  border: `1px solid ${accentColor}33`,
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {detailsFile ? (
 
