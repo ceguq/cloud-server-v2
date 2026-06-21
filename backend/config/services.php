@@ -40,7 +40,7 @@ return [
         'client_secret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
         'redirect_uri' => env('GOOGLE_DRIVE_REDIRECT_URI'),
         'scopes' => array_filter(
-            explode(',', env('GOOGLE_DRIVE_SCOPES', 'https://www.googleapis.com/auth/drive.readonly'))
+            explode(',', env('GOOGLE_DRIVE_SCOPES', 'https://www.googleapis.com/auth/drive'))
         ),
     ],
 

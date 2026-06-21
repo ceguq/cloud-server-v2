@@ -570,11 +570,20 @@ class GDriveController extends Controller
                 'data' => $data,
             ]);
         } catch (Throwable $e) {
+            Log::warning('Google Drive trash failed', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'account_id' => $account->id ?? null,
+                'file_id' => $fileId,
+                'user_id' => $request->user()?->id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to move file to Google Drive Trash.',
             ], 502);
         }
+
     }
 
     public function restore(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
@@ -596,6 +605,14 @@ class GDriveController extends Controller
                 'data' => $data,
             ]);
         } catch (Throwable $e) {
+            Log::warning('Google Drive restore failed', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'account_id' => $account->id ?? null,
+                'file_id' => $fileId,
+                'user_id' => $request->user()?->id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to restore file from Google Drive Trash.',
