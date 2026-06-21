@@ -1117,7 +1117,7 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
           </div>
         </div>
 
-        {isActive ? (
+        {isActive && account.is_connected ? (
           <div
             className="mt-4 flex items-center justify-between border-t pt-3"
             style={{ borderColor: colors.border }}
