@@ -37,6 +37,7 @@ import {
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
+  trashGDriveFile,
 
   type GDriveAccount,
   type GDriveFile,
@@ -444,6 +445,10 @@ export function GDrive() {
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
+
+  const [trashingFileId, setTrashingFileId] = useState<string | null>(null);
+  const [trashError, setTrashError] = useState<string | null>(null);
+
 
   const ACTION_MENU_WIDTH = 176;
 
@@ -1149,6 +1154,25 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
     setActionMenuPosition(null);
   };
 
+  const handleTrashFile = async (file: GDriveFileUI) => {
+    if (!activeAccountId) return;
+
+    setTrashingFileId(file.id);
+    setTrashError(null);
+
+    try {
+      await trashGDriveFile(activeAccountId, file.id);
+
+      // Close menu and refresh file list.
+      closeActionMenu();
+      setRefreshTick((value) => value + 1);
+    } catch {
+      setTrashError("Failed to move file to trash.");
+    } finally {
+      setTrashingFileId(null);
+    }
+  };
+
   const renderFileActions = (file: GDriveFileUI) => {
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
 
@@ -1359,23 +1383,45 @@ const actionBase: CSSProperties = {
             <button
               type="button"
               role="menuitem"
-              aria-label="Coming soon: trash Google Drive file"
-              title="Coming soon: trash Google Drive file"
+              aria-label="Trash"
+              title="Trash"
               className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled
+              disabled={!activeAccountId || trashingFileId === file.id}
               style={{
                 marginTop: 4,
-                opacity: 0.45,
-                cursor: "not-allowed",
+                opacity: !activeAccountId
+                  ? 0.45
+                  : trashingFileId === file.id
+                    ? 0.65
+                    : 1,
+                cursor:
+                  !activeAccountId
+                    ? "not-allowed"
+                    : trashingFileId === file.id
+                      ? "not-allowed"
+                      : "pointer",
                 color: "#ef4444",
                 background: "transparent",
+              }}
+              onClick={() => {
+                void handleTrashFile(file);
               }}
             >
               <div className="flex items-center gap-2">
                 <Trash2 size={14} />
-                <span>Trash</span>
+                <span>{trashingFileId === file.id ? "Trashing..." : "Trash"}</span>
               </div>
             </button>
+
+            {trashError && openActionFileId === file.id ? (
+              <div
+                className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
+                style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
+                role="alert"
+              >
+                {trashError}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
