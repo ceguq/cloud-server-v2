@@ -55,10 +55,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Move folder
     Route::patch('/folders/{folder}/move', [FolderController::class, 'move']);
 
+    // Duplicate finder (local My Files) - read-only
+    // Must be defined before dynamic route /files/{file}
+    Route::get('/files/duplicates', [FileController::class, 'duplicates']);
+
     // Move file
     Route::patch('/files/{file}/move', [FileController::class, 'move']);
 
     Route::get('/files', [FileController::class, 'index']);
+
 
     Route::post('/files/upload', [FileController::class, 'upload']);
 

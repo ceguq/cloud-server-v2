@@ -249,6 +249,13 @@ export function Sidebar({
       : 0;
   const usagePercent = Math.min(100, Math.max(0, usagePercentRaw));
 
+  type StorageQuotaStatus = "normal" | "warning" | "critical";
+
+  const storageQuotaStatus: StorageQuotaStatus =
+    usagePercent >= 95 ? "critical" : usagePercent >= 85 ? "warning" : "normal";
+
+
+
   return (
     <aside
       className="flex flex-col h-full w-[220px] shrink-0 overflow-hidden rounded-2xl"
@@ -390,6 +397,41 @@ export function Sidebar({
                 <span className="text-xs" style={{ color: sidebarColors.muted }} />
 
               </div>
+
+              {storageQuotaStatus !== "normal" && (
+
+                <div
+                  className="mb-2 rounded-lg px-2 py-1 text-[11px] font-medium"
+                  style={{
+                    background:
+                      storageQuotaStatus === "critical"
+                        ? "rgba(248, 113, 113, 0.14)"
+                        : "rgba(245, 158, 11, 0.14)",
+                    border:
+                      storageQuotaStatus === "critical"
+                        ? "1px solid rgba(248, 113, 113, 0.35)"
+                        : "1px solid rgba(245, 158, 11, 0.35)",
+                    color:
+                      storageQuotaStatus === "critical"
+                        ? sidebarColors.error
+                        : "rgba(245, 158, 11, 1)",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {storageQuotaStatus === "critical" ? (
+                    <>
+                      Storage critically full
+                      Uploads may fail.
+                    </>
+                  ) : (
+                    <>
+                      Storage almost full
+                      Free up space soon.
+                    </>
+                  )}
+                </div>
+              )}
+
 
               <div
                 className="relative h-1.5 rounded-full overflow-hidden"

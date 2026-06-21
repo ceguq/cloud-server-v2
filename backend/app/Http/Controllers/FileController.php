@@ -16,6 +16,85 @@ use Illuminate\Validation\ValidationException;
 
 class FileController extends Controller
 {
+    public function duplicates(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $groups = File::query()
+            ->select([
+                'original_name',
+                'size',
+            ])
+            ->where('user_id', $user->id)
+            ->whereNull('deleted_at')
+            ->groupBy('original_name', 'size')
+            ->havingRaw('COUNT(*) > 1')
+            ->orderByRaw('size * (COUNT(*) - 1) DESC')
+            ->get();
+
+        $totalGroups = $groups->count();
+
+        $responseGroups = [];
+        $totalWastedSize = 0;
+        $filesCount = 0;
+
+        foreach ($groups as $g) {
+            $duplicateKey = (string) $g->original_name . ':' . (string) $g->size;
+
+            $filesInGroupQuery = File::query()
+                ->where('user_id', $user->id)
+                ->whereNull('deleted_at')
+                ->where('original_name', $g->original_name)
+                ->where('size', $g->size)
+                ->orderBy('created_at', 'desc');
+
+            $filesInGroup = $filesInGroupQuery->get(['id', 'original_name', 'mime_type', 'size', 'created_at', 'updated_at', 'folder_id']);
+
+            $count = $filesInGroup->count();
+            if ($count <= 1) {
+                continue;
+            }
+
+            $size = (int) ($g->size ?? 0);
+            $totalSize = $size * $count;
+            $totalWasted = $size * ($count - 1);
+
+            $filesCount += $count;
+            $totalWastedSize += $totalWasted;
+
+            $responseGroups[] = [
+                'duplicate_key' => $duplicateKey,
+                'original_name' => $g->original_name,
+                'size' => $size,
+                'size_human' => $this->formatBytes($size),
+                'count' => $count,
+                'total_size' => $totalSize,
+                'total_wasted_size' => $totalWasted,
+                'files' => $filesInGroup->map(function (File $f) {
+                    return [
+                        'id' => (string) $f->id,
+                        'original_name' => $f->original_name,
+                        'mime_type' => $f->mime_type,
+                        'size' => (int) $f->size,
+                        'created_at' => $f->created_at?->toISOString(),
+                        'updated_at' => $f->updated_at?->toISOString(),
+                        'folder_id' => $f->folder_id,
+                    ];
+                })->values(),
+            ];
+        }
+
+        return response()->json([
+            'data' => $responseGroups,
+            'meta' => [
+                'groups_count' => $totalGroups,
+                'files_count' => $filesCount,
+                'total_wasted_size' => $totalWastedSize,
+            ],
+        ]);
+    }
+
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
