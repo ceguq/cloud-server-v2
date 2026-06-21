@@ -37,9 +37,12 @@ import {
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
+  getGDriveFileBlob,
+
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
+
 
 
 type AppearanceTheme = "dark" | "light" | "system";
@@ -438,7 +441,17 @@ export function GDrive() {
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
+
+  type GDrivePreviewKind = "image" | "pdf" | "video" | "audio" | "text" | "unsupported";
+
+  const [previewFile, setPreviewFile] = useState<GDriveFileUI | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewContentType, setPreviewContentType] = useState("");
+  const [previewKind, setPreviewKind] = useState<GDrivePreviewKind>("unsupported");
+
   const ACTION_MENU_WIDTH = 176;
+
 
   const getGDriveFileExtension = (fileName: string): string => {
     const safe = (fileName || "").trim();
@@ -581,7 +594,14 @@ export function GDrive() {
   useEffect(() => {
     if (!openActionFileId) return;
 
+    const handleScrollClose = () => {
+      if (openActionFileId !== null) {
+        closeActionMenu();
+      }
+    };
+
     const handlePointerDown = (event: PointerEvent) => {
+
       if (openActionFileId === null) return;
 
       const target = event.target;
@@ -605,7 +625,7 @@ export function GDrive() {
 
 
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         closeActionMenu();
       }
@@ -613,13 +633,19 @@ export function GDrive() {
 
 
 
+
     document.addEventListener("pointerdown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("scroll", handleScrollClose, true);
+    document.addEventListener("wheel", handleScrollClose, true);
+
 
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("scroll", handleScrollClose, true);
+      document.removeEventListener("wheel", handleScrollClose, true);
     };
   }, [openActionFileId]);
 
@@ -907,7 +933,9 @@ export function GDrive() {
     { key: "recent", label: "Recent", Icon: HardDrive },
   ];
 
-  const tableGridTemplate = "minmax(280px,1fr) 140px 170px 112px 132px";
+const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
+
+
 
 
   const selectAccount = (account: GDriveAccount) => {
@@ -1123,15 +1151,63 @@ export function GDrive() {
     setActionMenuPosition(null);
   };
 
+  const closePreviewModal = () => {
+    setPreviewFile(null);
+    setPreviewLoading(false);
+    setPreviewError("");
+    setPreviewContentType("");
+    setPreviewKind("unsupported");
+  };
+
+  function getGDrivePreviewKind(file: GDriveFileUI, contentType?: string): GDrivePreviewKind {
+    const type = (contentType || file.mime || "").toLowerCase();
+
+    if (type.startsWith("image/")) return "image";
+    if (type === "application/pdf") return "pdf";
+    if (type.startsWith("video/")) return "video";
+    if (type.startsWith("audio/")) return "audio";
+    if (type.startsWith("text/")) return "text";
+    if (type.includes("json")) return "text";
+    if (type.includes("xml")) return "text";
+    if (type.includes("javascript")) return "text";
+
+    return "unsupported";
+  }
+
+  const handlePreviewFile = async (file: GDriveFileUI) => {
+    closeActionMenu();
+
+    setPreviewFile(file);
+    setPreviewLoading(true);
+    setPreviewError("");
+    setPreviewContentType("");
+    setPreviewKind("unsupported");
+
+    try {
+      const result = await getGDriveFileBlob(file.accountId, file.id);
+      const contentType = result.contentType || result.blob.type || "";
+      const kind = getGDrivePreviewKind(file, contentType);
+
+      setPreviewContentType(contentType);
+      setPreviewKind(kind);
+    } catch {
+      setPreviewError("Failed to load preview.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+
 
   const renderFileActions = (file: GDriveFileUI) => {
+
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
     const isOpen = openActionFileId === file.id;
 
 
-    const actionBase: CSSProperties = {
-      width: 28,
-      height: 28,
+const actionBase: CSSProperties = {
+      width: 32,
+      height: 32,
       borderRadius: 8,
       display: "flex",
       alignItems: "center",
@@ -1252,6 +1328,32 @@ export function GDrive() {
             <button
               type="button"
               role="menuitem"
+              aria-label="Preview"
+              title="Preview"
+              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+              disabled={!file.id || !file.accountId}
+              style={{
+                marginTop: 4,
+                opacity: file.id && file.accountId ? 1 : 0.45,
+                cursor: file.id && file.accountId ? "pointer" : "not-allowed",
+                color: colors.text,
+                background: "transparent",
+              }}
+              onClick={() => {
+                void handlePreviewFile(file);
+              }}
+
+            >
+              <div className="flex items-center gap-2">
+                <FileText size={14} />
+                <span>Preview</span>
+              </div>
+            </button>
+
+
+            <button
+              type="button"
+              role="menuitem"
               aria-label="Details"
               title="Details"
               className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
@@ -1359,7 +1461,118 @@ export function GDrive() {
 
   return (
     <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
+      {previewFile !== null ? (
+        <div
+
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
+          style={{ background: resolvedTheme === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.45)" }}
+          onClick={() => closePreviewModal()}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border p-4"
+            style={{ background: colors.surfaceBg, borderColor: colors.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold" style={{ color: colors.title }}>
+                  Preview
+                </div>
+                <div
+                  className="mt-1 truncate text-xs"
+                  style={{ color: colors.text }}
+                  title={previewFile.name}
+                >
+                  {previewFile.name}
+                </div>
+                <div className="mt-1 text-[11px]" style={{ color: colors.muted2 }}>
+                  {previewContentType || previewFile.mime || "Unknown type"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => closePreviewModal()}
+                className="rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{
+                  color: accentColor,
+                  background: `${accentColor}14`,
+                  border: `1px solid ${accentColor}33`,
+                  flexShrink: 0,
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4">
+              {previewLoading ? (
+                <div className="text-xs font-semibold" style={{ color: colors.muted }}>
+                  Loading preview...
+                </div>
+              ) : previewError ? (
+                <div className="text-xs font-semibold" style={{ color: "#ef4444" }}>
+                  {previewError}
+                </div>
+              ) : previewKind !== "unsupported" ? (
+                <div className="text-xs" style={{ color: colors.text }}>
+                  Preview shell ready. Full inline rendering will be added next.
+                </div>
+              ) : (
+                <div className="text-xs" style={{ color: colors.text }}>
+                  Preview not available for this file yet.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: colors.border }}>
+              <button
+                type="button"
+                onClick={() => openFile(previewFile)}
+                className="rounded-lg px-3 py-1 text-xs font-semibold"
+                style={{
+                  color: colors.text,
+                  background: "transparent",
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                Open
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void downloadFile(previewFile)}
+                className="rounded-lg px-3 py-1 text-xs font-semibold"
+                style={{
+                  color: colors.text,
+                  background: "transparent",
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                Download
+              </button>
+
+              <button
+                type="button"
+                onClick={() => closePreviewModal()}
+                className="rounded-lg px-3 py-1 text-xs font-semibold"
+                style={{
+                  color: accentColor,
+                  background: `${accentColor}14`,
+                  border: `1px solid ${accentColor}33`,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {detailsFile ? (
+
         <div
           role="dialog"
           aria-modal="true"
@@ -1669,7 +1882,7 @@ export function GDrive() {
                   <div className="overflow-x-auto">
                     <div style={{ minWidth: 820 }}>
                       <div
-                        className="grid items-center px-4 py-3 text-[11px] font-semibold"
+className="grid items-center px-3 py-2 text-[11px] font-semibold"
                         style={{
                           gridTemplateColumns: tableGridTemplate,
                           color: colors.header,
@@ -1677,18 +1890,19 @@ export function GDrive() {
                         }}
                       >
                         <span>Name</span>
-                        <span>Visibility</span>
                         <span>Type</span>
+                        <span>Visibility</span>
                         <span>Modified</span>
                         <span>Size</span>
                         <span />
-
                       </div>
+
+
 
                       {filteredFiles.map((file) => (
                         <div
                           key={file.id}
-                          className="group grid items-center px-4 py-3 transition-colors"
+className="group grid items-center px-3 py-2 transition-colors"
                           style={{
                             gridTemplateColumns: tableGridTemplate,
                             borderBottom: `1px solid ${colors.border}`,
@@ -1735,6 +1949,7 @@ export function GDrive() {
                           <div>
 
                             {file.shared ? (
+
                               <span
                                 className="rounded-full px-2 py-1 text-[10px] font-semibold"
                                 style={{
@@ -1760,7 +1975,10 @@ export function GDrive() {
                           </div>
 
                           {renderFileActions(file)}
+
+
                         </div>
+
                       ))}
                     </div>
                   </div>

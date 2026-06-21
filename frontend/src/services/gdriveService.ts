@@ -142,6 +142,18 @@ export async function getGDriveConnectUrl(): Promise<string> {
   return url;
 }
 
+function getFileNameFromContentDisposition(
+  contentDisposition: string | undefined,
+): string | undefined {
+  if (typeof contentDisposition !== "string") return undefined;
+
+  // content-disposition: attachment; filename="..."
+  // Be tolerant to quoted/unquoted variants.
+  const match = contentDisposition.match(/filename\s*=\s*"?([^";]+)"?/i);
+  if (!match?.[1]) return undefined;
+  return match[1].trim();
+}
+
 export async function downloadGDriveFile(
   accountId: string,
   fileId: string,
@@ -163,9 +175,7 @@ export async function downloadGDriveFile(
 
   let fileName: string | undefined;
   if (cd) {
-    // content-disposition: attachment; filename="..."
-    const match = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
-    if (match?.[1]) fileName = match[1].trim();
+    fileName = getFileNameFromContentDisposition(cd);
   }
 
   const nameToUse = fileName || fallbackName || `gdrive-file`;
@@ -182,6 +192,42 @@ export async function downloadGDriveFile(
     window.URL.revokeObjectURL(url);
   }
 }
+
+export async function getGDriveFileBlob(
+  accountId: string,
+  fileId: string,
+): Promise<{ blob: Blob; contentType: string; fileName?: string }> {
+  const res = await api.get(
+    `/gdrive/accounts/${accountId}/files/${fileId}/download`,
+    {
+      responseType: "blob",
+    },
+  );
+
+  const blob = res.data as Blob;
+
+  const contentTypeFromHeader =
+    typeof res.headers?.["content-type"] === "string"
+      ? (res.headers?.["content-type"] as string)
+      : undefined;
+
+  const contentType =
+    contentTypeFromHeader || blob.type || "application/octet-stream";
+
+  const cd: string | undefined =
+    typeof res.headers?.["content-disposition"] === "string"
+      ? (res.headers?.["content-disposition"] as string)
+      : undefined;
+
+  const fileName = getFileNameFromContentDisposition(cd);
+
+  return {
+    blob,
+    contentType,
+    fileName: fileName || undefined,
+  };
+}
+
 
 
 
