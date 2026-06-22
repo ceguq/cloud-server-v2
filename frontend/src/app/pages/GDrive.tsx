@@ -8,13 +8,11 @@ import {
 } from "react";
 
 import {
-
   Archive,
   CheckCircle2,
   Database,
   Download,
   Eye,
-
   FileText,
   Film,
   Folder,
@@ -37,18 +35,15 @@ import {
   getGDriveAccountFiles,
   getGDriveAccounts,
   getGDriveConnectUrl,
+  getGDriveFileBlob,
   getTrashedGDriveFiles,
   restoreGDriveFile,
   trashGDriveFile,
-
-
+  uploadGDriveFile,
+  deleteGDriveFilePermanently,
   type GDriveAccount,
   type GDriveFile,
 } from "../../services/gdriveService";
-
-
-
-
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -57,6 +52,7 @@ type IconComponent = typeof FileText;
 
 type GDriveFileUI = {
   id: string;
+  rowKey: string;
   accountId: string;
   name: string;
   mime: string;
@@ -356,7 +352,6 @@ export function GDrive() {
 
   const [connectSuccessMessage, setConnectSuccessMessage] = useState<string>("");
 
-
   const syncThemeFromStorage = () => {
     const nextTheme = safeReadAppearanceTheme();
     setAccentColor(safeReadAccentColor());
@@ -446,10 +441,26 @@ export function GDrive() {
 
   const [driveListMode, setDriveListMode] = useState<"files" | "trash">("files");
 
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState("");
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
   const [copiedFileId, setCopiedFileId] = useState<string>("");
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
+
+  const [previewFile, setPreviewFile] = useState<GDriveFileUI | null>(null);
+  const TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
+  const previewRequestIdRef = useRef(0);
+
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [previewContentType, setPreviewContentType] = useState<string>("");
+  const [previewTextContent, setPreviewTextContent] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string>("");
 
   const [trashingFileId, setTrashingFileId] = useState<string | null>(null);
   const [trashError, setTrashError] = useState<string | null>(null);
@@ -457,12 +468,14 @@ export function GDrive() {
   const [restoringFileId, setRestoringFileId] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
 
-
+  const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
+  const [deletingPermanentFileId, setDeletingPermanentFileId] = useState<string | null>(null);
 
   const ACTION_MENU_WIDTH = 176;
 
-
-
+  const hasValidGDriveFileId = (file: GDriveFileUI): boolean => {
+    return Boolean(file.id && file.id.trim());
+  };
 
   const getGDriveFileExtension = (fileName: string): string => {
     const safe = (fileName || "").trim();
@@ -482,69 +495,67 @@ export function GDrive() {
 
     const extension = getGDriveFileExtension(name);
 
-    // Workspace types
     if (mime === "application/vnd.google-apps.document") {
       return { label: "Google Docs", detail: "Workspace file (Docs)" };
     }
     if (mime === "application/vnd.google-apps.spreadsheet") {
-      return {
-        label: "Google Sheets",
-        detail: "Workspace file (Sheets)",
-      };
+      return { label: "Google Sheets", detail: "Workspace file (Sheets)" };
     }
     if (mime === "application/vnd.google-apps.presentation") {
       return { label: "Google Slides", detail: "Workspace file (Slides)" };
     }
     if (mime === "application/vnd.google-apps.drawing") {
-      return {
-        label: "Google Drawing",
-        detail: "Workspace file (Drawing)",
-      };
+      return { label: "Google Drawing", detail: "Google Drive folder" };
     }
+
     if (mime.includes("application/vnd.google-apps.folder") || mime === "application/vnd.google-apps.folder") {
       return { label: "Folder", detail: "Google Drive folder" };
     }
 
-    // Folder icon is driven by mime containing 'folder'
     if (mime.includes("folder")) {
       return { label: "Folder", detail: "Google Drive folder" };
     }
 
-    // Archive by common extensions
-    const archiveExt = [
-      "zip",
-      "rar",
-      "7z",
-      "tar",
-      "gz",
-      "gzip",
-      "tgz",
-    ];
-    if (mime.includes("zip") || mime.includes("rar") || mime.includes("7z") || mime.includes("tar") || mime.includes("gzip") || archiveExt.includes(extension)) {
+    const archiveExt = ["zip", "rar", "7z", "tar", "gz", "gzip", "tgz"];
+    if (
+      mime.includes("zip") ||
+      mime.includes("rar") ||
+      mime.includes("7z") ||
+      mime.includes("tar") ||
+      mime.includes("gzip") ||
+      archiveExt.includes(extension)
+    ) {
       return { label: "Archive", detail: `.${extension || "archive"}` };
     }
 
-    // PDFs
     if (mime === "application/pdf" || mime.includes("pdf")) {
       return { label: "PDF", detail: `application/pdf` };
     }
 
-    // Image
     if (mime.startsWith("image/")) {
-      return { label: "Image", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Image file" };
+      return {
+        label: "Image",
+        detail:
+          mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Image file",
+      };
     }
 
-    // Video
     if (mime.startsWith("video/")) {
-      return { label: "Video", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Video file" };
+      return {
+        label: "Video",
+        detail:
+          mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Video file",
+      };
     }
 
-    // Audio
     if (mime.startsWith("audio/")) {
-      return { label: "Audio", detail: mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Audio file" };
+      return {
+        label: "Audio",
+        detail:
+          mime ? mime.split("/")[1]?.toUpperCase?.() || mime : "Audio file",
+      };
     }
 
-    // Text-ish
     const isTextMime =
       mime.startsWith("text/") ||
       [
@@ -566,15 +577,14 @@ export function GDrive() {
       return { label: "Text", detail: short };
     }
 
-    // Fallback by extension
     if (extension) {
-      if (['png','jpg','jpeg','gif','webp','bmp'].includes(extension)) {
+      if (["png", "jpg", "jpeg", "gif", "webp", "bmp"].includes(extension)) {
         return { label: "Image", detail: extension.toUpperCase() };
       }
-      if (['mp4','mov','mkv','webm','avi','mpeg'].includes(extension)) {
+      if (["mp4", "mov", "mkv", "webm", "avi", "mpeg"].includes(extension)) {
         return { label: "Video", detail: extension.toUpperCase() };
       }
-      if (['mp3','wav','ogg','flac','aac'].includes(extension)) {
+      if (["mp3", "wav", "ogg", "flac", "aac"].includes(extension)) {
         return { label: "Audio", detail: extension.toUpperCase() };
       }
       if (["pdf"].includes(extension)) {
@@ -583,7 +593,7 @@ export function GDrive() {
       if (archiveExt.includes(extension)) {
         return { label: "Archive", detail: extension.toUpperCase() };
       }
-      if (["txt","md","csv","json","xml","js","ts","css","html"].includes(extension)) {
+      if (["txt", "md", "csv", "json", "xml", "js", "ts", "css", "html"].includes(extension)) {
         return { label: "Text", detail: extension.toUpperCase() };
       }
     }
@@ -591,16 +601,12 @@ export function GDrive() {
     return { label: "File", detail: mime ? mime.slice(0, 48) : "" };
   };
 
-
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const [actionMenuPosition, setActionMenuPosition] = useState<
     { top: number; left: number } | null
   >(null);
-
-
-
 
   useEffect(() => {
     if (!openActionFileId) return;
@@ -612,7 +618,6 @@ export function GDrive() {
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-
       if (openActionFileId === null) return;
 
       const target = event.target;
@@ -625,16 +630,12 @@ export function GDrive() {
       if (menuEl?.contains(target)) return;
 
       const buttonEl =
-        openActionFileId !== null
-          ? actionButtonRefs.current[openActionFileId] ?? null
-          : null;
+        openActionFileId !== null ? actionButtonRefs.current[openActionFileId] ?? null : null;
 
       if (buttonEl?.contains(target)) return;
 
       closeActionMenu();
     };
-
-
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -642,15 +643,10 @@ export function GDrive() {
       }
     };
 
-
-
-
     document.addEventListener("pointerdown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("scroll", handleScrollClose, true);
     document.addEventListener("wheel", handleScrollClose, true);
-
-
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown, true);
@@ -660,9 +656,7 @@ export function GDrive() {
     };
   }, [openActionFileId]);
 
-
   const connectedAccountIdsKey = useMemo(
-
     () =>
       gdriveAccounts
         .filter((account) => account.is_connected)
@@ -672,16 +666,7 @@ export function GDrive() {
     [gdriveAccounts],
   );
 
-  // Ensure we only auto-pick the first connected account once per page load.
-  // This prevents unexpected account switching during errors/retries.
   const [didInitialAutoSwitch, setDidInitialAutoSwitch] = useState(false);
-
-
-
-
-
-
-
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -705,10 +690,7 @@ export function GDrive() {
         const list = res?.data ?? [];
         setGdriveAccounts(list);
         setActiveAccountId((prev) => {
-          if (prev) {
-            return prev;
-          }
-
+          if (prev) return prev;
           return normalizeAccountId(list.find((account) => account.is_connected)?.id);
         });
       } catch {
@@ -761,10 +743,7 @@ export function GDrive() {
       const list = res?.data ?? [];
       setGdriveAccounts(list);
       setActiveAccountId((prev) => {
-        if (prev && prev !== accountId) {
-          return prev;
-        }
-
+        if (prev && prev !== accountId) return prev;
         return normalizeAccountId(list.find((account) => account.is_connected)?.id);
       });
 
@@ -791,8 +770,7 @@ export function GDrive() {
         ? connectedAccountIdsKey.split("|").filter(Boolean)
         : [];
       const firstConnectedAccountId = connectedAccountIds[0] ?? "";
-      const activeAccountIsValid =
-        !!accountId && connectedAccountIds.includes(accountId);
+      const activeAccountIsValid = !!accountId && connectedAccountIds.includes(accountId);
 
       if (!accountsLoaded) {
         setFilesError(false);
@@ -805,50 +783,40 @@ export function GDrive() {
       setFilesError(false);
       setFilesErrorMessage("");
 
-      // Initial auto-switch only when activeAccountId is empty (one-time per page load).
       if (!accountId) {
         setGdriveFiles([]);
         setFilesLoading(false);
 
         if (!didInitialAutoSwitch && firstConnectedAccountId) {
           setDidInitialAutoSwitch(true);
-
           setActiveAccountId(firstConnectedAccountId);
         }
 
         return;
       }
 
-      // If active account id no longer exists in connected list,
-      // show error and don't auto-switch.
       if (!activeAccountIsValid) {
         setGdriveFiles([]);
         setFilesLoading(false);
         setFilesError(true);
         setFilesErrorMessage(ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE);
-
         return;
       }
 
       setFilesLoading(true);
 
-
       try {
-        // Load files account-specific when account selected.
-        // This avoids aggregating files from all connected accounts.
         const res =
           driveListMode === "files"
             ? await getGDriveAccountFiles(accountId, { page_size: 50 })
             : await getTrashedGDriveFiles(accountId, { page_size: 50 });
-
-
-
 
         if (cancelled) return;
 
         const list = res?.data ?? [];
         setGdriveFiles(list);
         setFilesErrorMessage("");
+
         const syncedAccountIds = new Set(
           list
             .map((file) => file.account_id)
@@ -875,8 +843,6 @@ export function GDrive() {
 
         const message = getErrorResponseMessage(error).trim();
         if (message === GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE) {
-          // Account explicitly not found: keep current active selection,
-          // show clear message, and allow user to retry manually.
           setFilesErrorMessage(GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE);
         } else if (isAccountUnavailableError(error)) {
           setFilesErrorMessage(ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE);
@@ -886,7 +852,6 @@ export function GDrive() {
       } finally {
         if (!cancelled) setFilesLoading(false);
       }
-
     };
 
     void loadFiles();
@@ -896,15 +861,18 @@ export function GDrive() {
     };
   }, [accountsLoaded, activeAccountId, connectedAccountIdsKey, refreshTick, driveListMode]);
 
-
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
-      const id =
-        String(file.id ?? "") ||
-        `${file.account_id}-${file.name ?? "untitled"}-${file.modified_time ?? ""}`;
+      const driveFileId = String(file.id ?? "").trim();
+      const rowKey =
+        driveFileId ||
+        `${String(file.account_id ?? "account")}-${String(file.name ?? "untitled")}-${String(
+          file.modified_time ?? "",
+        )}`;
 
       return {
-        id,
+        id: driveFileId,
+        rowKey,
         accountId: file.account_id,
         name: file.name || "Untitled",
         mime: file.mime_type || "",
@@ -949,23 +917,17 @@ export function GDrive() {
     { key: "recent", label: "Recent", Icon: HardDrive },
   ];
 
-const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
-
-
-
+  const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
 
   const selectAccount = (account: GDriveAccount) => {
     if (!account.is_connected) return;
 
     const nextActiveAccountId = normalizeAccountId(account.id);
-
-    // Manual switch should always be allowed to retry loading for that account.
     setActiveAccountId(nextActiveAccountId);
     setFilesError(false);
     setFilesErrorMessage("");
     setGdriveFiles([]);
   };
-
 
   const handleAccountKeyDown = (
     event: KeyboardEvent<HTMLDivElement>,
@@ -985,8 +947,9 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
   const downloadFile = async (file: GDriveFileUI) => {
     if (downloadingFileId) return;
     if (!file.accountId || !file.id) return;
+    if (!file.id.trim()) return;
 
-    setDownloadingFileId(file.id);
+    setDownloadingFileId(file.rowKey);
     try {
       await downloadGDriveFile(file.accountId, file.id, file.name);
     } catch {
@@ -1167,17 +1130,360 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
     setActionMenuPosition(null);
   };
 
-  const handleTrashFile = async (file: GDriveFileUI) => {
+  const getSelectedUploadAccountId = (): string => {
+    return activeAccountId || "";
+  };
 
+  const handleUploadButtonClick = () => {
+    setUploadError("");
+    setUploadSuccess("");
+
+    if (driveListMode === "trash") {
+      setUploadError("Switch to Files before uploading.");
+      return;
+    }
+
+    const accountId = getSelectedUploadAccountId();
+    if (!accountId) {
+      setUploadError("Select a Google Drive account before uploading.");
+      return;
+    }
+
+    uploadInputRef.current?.click();
+  };
+
+  const handleUploadFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (driveListMode === "trash") {
+      setUploadError("Switch to Files before uploading.");
+      setUploadSuccess("");
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+      return;
+    }
+
+    const accountId = getSelectedUploadAccountId();
+    if (!accountId) {
+      setUploadError("Select a Google Drive account before uploading.");
+      setUploadSuccess("");
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+      return;
+    }
+
+    setUploadingFile(true);
+    setUploadError("");
+    setUploadSuccess("");
+
+    try {
+      await uploadGDriveFile(accountId, file);
+      setUploadSuccess("File uploaded to Google Drive.");
+      setRefreshTick((v) => v + 1);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "Failed to upload file to Google Drive.";
+
+      setUploadError(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Failed to upload file to Google Drive.",
+      );
+    } finally {
+      setUploadingFile(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
+
+  const getGDriveFileExtensionFromFile = (file: GDriveFileUI): string => {
+    const safe = (file?.name || "").trim();
+    if (!safe) return "";
+    const idx = safe.lastIndexOf(".");
+    if (idx < 0) return "";
+    return safe.slice(idx + 1).toLowerCase();
+  };
+
+  const isGDriveBinaryExtensionPreviewable = (ext: string): boolean => {
+    return (
+      ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext) ||
+      ["mp4", "webm", "mov", "m4v"].includes(ext) ||
+      ["mp3", "wav", "ogg", "m4a"].includes(ext) ||
+      ext === "pdf"
+    );
+  };
+
+  const resolvePreviewContentKind = (
+    file: GDriveFileUI,
+    contentType: string,
+  ):
+    | "image"
+    | "pdf"
+    | "video"
+    | "audio"
+    | "text"
+    | "unknown" => {
+    const resolvedType = (contentType || "").trim().toLowerCase();
+
+    const workspaceMime = (file.mime || "").toLowerCase();
+    if (workspaceMime.startsWith("application/vnd.google-apps.")) return "unknown";
+
+    if (previewTextContent !== null) return "text";
+    if (isGDriveTextPreviewable(file)) return "text";
+
+    if (resolvedType.startsWith("image/")) return "image";
+    if (resolvedType === "application/pdf") return "pdf";
+    if (resolvedType.startsWith("video/")) return "video";
+    if (resolvedType.startsWith("audio/")) return "audio";
+
+    const ext = getGDriveFileExtensionFromFile(file);
+    if (!resolvedType || resolvedType === "application/octet-stream") {
+      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext)) return "image";
+      if (ext === "pdf") return "pdf";
+      if (["mp4", "webm", "mov", "m4v"].includes(ext)) return "video";
+      if (["mp3", "wav", "ogg", "m4a"].includes(ext)) return "audio";
+    }
+
+    return "unknown";
+  };
+
+  const getBinaryFallbackContentTypeFromFile = (file: GDriveFileUI): string => {
+    const ext = getGDriveFileExtensionFromFile(file);
+    switch (ext) {
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "gif":
+        return "image/gif";
+      case "webp":
+        return "image/webp";
+      case "bmp":
+        return "image/bmp";
+      case "svg":
+        return "image/svg+xml";
+      case "pdf":
+        return "application/pdf";
+      case "mp4":
+        return "video/mp4";
+      case "webm":
+        return "video/webm";
+      case "mov":
+        return "video/quicktime";
+      case "m4v":
+        return "video/mp4";
+      case "mp3":
+        return "audio/mpeg";
+      case "wav":
+        return "audio/wav";
+      case "ogg":
+        return "audio/ogg";
+      case "m4a":
+        return "audio/mp4";
+      default:
+        return "";
+    }
+  };
+
+  const isGDriveTextPreviewable = (file: GDriveFileUI): boolean => {
+    const mime = (file.mime || "").toLowerCase();
+    const name = (file.name || "").toLowerCase();
+
+    if (mime.startsWith("application/vnd.google-apps.")) return false;
+    if (mime.startsWith("text/")) return true;
+    if (mime === "application/json") return true;
+
+    const idx = name.lastIndexOf(".");
+    const ext = idx < 0 ? "" : name.slice(idx + 1).toLowerCase();
+
+    return ["md", "markdown", "txt", "json", "csv", "log"].includes(ext);
+  };
+
+  const isGDrivePreviewable = (file: GDriveFileUI): boolean => {
+    const mime = (file.mime || "").toLowerCase();
+
+    if (mime.startsWith("application/vnd.google-apps.")) return false;
+
+    if (mime.startsWith("image/")) return true;
+    if (mime.startsWith("video/")) return true;
+    if (mime.startsWith("audio/")) return true;
+    if (mime === "application/pdf") return true;
+    if (mime.includes("pdf")) return true;
+
+    if (isGDriveTextPreviewable(file)) return true;
+
+    const ext = getGDriveFileExtensionFromFile(file);
+    return isGDriveBinaryExtensionPreviewable(ext);
+  };
+
+  const closePreviewModal = () => {
+    previewRequestIdRef.current += 1;
+
+    if (previewUrl) {
+      try {
+        window.URL.revokeObjectURL(previewUrl);
+      } catch {
+        // ignore
+      }
+    }
+
+    setPreviewFile(null);
+    setPreviewUrl("");
+    setPreviewContentType("");
+    setPreviewTextContent(null);
+    setPreviewLoading(false);
+    setPreviewError("");
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        try {
+          window.URL.revokeObjectURL(previewUrl);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewUrl]);
+
+  const handlePreviewFile = async (file: GDriveFileUI) => {
     if (!activeAccountId) return;
 
-    setTrashingFileId(file.id);
+    if (!file?.id?.trim()) {
+      setPreviewFile(file);
+      setPreviewUrl("");
+      setPreviewTextContent(null);
+      setPreviewContentType("");
+      setPreviewError("Preview unavailable because this file has no Google Drive file id.");
+      setPreviewLoading(false);
+      closeActionMenu();
+      return;
+    }
+
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
+
+    if (previewUrl) {
+      try {
+        window.URL.revokeObjectURL(previewUrl);
+      } catch {
+        // ignore
+      }
+    }
+
+    setPreviewUrl("");
+    setPreviewTextContent(null);
+    setPreviewContentType("");
+    setPreviewError("");
+    setPreviewLoading(true);
+    setPreviewFile(file);
+
+    const accountId = file.accountId;
+    if (!accountId) {
+      setPreviewLoading(false);
+      setPreviewError("Preview unavailable because this file has no Google Drive account id.");
+      return;
+    }
+
+    if (!isGDrivePreviewable(file)) {
+      setPreviewLoading(false);
+      setPreviewError("");
+      return;
+    }
+
+    closeActionMenu();
+
+    try {
+      if (isGDriveTextPreviewable(file)) {
+        const knownSize = file.sizeBytes;
+        if (
+          typeof knownSize === "number" &&
+          Number.isFinite(knownSize) &&
+          knownSize > TEXT_PREVIEW_MAX_BYTES
+        ) {
+          if (previewRequestIdRef.current !== requestId) return;
+          setPreviewTextContent(null);
+          setPreviewUrl("");
+          setPreviewContentType("");
+          setPreviewError("Text preview is limited to 1 MB. Use Download or Open instead.");
+          setPreviewLoading(false);
+          return;
+        }
+
+        const { blob } = await getGDriveFileBlob(accountId, file.id);
+        if (previewRequestIdRef.current !== requestId) return;
+
+        if (blob.size > TEXT_PREVIEW_MAX_BYTES) {
+          setPreviewTextContent(null);
+          setPreviewUrl("");
+          setPreviewContentType("");
+          setPreviewError("Text preview is limited to 1 MB. Use Download or Open instead.");
+          setPreviewLoading(false);
+          return;
+        }
+
+        const text = await blob.text();
+        if (previewRequestIdRef.current !== requestId) return;
+
+        setPreviewTextContent(text);
+        setPreviewUrl("");
+        const resolvedContentType = blob.type || file.mime || "text/plain";
+        setPreviewContentType(resolvedContentType || "text/plain");
+        setPreviewError("");
+        setPreviewLoading(false);
+        return;
+      }
+
+      const { blob, contentType } = await getGDriveFileBlob(accountId, file.id);
+      if (previewRequestIdRef.current !== requestId) return;
+
+      setPreviewTextContent(null);
+
+      const resolvedContentTypeRaw = contentType || blob.type || file.mime || "";
+      const resolvedContentType =
+        resolvedContentTypeRaw && resolvedContentTypeRaw !== "application/octet-stream"
+          ? resolvedContentTypeRaw
+          : getBinaryFallbackContentTypeFromFile(file);
+
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      setPreviewUrl(objectUrl);
+      setPreviewContentType(
+        resolvedContentType || blob.type || contentType || file.mime || "",
+      );
+      setPreviewError("");
+      setPreviewLoading(false);
+    } catch {
+      if (previewRequestIdRef.current !== requestId) return;
+
+      setPreviewTextContent(null);
+      setPreviewUrl("");
+      setPreviewContentType("");
+      setPreviewError("Failed to load preview.");
+      setPreviewLoading(false);
+    } finally {
+      if (previewRequestIdRef.current === requestId) {
+        setPreviewLoading(false);
+      }
+    }
+  };
+
+  const handleTrashFile = async (file: GDriveFileUI) => {
+    if (!activeAccountId) return;
+    if (!file?.id?.trim()) {
+      setTrashError("Action unavailable because this file has no Google Drive file id.");
+      return;
+    }
+
+    setTrashingFileId(file.rowKey);
     setTrashError(null);
 
     try {
       await trashGDriveFile(activeAccountId, file.id);
-
-      // Close menu and refresh file list.
       closeActionMenu();
       setRefreshTick((value) => value + 1);
     } catch {
@@ -1189,13 +1495,16 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
 
   const handleRestoreFile = async (file: GDriveFileUI) => {
     if (!activeAccountId) return;
+    if (!file?.id?.trim()) {
+      setRestoreError("Action unavailable because this file has no Google Drive file id.");
+      return;
+    }
 
-    setRestoringFileId(file.id);
+    setRestoringFileId(file.rowKey);
     setRestoreError(null);
 
     try {
       await restoreGDriveFile(activeAccountId, file.id);
-
       closeActionMenu();
       setRefreshTick((value) => value + 1);
     } catch {
@@ -1205,11 +1514,51 @@ const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
     }
   };
 
+  const handleDeletePermanentlyFile = async (file: GDriveFileUI) => {
+    if (driveListMode !== "trash") return;
 
-  const renderFileActions = (file: GDriveFileUI) => {
+    if (!file.id?.trim()) {
+      setPermanentDeleteError("Action unavailable because this file has no Google Drive file id.");
+      return;
+    }
+
+    if (!file.accountId) {
+      setPermanentDeleteError("Permanent delete unavailable because this file has no Google Drive account id.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently delete "${file.name}" from Google Drive? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setPermanentDeleteError(null);
+    setDeletingPermanentFileId(file.rowKey);
+
+    try {
+      await deleteGDriveFilePermanently(file.accountId, file.id);
+      setRefreshTick((value) => value + 1);
+      closeActionMenu();
+    } catch (error: any) {
+      const message = error?.response?.data?.message;
+      setPermanentDeleteError(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Failed to permanently delete Google Drive file.",
+      );
+    } finally {
+      setDeletingPermanentFileId(null);
+    }
+  };
+
+const renderFileActions = (file: GDriveFileUI) => {
+
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
+    const isGDriveFileIdValid = hasValidGDriveFileId(file);
 
-    const isOpen = openActionFileId === file.id;
+    const isOpen = openActionFileId === file.rowKey;
+
 
 
 const actionBase: CSSProperties = {
@@ -1242,14 +1591,16 @@ const actionBase: CSSProperties = {
         <button
           type="button"
           title="More actions"
-          ref={(el) => {
-            actionButtonRefs.current[file.id] = el;
+                  ref={(el) => {
+            actionButtonRefs.current[file.rowKey] = el;
           }}
 
           onClick={(e) => {
             e.stopPropagation();
 
-            const nextOpen = openActionFileId === file.id ? null : file.id;
+            const nextOpen =
+              openActionFileId === file.rowKey ? null : file.rowKey;
+
 
             if (!nextOpen) {
               closeActionMenu();
@@ -1258,7 +1609,8 @@ const actionBase: CSSProperties = {
 
             closeActionMenu();
 
-            setOpenActionFileId(file.id);
+            setOpenActionFileId(file.rowKey);
+
 
 
             const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -1285,10 +1637,11 @@ const actionBase: CSSProperties = {
           <span style={{ fontSize: 18, lineHeight: 1, transform: "translateY(-1px)" }}>⋯</span>
         </button>
 
-        {isOpen ? (
+                {isOpen ? (
           <div
             ref={actionMenuRef}
             role="menu"
+
             aria-label="File actions"
             data-gdrive-action-menu="true"
             style={{
@@ -1307,170 +1660,270 @@ const actionBase: CSSProperties = {
             }}
           >
 
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Open"
-              title="Open"
-              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled={!hasOpenUrl}
-              style={{
-                opacity: hasOpenUrl ? 1 : 0.45,
-                cursor: hasOpenUrl ? "pointer" : "not-allowed",
-                color: colors.text,
-                background: "transparent",
-              }}
-              onClick={() => {
-                closeActionMenu();
-                openFile(file);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Eye size={14} />
-                <span>Open</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Details"
-              title="Details"
-              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled={!file.id}
-              style={{
-                marginTop: 4,
-                opacity: file.id ? 1 : 0.45,
-                cursor: file.id ? "pointer" : "not-allowed",
-                color: colors.text,
-                background: "transparent",
-              }}
-              onClick={() => {
-                closeActionMenu();
-                setDetailsFileAndReset(file);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <FileText size={14} />
-                <span>Details</span>
-              </div>
-            </button>
-
-
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Download"
-              title={downloadTitle}
-              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled={downloadingFileId === file.id || !file.accountId || !file.id}
-              style={{
-                marginTop: 4,
-                opacity:
-                  downloadingFileId === file.id || !file.accountId || !file.id ? 0.45 : 1,
-                cursor:
-                  downloadingFileId === file.id || !file.accountId || !file.id
-                    ? "not-allowed"
-                    : "pointer",
-                color: colors.text,
-                background: "transparent",
-              }}
-              onClick={() => {
-                closeActionMenu();
-                void downloadFile(file);
-              }}
-
-            >
-              <div className="flex items-center gap-2">
-                <Download size={14} />
-                <span>Download</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Copy link"
-              title="Copy link"
-              className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-              disabled={!hasOpenUrl}
-              style={{
-                marginTop: 4,
-                opacity: hasOpenUrl ? 1 : 0.45,
-                cursor: hasOpenUrl ? "pointer" : "not-allowed",
-                color: colors.text,
-                background: "transparent",
-              }}
-              onClick={() => {
-                closeActionMenu();
-                void copyFileLink(file);
-              }}
-
-            >
-              <div className="flex items-center gap-2">
-                <Share2 size={14} />
-                <span>Copy link</span>
-              </div>
-            </button>
-
-            {driveListMode === "trash" ? (
+            {driveListMode !== "trash" && isGDriveFileIdValid && isGDrivePreviewable(file) ? (
               <button
+
                 type="button"
                 role="menuitem"
-                aria-label="Restore"
-                title="Restore"
+                aria-label="Preview"
+                title="Preview"
                 className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={!activeAccountId || restoringFileId === file.id}
+                disabled={previewLoading}
                 style={{
-                  marginTop: 4,
-                  opacity: !activeAccountId
-                    ? 0.45
-                    : restoringFileId === file.id
-                      ? 0.65
-                      : 1,
-                  cursor:
-                    !activeAccountId
-                      ? "not-allowed"
-                      : restoringFileId === file.id
-                        ? "not-allowed"
-                        : "pointer",
-                  color: "#22c55e",
+                  opacity: previewLoading ? 0.65 : 1,
+                  cursor: previewLoading ? "not-allowed" : "pointer",
+                  color: colors.text,
                   background: "transparent",
                 }}
                 onClick={() => {
-                  void handleRestoreFile(file);
+                  closeActionMenu();
+                  void handlePreviewFile(file);
                 }}
               >
+
                 <div className="flex items-center gap-2">
-                  <Trash2 size={14} style={{ transform: "rotate(180deg)" }} />
-                  <span>
-                    {restoringFileId === file.id ? "Restoring..." : "Restore"}
-                  </span>
+                  <Eye size={14} />
+                  <span>Preview</span>
                 </div>
               </button>
             ) : null}
 
-            {driveListMode === "files" ? (
+
+            {driveListMode !== "trash" ? (
               <button
+                type="button"
+                role="menuitem"
+                aria-label="Open"
+                title="Open"
+                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                disabled={!hasOpenUrl}
+                style={{
+                  opacity: hasOpenUrl ? 1 : 0.45,
+                  cursor: hasOpenUrl ? "pointer" : "not-allowed",
+                  color: colors.text,
+                  background: "transparent",
+                }}
+                onClick={() => {
+                  closeActionMenu();
+                  openFile(file);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Eye size={14} />
+                  <span>Open</span>
+                </div>
+              </button>
+            ) : null}
+
+
+
+
+
+            {driveListMode !== "trash" ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Details"
+                  title="Details"
+                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                  disabled={!file.id}
+
+
+                style={{
+                  marginTop: 4,
+                  opacity: file.id ? 1 : 0.45,
+                  cursor: file.id ? "pointer" : "not-allowed",
+                  color: colors.text,
+                  background: "transparent",
+                }}
+                onClick={() => {
+                  closeActionMenu();
+                  setDetailsFileAndReset(file);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText size={14} />
+                  <span>Details</span>
+                </div>
+              </button>
+            ) : null}
+
+
+
+
+
+            {driveListMode !== "trash" ? (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Download"
+                  title={downloadTitle}
+                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                        disabled={
+                    downloadingFileId === file.rowKey || !file.accountId || !file.id
+                  }
+
+                  style={{
+                    marginTop: 4,
+                      opacity:
+                      downloadingFileId === file.rowKey || !file.accountId || !file.id
+                        ? 0.45
+                        : 1,
+
+                    cursor:
+                          downloadingFileId === file.rowKey || !file.accountId || !file.id
+                        ? "not-allowed"
+                        : "pointer",
+
+                    color: colors.text,
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    closeActionMenu();
+                    void downloadFile(file);
+                  }}
+
+                >
+                  <div className="flex items-center gap-2">
+                    <Download size={14} />
+                    <span>Download</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Copy link"
+                  title="Copy link"
+                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                  disabled={!hasOpenUrl}
+                  style={{
+                    marginTop: 4,
+                    opacity: hasOpenUrl ? 1 : 0.45,
+                    cursor: hasOpenUrl ? "pointer" : "not-allowed",
+                    color: colors.text,
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    closeActionMenu();
+                    void copyFileLink(file);
+                  }}
+
+                >
+                  <div className="flex items-center gap-2">
+                    <Share2 size={14} />
+                    <span>Copy link</span>
+                  </div>
+                </button>
+              </>
+            ) : null}
+
+                {driveListMode === "trash" && isGDriveFileIdValid ? (
+              <>
+                <button
+
+                  type="button"
+                  role="menuitem"
+                  aria-label="Restore"
+                  title="Restore"
+                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                      disabled={!activeAccountId || restoringFileId === file.rowKey}
+
+                  style={{
+                    marginTop: 4,
+                    opacity: !activeAccountId
+                      ? 0.45
+                      : restoringFileId === file.id
+                        ? 0.65
+                        : 1,
+                    cursor:
+                      !activeAccountId
+                        ? "not-allowed"
+                        : restoringFileId === file.id
+                          ? "not-allowed"
+                          : "pointer",
+                    color: "#22c55e",
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    void handleRestoreFile(file);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Trash2
+                      size={14}
+                      style={{ transform: "rotate(180deg)" }}
+                    />
+                  <span>
+                      {restoringFileId === file.rowKey ? "Restoring..." : "Restore"}
+                     </span>
+
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Delete Permanently"
+                  title="Delete Permanently"
+                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                  disabled={deletingPermanentFileId === file.rowKey}
+
+                  style={{
+                    marginTop: 4,
+                    opacity:
+                      deletingPermanentFileId === file.rowKey ? 0.65 : 1,
+                    cursor:
+                      deletingPermanentFileId === file.rowKey
+                        ? "not-allowed"
+                        : "pointer",
+
+                    color: "#ef4444",
+                    background: "transparent",
+                  }}
+                  onClick={() => {
+                    void handleDeletePermanentlyFile(file);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Trash2 size={14} />
+                    <span>
+                      {deletingPermanentFileId === file.rowKey
+                        ? "Deleting..."
+                        : "Delete Permanently"}
+                    </span>
+
+                  </div>
+                </button>
+              </>
+            ) : null}
+
+
+            {driveListMode !== "trash" && driveListMode === "files" && isGDriveFileIdValid ? (
+              <button
+
                 type="button"
                 role="menuitem"
                 aria-label="Trash"
                 title="Trash"
                 className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={!activeAccountId || trashingFileId === file.id}
+                disabled={!activeAccountId || trashingFileId === file.rowKey}
+
                 style={{
                   marginTop: 4,
-                  opacity: !activeAccountId
-                    ? 0.45
-                    : trashingFileId === file.id
-                      ? 0.65
-                      : 1,
+                    opacity: !activeAccountId
+                      ? 0.45
+                      : trashingFileId === file.rowKey
+                        ? 0.65
+                        : 1,
                   cursor:
                     !activeAccountId
                       ? "not-allowed"
-                      : trashingFileId === file.id
+                      : trashingFileId === file.rowKey
                         ? "not-allowed"
                         : "pointer",
+
                   color: "#ef4444",
                   background: "transparent",
                 }}
@@ -1480,12 +1933,15 @@ const actionBase: CSSProperties = {
               >
                 <div className="flex items-center gap-2">
                   <Trash2 size={14} />
-                  <span>{trashingFileId === file.id ? "Trashing..." : "Trash"}</span>
+                  <span>{trashingFileId === file.rowKey ? "Trashing..." : "Trash"}</span>
+
                 </div>
               </button>
             ) : null}
 
-            {trashError && openActionFileId === file.id ? (
+
+            {trashError && driveListMode !== "trash" && openActionFileId === file.rowKey ? (
+
               <div
                 className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
                 style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
@@ -1495,7 +1951,8 @@ const actionBase: CSSProperties = {
               </div>
             ) : null}
 
-            {restoreError && driveListMode === "trash" && openActionFileId === file.id ? (
+            {restoreError && driveListMode === "trash" && openActionFileId === file.rowKey ? (
+
               <div
                 className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
                 style={{ background: "rgba(34,197,94,0.10)", color: "#22c55e" }}
@@ -1505,8 +1962,22 @@ const actionBase: CSSProperties = {
               </div>
             ) : null}
 
+            {permanentDeleteError &&
+            driveListMode === "trash" &&
+            openActionFileId === file.rowKey ? (
+
+              <div
+                className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
+                style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
+                role="alert"
+              >
+                {permanentDeleteError}
+              </div>
+            ) : null}
+
           </div>
         ) : null}
+
       </div>
     );
   };
@@ -1514,6 +1985,168 @@ const actionBase: CSSProperties = {
   return (
     <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
 
+      {/* Hidden file input for Upload */}
+
+      <input
+        ref={uploadInputRef}
+        type="file"
+        onChange={handleUploadFileChange}
+        style={{ display: "none" }}
+      />
+
+
+      {previewFile ? (
+
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
+          style={{ background: resolvedTheme === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.45)" }}
+          onClick={closePreviewModal}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl border p-4"
+            style={{ background: colors.surfaceBg, borderColor: colors.border, boxShadow: colors.shadow }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: colors.title }}>
+                  Preview
+                </div>
+                <div
+                  className="mt-1 truncate text-xs"
+                  style={{ color: colors.text }}
+                  title={previewFile.name}
+                >
+                  {previewFile.name}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePreviewModal}
+                className="rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{
+                  color: accentColor,
+                  background: `${accentColor}14`,
+                  border: `1px solid ${accentColor}33`,
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4">
+              {previewLoading ? (
+                <div className="flex items-center gap-2" style={{ color: colors.muted }}>
+                  <LoadingSpinner size={14} color={accentColor} />
+                  Loading preview...
+                </div>
+              ) : previewError ? (
+                <div
+                  className="rounded-lg px-3 py-2 text-xs font-semibold"
+                  style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
+                  role="alert"
+                >
+                  {previewError}
+                </div>
+              ) : null}
+
+              {!previewLoading && !previewError ? (
+                <div
+                  className="mt-3 overflow-hidden rounded-xl border"
+                  style={{ borderColor: colors.border, background: resolvedTheme === "light" ? "#fff" : colors.softBg }}
+                >
+                  {(() => {
+                    const kind = previewFile
+                      ? resolvePreviewContentKind(
+                          previewFile,
+                          previewContentType || "",
+                        )
+                      : "unknown";
+
+                    if (previewLoading) return null;
+
+                    if (previewTextContent !== null && kind === "text") {
+                      return (
+                        <pre
+                          key={previewFile?.id}
+                          style={{
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            overflow: "auto",
+                            fontFamily: "monospace",
+                            margin: 0,
+                            padding: 12,
+                            fontSize: 12,
+                            color: colors.text,
+                            background:
+                              resolvedTheme === "light" ? "#fff" : colors.softBg,
+                            minHeight: 520,
+                          }}
+                        >
+                          {previewTextContent}
+                        </pre>
+                      );
+                    }
+
+                    if (previewUrl && kind === "image") {
+                      return (
+                        <img
+                          key={previewUrl || previewFile?.id}
+                          src={previewUrl}
+                          alt={previewFile.name}
+                          className="block max-h-[520px] w-full object-contain"
+                        />
+                      );
+                    }
+
+                    if (previewUrl && kind === "pdf") {
+                      return (
+                        <div key={previewUrl || previewFile?.id} style={{ height: 520 }}>
+                          <iframe
+                            title="PDF preview"
+                            src={previewUrl}
+                            className="h-full w-full"
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (previewUrl && kind === "video") {
+                      return (
+                        <div key={previewUrl || previewFile?.id} className="p-2">
+                          <video controls src={previewUrl} className="block w-full" />
+                        </div>
+                      );
+                    }
+
+                    if (previewUrl && kind === "audio") {
+                      return (
+                        <div key={previewUrl || previewFile?.id} className="p-3">
+                          <audio controls src={previewUrl} className="w-full" />
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        className="p-4 text-xs font-semibold"
+                        style={{ color: colors.muted }}
+                      >
+                        Preview unavailable. Use Download or Open instead.
+                      </div>
+                    );
+                  })()}
+
+
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {detailsFile ? (
 
@@ -1524,11 +2157,13 @@ const actionBase: CSSProperties = {
           style={{ background: resolvedTheme === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.45)" }}
           onClick={() => setDetailsFileAndReset(null)}
         >
+
           <div
             className="w-full max-w-xl rounded-2xl border p-4"
             style={{ background: colors.surfaceBg, borderColor: colors.border, boxShadow: colors.shadow }}
             onClick={(e) => e.stopPropagation()}
           >
+
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold" style={{ color: colors.title }}>
@@ -1550,6 +2185,7 @@ const actionBase: CSSProperties = {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
               <div>
                 <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
                   Name
@@ -1831,6 +2467,38 @@ const actionBase: CSSProperties = {
                   >
                     ↻
                   </button>
+
+                  <button
+                    type="button"
+                    title="Upload"
+                    disabled={uploadingFile || driveListMode === "trash"}
+                    onClick={handleUploadButtonClick}
+                    className="flex h-9 items-center justify-center rounded-full border px-3 text-xs font-semibold"
+                    style={{
+                      background:
+                        uploadingFile || driveListMode === "trash"
+                          ? "transparent"
+                          : `${accentColor}14`,
+                      borderColor:
+                        uploadingFile || driveListMode === "trash"
+                          ? colors.border
+                          : `${accentColor}22`,
+                      color:
+                        uploadingFile || driveListMode === "trash"
+                          ? colors.muted2
+                          : accentColor,
+                      cursor:
+                        uploadingFile || driveListMode === "trash"
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        uploadingFile || driveListMode === "trash" ? 0.65 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {uploadingFile ? "Uploading..." : "Upload"}
+                  </button>
+
                 </div>
 
 
@@ -1838,7 +2506,14 @@ const actionBase: CSSProperties = {
                   {activeAccount || anyFiles ? `${filteredFiles.length} item(s)` : ""}
                 </div>
 
+                {(uploadError || uploadSuccess) ? (
+                  <div className="shrink-0 text-[11px] font-semibold" style={{ color: uploadError ? "#ef4444" : "#22c55e" }} role="status">
+                    {uploadError ? uploadError : uploadSuccess}
+                  </div>
+                ) : null}
+
               </div>
+
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 nimbus-scrollbar">
@@ -1917,8 +2592,9 @@ className="grid items-center px-3 py-2 text-[11px] font-semibold"
 
                       {filteredFiles.map((file) => (
                         <div
-                          key={file.id}
+                          key={file.rowKey}
 className="group grid items-center px-3 py-2 transition-colors"
+
                           style={{
                             gridTemplateColumns: tableGridTemplate,
                             background: colors.surfaceBg,

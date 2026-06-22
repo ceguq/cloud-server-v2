@@ -250,7 +250,33 @@ class GoogleDriveService
         return $this->updateTrashState($account, $fileId, false);
     }
 
+    public function deletePermanently(GDriveAccount $account, string $fileId): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $encodedFileId = rawurlencode($fileId);
+        $url = self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId;
+
+        $response = Http::withToken($account->access_token)
+            ->delete($url);
+
+        if ($response->successful()) {
+            return [
+                'id' => $fileId,
+                'deleted' => true,
+            ];
+        }
+
+        $status = (int) $response->status();
+        if ($status === 401 || $status === 403) {
+            throw new RuntimeException('Google Drive delete permission denied.', $status);
+        }
+
+        throw new RuntimeException('Google Drive permanent delete failed.', $status ?: 500);
+    }
+
     private function updateTrashState(GDriveAccount $account, string $fileId, bool $trashed): array
+
     {
         $account = $this->ensureFreshAccessToken($account);
 
@@ -325,13 +351,15 @@ class GoogleDriveService
             ]);
         }
 
-        // Non-Workspace: keep legacy binary download behavior unchanged.
-        $url = $this->fileDownloadUrl($fileId);
-
+        // Non-Workspace: ensure alt=media is sent as explicit query parameters.
+        $encodedFileId = rawurlencode($fileId);
         $response = Http::withToken($account->access_token)
             ->withOptions(['stream' => true])
-            ->get($url, [])
+            ->get(self::DRIVE_FILE_MEDIA_ENDPOINT . '/' . $encodedFileId, [
+                'alt' => 'media',
+            ])
             ->throw();
+
 
         $disposition = 'attachment; filename="' . str_replace('"', '', $fileName) . '"';
 
@@ -342,7 +370,91 @@ class GoogleDriveService
             'Content-Disposition' => $disposition,
         ]);
     }
+
+    public function uploadFile(GDriveAccount $account, \Illuminate\Http\UploadedFile $file): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $mimeType = $file->getClientMimeType() ?: 'application/octet-stream';
+
+        $metadata = [
+            'name' => $file->getClientOriginalName(),
+            'mimeType' => $mimeType,
+        ];
+
+
+        $fields = 'id,name,mimeType,size,createdTime,modifiedTime,webViewLink,webContentLink,iconLink,trashed,shared,starred,owners';
+
+
+        // Endpoint: https://www.googleapis.com/upload/drive/v3/files
+        // Query params must be sent as query:
+        // uploadType=multipart
+        // fields=...
+        $url = 'https://www.googleapis.com/upload/drive/v3/files'
+            . '?uploadType=multipart'
+            . '&fields=' . urlencode($fields);
+
+
+        // Multipart/related body: JSON metadata part + raw file bytes part.
+        $metadataJson = json_encode($metadata);
+        if (! is_string($metadataJson)) {
+            throw new RuntimeException('Failed to encode Google Drive upload metadata.');
+        }
+
+
+        $boundary = 'nimbus_' . bin2hex(random_bytes(16));
+
+        $eol = "\r\n";
+
+        $fileBytes = file_get_contents($file->getRealPath());
+        if (! is_string($fileBytes)) {
+            throw new RuntimeException('Failed to read uploaded file bytes.');
+        }
+
+        $body = '';
+        $body .= '--' . $boundary . $eol;
+        $body .= 'Content-Type: application/json; charset=UTF-8' . $eol;
+        $body .= $eol;
+        $body .= $metadataJson . $eol;
+
+        $body .= '--' . $boundary . $eol;
+        $body .= 'Content-Type: ' . $metadata['mimeType'] . $eol;
+        $body .= $eol;
+
+        $body .= $fileBytes . $eol;
+
+        $body .= '--' . $boundary . '--' . $eol;
+
+        $response = null;
+        $httpResponse = Http::withToken($account->access_token)
+            ->withHeaders([
+                'Content-Type' => 'multipart/related; boundary=' . $boundary,
+                'Accept' => 'application/json',
+            ])
+            ->withBody($body, 'multipart/related; boundary=' . $boundary)
+            ->post($url);
+
+        $status = $httpResponse->status();
+
+        if ($httpResponse->failed()) {
+            $googleMessage = $httpResponse->json('error.message')
+                ?? $httpResponse->json('error_description')
+                ?? 'Google Drive upload request failed.';
+
+            // Avoid leaking secrets/tokens.
+            throw new RuntimeException('Google Drive upload failed: ' . $googleMessage, $status ?: 500);
+        }
+
+        $response = $httpResponse->json();
+
+        if (! is_array($response)) {
+            throw new RuntimeException('Google Drive upload failed.', 500);
+        }
+
+        return $response;
+    }
 }
+
 
 
 

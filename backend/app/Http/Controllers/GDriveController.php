@@ -711,6 +711,100 @@ class GDriveController extends Controller
             ], 502);
         }
     }
+
+    public function permanentDelete(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Not found.'], 403);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        try {
+            $data = $googleDriveService->deletePermanently($account, $fileId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File permanently deleted from Google Drive.',
+                'data' => [
+                    'id' => $fileId,
+                    'deleted' => true,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            $statusCode = (int) $e->getCode();
+
+            if (in_array($statusCode, [401, 403], true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Google Drive delete permission denied. Please reconnect this Google Drive account with proper permission.',
+                    'error_code' => 'gdrive_delete_permission_denied',
+                ], 403);
+            }
+
+            Log::warning('Google Drive permanent delete failed', [
+                'exception' => get_class($e),
+                'account_id' => $account->id ?? null,
+                'file_id' => $fileId,
+                'user_id' => $request->user()?->id,
+                'http_status' => $statusCode,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to permanently delete Google Drive file.',
+                'error_code' => 'gdrive_permanent_delete_failed',
+            ], 502);
+        }
+    }
+
+    public function uploadFile(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
+
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        $uploadedFile = $request->file('file');
+        if (! $uploadedFile || ! $uploadedFile->isValid()) {
+            return response()->json([
+                'message' => 'Missing or invalid uploaded file. Please send multipart field named "file".',
+            ], 422);
+        }
+
+        try {
+            $data = $googleDriveService->uploadFile($account, $uploadedFile);
+
+            return response()->json([
+                'message' => 'File uploaded to Google Drive.',
+                'data' => $data,
+            ]);
+        } catch (Throwable $e) {
+            $statusCode = (int) $e->getCode();
+
+            if (in_array($statusCode, [401, 403], true)) {
+                return response()->json([
+                    'message' => 'Google Drive upload permission denied. Please reconnect this Google Drive account with upload permission.',
+                    'error_code' => 'gdrive_upload_permission_denied',
+                    'google_status' => $statusCode,
+                ], 403);
+            }
+
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Failed to upload file to Google Drive.',
+                'error_code' => 'gdrive_upload_failed',
+                'google_status' => $statusCode ?: 500,
+            ], 502);
+        }
+    }
 }
 
 

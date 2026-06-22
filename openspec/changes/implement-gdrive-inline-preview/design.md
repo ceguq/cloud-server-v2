@@ -1,75 +1,45 @@
-## Overview
-Implementasikan **inline file preview** pada halaman GDrive dengan pendekatan **frontend-only first**, menggunakan **blob** dari existing authenticated download/export proxy.
+## Design overview
+Implement inline preview di halaman **frontend/src/app/pages/GDrive.tsx** sebagai **modal/overlay** terpisah (state di GDrive.tsx), dengan sumber data **blob** dari endpoint download/proxy yang sudah ada.
 
-## Data source
-1. **Metadata file dari GDrive row** (tersedia di UI)
-   - `id` (fileId)
-   - `accountId`
-   - `name`
-   - `mime` (mime_type)
-   - (opsional untuk detail) ukuran `sizeBytes`
+## Reuse yang sudah ada
+1. **Frontend service**: reuse `getGDriveFileBlob(accountId, fileId)` dari `frontend/src/services/gdriveService.ts`.
+2. **Pola UI**: reuse pola modal/side-panel yang sudah ada (contoh: “Details” modal) dengan gaya serupa, tapi tanpa memindahkan logic besar.
 
-2. **Blob content via existing download/export endpoint**
-   - Reuse endpoint yang sudah ada:
-     - `GET /api/gdrive/accounts/{account}/files/{fileId}/download`
-   - Endpoint ini sudah mengembalikan blob untuk file dan workspace export yang relevan.
+## State yang ditambahkan (konseptual di implementasi berikutnya)
+Di GDrive.tsx tambahkan state modal preview, misalnya:
+- `previewModalOpen`
+- `previewTarget` (fileId, accountId, mime, name, sizeBytes)
+- `previewKind` (image/pdf/video/audio/text/unsupported/workspace-fallback)
+- `previewLoading`
+- `previewError`
+- `previewBlobUrl` (string | null)
 
-## Frontend-only first approach
-- Tidak menambah endpoint backend.
-- Tidak menambah perubahan OAuth.
-- Perubahan hanya pada logika frontend untuk:
-  - mengklasifikasikan jenis preview (preview kind)
-  - mengambil blob untuk preview (tanpa memaksa download)
-  - merender preview di UI modal inline
+## Mapping jenis preview (minimal)
+- `mime === image/*` → `<img src={blobUrl} />`
+- `mime === application/pdf` → `<iframe src={blobUrl} />` atau `<object>`
+- `mime.startsWith('video/')` → `<video controls src={blobUrl} />`
+- `mime.startsWith('audio/')` → `<audio controls src={blobUrl} />`
+- `mime.startsWith('text/')` + varian aman (plain/csv/md/json/xml/html/css, dst) → text view dengan **limit aman**
 
-## Preview modal state di implementasi berikutnya (GDrive.tsx)
-State yang direncanakan (konseptual):
-- `previewModalOpen: boolean`
-- `previewTarget: { fileId, accountId, mime, name, sizeBytes } | null`
-- `previewKind: PreviewKind | null`
-- `previewBlobUrl: string | null`
-- `previewError: string | null`
-- `previewLoading: boolean`
+## Guard untuk text/code
+- Gunakan `sizeBytes` untuk membatasi:
+  - Jika melebihi limit (ditetapkan saat implementasi, mis. ratusan KB–1MB), jangan render inline → tampilkan fallback.
+- Jika `sizeBytes` tidak tersedia, gunakan strategi defensif (batasi maksimal bytes yang akan diproses/ditampilkan).
 
-Alur state:
-1. User klik **Preview** pada dropdown.
-2. Frontend menentukan `previewKind` dari metadata (`mime` + `name/extension`) dan aturan scope.
-3. Jika `previewKind` unsupported:
-   - tampilkan pesan “Preview not available”
-   - tetap tampilkan/biarkan aksi Open & Download/Export (tidak mengubah dropdown behavior existing pada implementasi berikutnya).
-4. Jika didukung:
-   - fetch blob melalui existing download/export proxy
-   - `createObjectURL(blob)` → simpan sebagai `previewBlobUrl`
-   - render preview inline di modal
+## Google Workspace files
+- Workspace file (Docs/Sheets/Slides/Drawing) **tidak** di-preview via blob mentah.
+- Untuk iterasi awal: tampilkan fallback **"Open in Google Drive"**.
+  - (Jika pada implementasi berikutnya backend export untuk workspace sudah menghasilkan blob previewable, barulah bisa diarahkan, tapi non-goal ini adalah memaksa workspace blob inline preview sekarang.)
 
-## Blob URL lifecycle
-- Gunakan `URL.createObjectURL(blob)` ketika blob preview sudah didapat.
-- Revoke object URL saat modal ditutup atau saat target file berubah:
+## Lifecycle blob URL
+- Saat preview dibuka dan blob berhasil didapat:
+  - `URL.createObjectURL(blob)` → simpan ke `previewBlobUrl`
+- Saat modal ditutup atau target preview berubah:
   - `URL.revokeObjectURL(previewBlobUrl)`
-- Pastikan tidak ada memory leak ketika user membuka preview untuk beberapa file berturut-turut.
+- Tujuan: mencegah memory leak dari object URL.
 
-## Text preview size guard
-- Text/code kecil saja agar tidak memuat file besar ke memory browser.
-- Guard yang direncanakan:
-  - jika `sizeBytes` tersedia dan melebihi limit (contoh: 256KB–1MB, ditetapkan saat implementasi), jangan fetch/atau jangan render inline; tampil fallback “Preview not available”.
-  - jika `sizeBytes` tidak tersedia, gunakan limit berbasis praktik aman di implementasi (mis. batasi maksimal bytes yang di-try to read).
-
-## Fallback untuk unsupported file
-- Jika file tidak termasuk kategori preview yang didukung, UI menampilkan:
-  - **“Preview not available”**
-- Aksi **Open** dan **Download/Export** tetap tersedia dan tidak terpengaruh.
-
-## Google Workspace handling (berdasarkan export/download)
-- Google Docs → export PDF → render via `<iframe>` atau `<object>` (tergantung implementasi yang dipilih berikutnya) dengan blob URL.
-- Google Slides → export PDF → render via `<iframe>` / `<object>`.
-- Google Drawing → export PNG → render via `<img>`.
-- Google Sheets → fallback:
-  - bila inline preview tidak kompatibel, gunakan fallback berupa tindakan download/open dari action yang sudah ada pada implementasi berikutnya.
-  - tetap tanpa perubahan backend.
-
-## Tidak ada backend/API/OAuth change
-- Tidak ada pembuatan endpoint baru.
-- Tidak ada perubahan scope OAuth.
-- Tidak ada perubahan logic list accounts/list file.
-- Tidak ada perubahan endpoint download/export yang sudah berjalan.
+## Tidak ada perubahan OAuth scope
+- Scope saat ini read-only sudah cukup untuk preview berbasis download/proxy.
+- Tidak menambah endpoint baru.
+- Tidak menambah permission/ubah OAuth.
 

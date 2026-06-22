@@ -148,14 +148,34 @@ export async function getTrashedGDriveFiles(
   };
 }
 
+export type GDriveUploadResponse = {
+  message: string;
+  data: GDriveFile;
+};
+
+export async function uploadGDriveFile(
+  accountId: string,
+  file: File,
+): Promise<GDriveUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await api.post(
+    `/gdrive/accounts/${accountId}/files/upload`,
+    formData,
+  );
+  return res.data;
+}
+
+
 export async function disconnectGDriveAccount(accountId: string) {
   const res = await api.delete(`/gdrive/accounts/${accountId}`);
   return res.data;
 }
 
 export async function getGDriveConnectUrl(): Promise<string> {
-
   const res = await api.get("/gdrive/connect");
+
   const url = res.data?.url;
 
   if (typeof url !== "string" || url.trim() === "") {
@@ -272,6 +292,30 @@ export async function restoreGDriveFile(
 
   return res.data;
 }
+
+export async function deleteGDriveFilePermanently(
+  accountId: string,
+  fileId: string,
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { id: string; deleted: boolean };
+}> {
+  const res = await api.delete(
+    `/gdrive/accounts/${accountId}/files/${fileId}/permanent`,
+  );
+
+  return res.data;
+}
+
+
+
+
+
+
+
+
+
 
 
 
