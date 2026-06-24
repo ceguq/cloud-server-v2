@@ -906,7 +906,22 @@ export function GDrive() {
     return base;
   }, [gdriveAllFiles, tab, search]);
 
+  const isGDriveFolder = (file: GDriveFileUI): boolean => {
+    return file.mime === "application/vnd.google-apps.folder";
+  };
+
+  const folderItems = useMemo(
+    () => filteredFiles.filter(isGDriveFolder),
+    [filteredFiles],
+  );
+
+  const regularFileItems = useMemo(
+    () => filteredFiles.filter((file) => !isGDriveFolder(file)),
+    [filteredFiles],
+  );
+
   const activeAccount =
+
     gdriveAccounts.find((account) => normalizeAccountId(account.id) === activeAccountId) ?? null;
   const anyFiles = filteredFiles.length > 0;
 
@@ -1129,6 +1144,47 @@ export function GDrive() {
     setOpenActionFileId(null);
     setActionMenuPosition(null);
   };
+
+  const handleFileContextMenu = (
+    event: React.MouseEvent<HTMLElement>,
+    file: GDriveFileUI,
+  ) => {
+    // Preserve clicks on internal controls (⋯ button, menu items, links, etc.)
+    const target = event.target as HTMLElement | null;
+    if (target) {
+      const tag = target.tagName?.toLowerCase?.() ?? "";
+      if (
+        tag === "button" ||
+        tag === "a" ||
+        target.getAttribute?.("role") === "menuitem" ||
+        target.closest?.("[data-gdrive-action-menu='true']")
+      ) {
+        return;
+      }
+    }
+
+    event.preventDefault();
+
+    closeActionMenu();
+    setOpenActionFileId(file.rowKey);
+
+    const menuWidth = ACTION_MENU_WIDTH;
+    const approxMenuHeight = 220;
+    const minPos = 8;
+
+    const left = Math.max(
+      minPos,
+      Math.min(window.innerWidth - menuWidth - 8, event.clientX),
+    );
+
+    const top = Math.max(
+      minPos,
+      Math.min(window.innerHeight - approxMenuHeight - 8, event.clientY),
+    );
+
+    setActionMenuPosition({ top, left });
+  };
+
 
   const getSelectedUploadAccountId = (): string => {
     return activeAccountId || "";
@@ -1720,15 +1776,13 @@ const actionBase: CSSProperties = {
 
 
             {driveListMode !== "trash" ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Details"
-                  title="Details"
-                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                  disabled={!file.id}
-
-
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="Details"
+                title="Details"
+                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                disabled={!file.id}
                 style={{
                   marginTop: 4,
                   opacity: file.id ? 1 : 0.45,
@@ -1754,17 +1808,18 @@ const actionBase: CSSProperties = {
 
             {driveListMode !== "trash" ? (
               <>
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Download"
-                  title={downloadTitle}
-                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                        disabled={
-                    downloadingFileId === file.rowKey || !file.accountId || !file.id
-                  }
+                {isGDriveFolder(file) ? null : (
+              <button
+                    type="button"
+                    role="menuitem"
+                    aria-label="Download"
+                    title={downloadTitle}
+                    className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+                    disabled={
+                      downloadingFileId === file.rowKey || !file.accountId || !file.id
+                    }
 
-                  style={{
+                    style={{
                     marginTop: 4,
                       opacity:
                       downloadingFileId === file.rowKey || !file.accountId || !file.id
@@ -1790,6 +1845,7 @@ const actionBase: CSSProperties = {
                     <span>Download</span>
                   </div>
                 </button>
+)}
 
                 <button
                   type="button"
@@ -2571,111 +2627,223 @@ const actionBase: CSSProperties = {
                 ) : (
                   <div className="overflow-x-auto">
                     <div style={{ minWidth: 820 }}>
-                      <div
-className="grid items-center px-3 py-2 text-[11px] font-semibold"
-                        style={{
-                          gridTemplateColumns: tableGridTemplate,
-                          color: colors.header,
-                          background: colors.rowHover,
-                          borderBottom: `1px solid ${colors.border}`,
-                        }}
-                      >
-                        <span>Name</span>
-                        <span>Type</span>
-                        <span>Visibility</span>
-                        <span>Modified</span>
-                        <span>Size</span>
-                        <span />
-                      </div>
-
-
-
-                      {filteredFiles.map((file) => (
-                        <div
-                          key={file.rowKey}
-className="group grid items-center px-3 py-2 transition-colors"
-
-                          style={{
-                            gridTemplateColumns: tableGridTemplate,
-                            background: colors.surfaceBg,
-                            borderBottom: `1px solid ${colors.border}`,
-                            color: colors.text,
-                          }}
-                          onMouseEnter={(event) => {
-                            event.currentTarget.style.background = colors.rowHover;
-                          }}
-                          onMouseLeave={(event) => {
-                            event.currentTarget.style.background = colors.surfaceBg;
-                          }}
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            {renderFileIcon(file)}
-                            <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span
-                                  className="truncate text-xs font-medium"
-                                  style={{ color: colors.title }}
-                                  title={file.name}
-                                >
-                                  {file.name}
-                                </span>
-                                {file.starred ? (
-                                  <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
-                                ) : null}
-                              </div>
-                            </div>
+                      {folderItems.length > 0 ? (
+                        <div>
+                          <div
+                            className="px-3 py-2 text-xs font-semibold"
+                            style={{ color: colors.header, background: colors.rowHover, borderBottom: `1px solid ${colors.border}` }}
+                          >
+                            Folders
                           </div>
 
-                          <div className="min-w-0">
-                            <div className="truncate text-[11px] font-semibold" style={{ color: colors.title }}>
-                              {getGDriveFileTypeInfo(file).label}
-                            </div>
+                          <div
+                            className="grid items-center px-3 py-2 text-[11px] font-semibold"
+                            style={{
+                              gridTemplateColumns: tableGridTemplate,
+                              color: colors.header,
+                              background: colors.rowHover,
+                              borderBottom: `1px solid ${colors.border}`,
+                            }}
+                          >
+                            <span>Name</span>
+                            <span>Type</span>
+                            <span>Visibility</span>
+                            <span>Modified</span>
+                            <span>Size</span>
+                            <span />
+                          </div>
+
+                          {folderItems.map((file) => (
                             <div
-                              className="mt-1 truncate text-[10px]"
-                              style={{ color: colors.muted2 }}
-                              title={getGDriveFileTypeInfo(file).detail}
+                              key={file.rowKey}
+                              className="group grid items-center px-3 py-2 transition-colors"
+                              style={{
+                                gridTemplateColumns: tableGridTemplate,
+                                background: colors.surfaceBg,
+                                borderBottom: `1px solid ${colors.border}`,
+                                color: colors.text,
+                              }}
+                              onContextMenu={(event) => handleFileContextMenu(event, file)}
+                              onMouseEnter={(event) => {
+                                event.currentTarget.style.background = colors.rowHover;
+                              }}
+                              onMouseLeave={(event) => {
+                                event.currentTarget.style.background = colors.surfaceBg;
+                              }}
                             >
-                              {getGDriveFileTypeInfo(file).detail}
+                              <div className="flex min-w-0 items-center gap-3">
+                                {renderFileIcon(file)}
+                                <div className="min-w-0">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span
+                                      className="truncate text-xs font-medium"
+                                      style={{ color: colors.title }}
+                                      title={file.name}
+                                    >
+                                      {file.name}
+                                    </span>
+                                    {file.starred ? (
+                                      <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="truncate text-[11px] font-semibold" style={{ color: colors.title }}>
+                                  {getGDriveFileTypeInfo(file).label}
+                                </div>
+                                <div
+                                  className="mt-1 truncate text-[10px]"
+                                  style={{ color: colors.muted2 }}
+                                  title={getGDriveFileTypeInfo(file).detail}
+                                >
+                                  {getGDriveFileTypeInfo(file).detail}
+                                </div>
+                              </div>
+
+                              <div>
+                                {file.shared ? (
+                                  <span
+                                    className="rounded-full px-2 py-1 text-[10px] font-semibold"
+                                    style={{
+                                      background: `${accentColor}12`,
+                                      color: accentColor,
+                                    }}
+                                  >
+                                    Shared
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px]" style={{ color: colors.muted2 }}>
+                                    Private
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-xs" style={{ color: colors.muted }}>
+                                {formatDate(file.recentAt)}
+                              </div>
+
+                              <div className="text-xs" style={{ color: colors.muted }}>
+                                {formatBytes(file.sizeBytes)}
+                              </div>
+
+                              {renderFileActions(file)}
                             </div>
-                          </div>
-
-                          <div>
-
-                            {file.shared ? (
-
-                              <span
-                                className="rounded-full px-2 py-1 text-[10px] font-semibold"
-                                style={{
-                                  background: `${accentColor}12`,
-                                  color: accentColor,
-                                }}
-                              >
-                                Shared
-                              </span>
-                            ) : (
-                              <span className="text-[11px]" style={{ color: colors.muted2 }}>
-                                Private
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="text-xs" style={{ color: colors.muted }}>
-                            {formatDate(file.recentAt)}
-                          </div>
-
-                          <div className="text-xs" style={{ color: colors.muted }}>
-                            {formatBytes(file.sizeBytes)}
-                          </div>
-
-                          {renderFileActions(file)}
-
-
+                          ))}
                         </div>
+                      ) : null}
 
-                      ))}
+                      {regularFileItems.length > 0 ? (
+                        <div>
+                          <div
+                            className="px-3 py-2 text-xs font-semibold"
+                            style={{ color: colors.header, background: colors.rowHover, borderBottom: `1px solid ${colors.border}` }}
+                          >
+                            Files
+                          </div>
+
+                          <div
+                            className="grid items-center px-3 py-2 text-[11px] font-semibold"
+                            style={{
+                              gridTemplateColumns: tableGridTemplate,
+                              color: colors.header,
+                              background: colors.rowHover,
+                              borderBottom: `1px solid ${colors.border}`,
+                            }}
+                          >
+                            <span>Name</span>
+                            <span>Type</span>
+                            <span>Visibility</span>
+                            <span>Modified</span>
+                            <span>Size</span>
+                            <span />
+                          </div>
+
+                          {regularFileItems.map((file) => (
+                            <div
+                              key={file.rowKey}
+                              className="group grid items-center px-3 py-2 transition-colors"
+                              style={{
+                                gridTemplateColumns: tableGridTemplate,
+                                background: colors.surfaceBg,
+                                borderBottom: `1px solid ${colors.border}`,
+                                color: colors.text,
+                              }}
+                              onContextMenu={(event) => handleFileContextMenu(event, file)}
+                              onMouseEnter={(event) => {
+                                event.currentTarget.style.background = colors.rowHover;
+                              }}
+                              onMouseLeave={(event) => {
+                                event.currentTarget.style.background = colors.surfaceBg;
+                              }}
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                {renderFileIcon(file)}
+                                <div className="min-w-0">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span
+                                      className="truncate text-xs font-medium"
+                                      style={{ color: colors.title }}
+                                      title={file.name}
+                                    >
+                                      {file.name}
+                                    </span>
+                                    {file.starred ? (
+                                      <Star size={13} fill="#f59e0b" style={{ color: "#f59e0b" }} />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="truncate text-[11px] font-semibold" style={{ color: colors.title }}>
+                                  {getGDriveFileTypeInfo(file).label}
+                                </div>
+                                <div
+                                  className="mt-1 truncate text-[10px]"
+                                  style={{ color: colors.muted2 }}
+                                  title={getGDriveFileTypeInfo(file).detail}
+                                >
+                                  {getGDriveFileTypeInfo(file).detail}
+                                </div>
+                              </div>
+
+                              <div>
+                                {file.shared ? (
+                                  <span
+                                    className="rounded-full px-2 py-1 text-[10px] font-semibold"
+                                    style={{
+                                      background: `${accentColor}12`,
+                                      color: accentColor,
+                                    }}
+                                  >
+                                    Shared
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px]" style={{ color: colors.muted2 }}>
+                                    Private
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-xs" style={{ color: colors.muted }}>
+                                {formatDate(file.recentAt)}
+                              </div>
+
+                              <div className="text-xs" style={{ color: colors.muted }}>
+                                {formatBytes(file.sizeBytes)}
+                              </div>
+
+                              {renderFileActions(file)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
+
               </div>
             </div>
           </div>
