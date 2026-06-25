@@ -325,15 +325,90 @@ function formatBytes(bytes?: number | null): string {
 
 function getTypeLabel(mime?: string | null): string {
   if (!mime) return "FILE";
-  if (mime.includes("pdf")) return "PDF";
-  if (mime.includes("presentation")) return "PPTX";
-  if (mime.includes("image")) return "JPG";
-  if (mime.includes("zip")) return "ZIP";
-  if (mime.includes("audio")) return "MUSIC";
-  if (mime.includes("video")) return "MP4";
-  if (mime.includes("spreadsheet")) return "XLSX";
-  return mime.split("/")[1]?.toUpperCase() ?? "FILE";
+
+  const normalized = String(mime).trim().toLowerCase();
+
+  // Office (prefer explicit MIME when available)
+  if (
+    normalized === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    normalized === "application/msword" ||
+    normalized.includes("wordprocessingml") ||
+    normalized.includes("msword") ||
+    normalized.includes("/word")
+  ) {
+    return "DOCX";
+  }
+
+  if (
+    normalized === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    normalized === "application/vnd.ms-excel" ||
+    normalized.includes("spreadsheetml") ||
+    normalized.includes("/excel")
+  ) {
+    return "XLSX";
+  }
+
+  if (
+    normalized === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    normalized === "application/vnd.ms-powerpoint" ||
+    normalized.includes("presentationml") ||
+    normalized.includes("/powerpoint")
+  ) {
+    return "PPTX";
+  }
+
+  // PDF
+  if (
+    normalized === "application/pdf" ||
+    normalized.endsWith("/pdf") ||
+    normalized.includes("+pdf")
+  ) {
+    return "PDF";
+  }
+
+  // Images
+  if (
+    normalized === "image/jpeg" ||
+    normalized === "image/jpg" ||
+    normalized.endsWith("/jpeg") ||
+    normalized.endsWith("/jpg")
+  ) {
+    return "JPG";
+  }
+
+  if (normalized === "image/png" || normalized.endsWith("/png")) return "PNG";
+  if (normalized === "image/webp" || normalized.endsWith("/webp")) return "WEBP";
+  if (normalized === "image/gif" || normalized.endsWith("/gif")) return "GIF";
+  if (normalized.startsWith("image/")) return "IMAGE";
+
+  // Video
+  if (normalized.startsWith("video/")) return "VIDEO";
+
+  // Audio
+  if (normalized.startsWith("audio/")) return "AUDIO";
+
+  // Archives
+  if (
+    normalized === "application/zip" ||
+    normalized.includes("/zip") ||
+    normalized.includes("zip")
+  ) {
+    return "ZIP";
+  }
+
+  // Text / CSV / JSON / XML
+  if (
+    normalized.startsWith("text/") ||
+    normalized.includes("json") ||
+    normalized.includes("xml") ||
+    normalized.includes("csv")
+  ) {
+    return "TXT";
+  }
+
+  return "FILE";
 }
+
 
 function fileTypeFilterLabel(
   value:
