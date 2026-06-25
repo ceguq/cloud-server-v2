@@ -462,7 +462,11 @@ export function GDrive() {
   const [previewModalMode, setPreviewModalMode] = useState<
     "normal" | "maximized" | "minimized"
   >("normal");
+
+  const [previewImageScale, setPreviewImageScale] = useState(1);
+
   const TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
 
 
   const previewRequestIdRef = useRef(0);
@@ -1387,10 +1391,11 @@ export function GDrive() {
 
   const closePreviewModal = () => {
     setPreviewModalMode("normal");
+    setPreviewImageScale(1);
     previewRequestIdRef.current += 1;
 
-
     if (previewUrl) {
+
       try {
         window.URL.revokeObjectURL(previewUrl);
       } catch {
@@ -1421,7 +1426,9 @@ export function GDrive() {
 
   const handlePreviewFile = async (file: GDriveFileUI) => {
     setPreviewModalMode("normal");
+    setPreviewImageScale(1);
     if (!activeAccountId) return;
+
 
 
     if (!file?.id?.trim()) {
@@ -2152,107 +2159,227 @@ const actionBase: CSSProperties = {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="flex items-start justify-between gap-3"
-              style={{ borderBottom: `1px solid ${colors.border}`, paddingBottom: 12 }}
-            >
-              <div className="min-w-0">
-                <div className="text-sm font-semibold" style={{ color: colors.title }}>
-                  Preview
+            {/* Viewer-style header/top menu bar (preview only) */}
+            <div className="flex flex-col" style={{ borderBottom: `1px solid ${colors.border}` }}>
+              {/* Top menu bar */}
+              <div
+                className="flex items-start justify-between gap-3"
+                style={{ paddingTop: 6, paddingBottom: 8 }}
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={closePreviewModal}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
+                    style={{
+                      color: colors.muted2,
+                      background: colors.panelBg,
+                      border: `1px solid ${colors.border}`,
+                      flexShrink: 0,
+                    }}
+                    aria-label="Close preview"
+                    title="Close preview"
+                  >
+                    &times;
+                  </button>
+
+                  <div className="min-w-0">
+                    <div
+                      className="truncate text-sm font-semibold"
+                      style={{ color: colors.title }}
+                      title={previewFile.name}
+                    >
+                      {previewFile.name}
+                    </div>
+
+                    <div
+                      className="mt-1 flex flex-wrap gap-4"
+                      style={{
+                        color: colors.muted2,
+                        fontSize: 12,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      <span style={{ color: colors.muted2, fontWeight: 600 }}>File</span>
+                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Lihat</span>
+                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Alat</span>
+                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Bantuan</span>
+                    </div>
+                  </div>
                 </div>
-                <div
-                  className="mt-1 truncate text-xs"
-                  style={{ color: colors.text }}
-                  title={previewFile.name}
-                >
-                  {previewFile.name}
-                </div>
+
+                <div className="hidden" />
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (!previewFile) return;
-                  void downloadFile(previewFile);
-                }}
-                disabled={
-                  downloadingFileId === previewFile?.rowKey ||
-                  !previewFile?.accountId ||
-                  !previewFile?.id
-                }
-                className="flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold"
-                style={{
-                  background: `${accentColor}14`,
-                  border: `1px solid ${accentColor}33`,
-                  color: accentColor,
-                  opacity:
-                    downloadingFileId === previewFile?.rowKey ||
-                    !previewFile?.accountId ||
-                    !previewFile?.id
-                      ? 0.65
-                      : 1,
-                  cursor:
-                    downloadingFileId === previewFile?.rowKey ||
-                    !previewFile?.accountId ||
-                    !previewFile?.id
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-                title="Download"
-                aria-label="Download preview file"
+              {/* Action toolbar bar */}
+              <div
+                className="flex items-center justify-between gap-3"
+                style={{ paddingTop: 4, paddingBottom: 0 }}
               >
-                <Download size={14} />
-              </button>
+                <div className="min-w-0">
+                  <div
+                    className="truncate text-xs font-semibold"
+                    style={{ color: colors.muted2 }}
+                  >
+                    Preview
+                  </div>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPreviewModalMode("minimized")}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                  style={{
-                    color: colors.muted2,
-                    background: colors.panelBg,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                  aria-label="Minimize preview"
-                  title="Minimize preview"
-                >
-                  –
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!previewFile) return;
+                      void downloadFile(previewFile);
+                    }}
+                    disabled={
+                      downloadingFileId === previewFile?.rowKey ||
+                      !previewFile?.accountId ||
+                      !previewFile?.id
+                    }
+                    className="flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                    style={{
+                      background: `${accentColor}14`,
+                      border: `1px solid ${accentColor}33`,
+                      color: accentColor,
+                      opacity:
+                        downloadingFileId === previewFile?.rowKey ||
+                        !previewFile?.accountId ||
+                        !previewFile?.id
+                          ? 0.65
+                          : 1,
+                      cursor:
+                        downloadingFileId === previewFile?.rowKey ||
+                        !previewFile?.accountId ||
+                        !previewFile?.id
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                    title="Download"
+                    aria-label="Download preview file"
+                  >
+                    <Download size={14} />
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewModalMode((mode) =>
-                      mode === "maximized" ? "normal" : "maximized",
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                  style={{
-                    color: colors.muted2,
-                    background: colors.panelBg,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                  aria-label="Toggle maximize preview"
-                  title="Toggle maximize preview"
-                >
-                  {previewModalMode === "maximized" ? "⤢" : "⤢"}
-                </button>
+                  {/* Image-only zoom controls (body render unchanged) */}
+                  {(() => {
+                    const previewHeaderKind = previewFile
+                      ? resolvePreviewContentKind(
+                          previewFile,
+                          previewContentType || "",
+                        )
+                      : "unsupported";
+                    const isPreviewImage = previewHeaderKind === "image";
 
-                <button
-                  type="button"
-                  onClick={closePreviewModal}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
-                  style={{
-                    color: colors.muted2,
-                    background: colors.panelBg,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                  aria-label="Close preview"
-                  title="Close preview"
-                >
-                  &times;
-                </button>
+                    if (!isPreviewImage || previewModalMode === "minimized") {
+                      return null;
+                    }
+
+                    const canZoomOut = previewImageScale > 0.5;
+                    const canZoomIn = previewImageScale < 3;
+                    const canReset = previewImageScale !== 1;
+
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewImageScale((scale) =>
+                              Math.max(0.5, Number((scale - 0.25).toFixed(2))),
+                            )
+                          }
+                          disabled={!canZoomOut}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                          style={{
+                            color: colors.muted2,
+                            background: colors.panelBg,
+                            border: `1px solid ${colors.border}`,
+                            opacity: canZoomOut ? 1 : 0.5,
+                            cursor: canZoomOut ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Zoom out"
+                          title="Zoom out"
+                        >
+                          −
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImageScale(1)}
+                          disabled={!canReset}
+                          className="flex h-8 w-16 items-center justify-center rounded-lg text-xs font-semibold"
+                          style={{
+                            color: colors.muted2,
+                            background: colors.panelBg,
+                            border: `1px solid ${colors.border}`,
+                            opacity: canReset ? 1 : 0.5,
+                            cursor: canReset ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Reset zoom"
+                          title="Reset zoom"
+                        >
+                          100%
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewImageScale((scale) =>
+                              Math.min(3, Number((scale + 0.25).toFixed(2))),
+                            )
+                          }
+                          disabled={!canZoomIn}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                          style={{
+                            color: colors.muted2,
+                            background: colors.panelBg,
+                            border: `1px solid ${colors.border}`,
+                            opacity: canZoomIn ? 1 : 0.5,
+                            cursor: canZoomIn ? "pointer" : "not-allowed",
+                          }}
+                          aria-label="Zoom in"
+                          title="Zoom in"
+                        >
+                          +
+                        </button>
+                      </>
+                    );
+                  })()}
+
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalMode("minimized")}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                    style={{
+                      color: colors.muted2,
+                      background: colors.panelBg,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                    aria-label="Minimize preview"
+                    title="Minimize preview"
+                  >
+                    –
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewModalMode((mode) =>
+                        mode === "maximized" ? "normal" : "maximized",
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                    style={{
+                      color: colors.muted2,
+                      background: colors.panelBg,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                    aria-label="Toggle maximize preview"
+                    title="Toggle maximize preview"
+                  >
+                    {previewModalMode === "maximized" ? "⤢" : "⤢"}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2316,14 +2443,24 @@ const actionBase: CSSProperties = {
 
                       if (previewUrl && kind === "image") {
                         return (
-                          <img
-                            key={previewUrl || previewFile?.id}
-                            src={previewUrl}
-                            alt={previewFile.name}
-                            className="block max-h-[520px] w-full object-contain"
-                          />
+                          <div
+                            className="w-full flex justify-center overflow-auto"
+                            style={{ minHeight: 520 }}
+                          >
+                            <img
+                              key={previewUrl || previewFile?.id}
+                              src={previewUrl}
+                              alt={previewFile.name}
+                              className="block max-h-[520px] object-contain"
+                              style={{
+                                transform: `scale(${previewImageScale})`,
+                                transformOrigin: "center center",
+                              }}
+                            />
+                          </div>
                         );
                       }
+
 
                       if (previewUrl && kind === "pdf") {
                         return (

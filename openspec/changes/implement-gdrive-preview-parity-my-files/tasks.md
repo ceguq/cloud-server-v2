@@ -9,7 +9,11 @@
 - [x] Step 1: Align GDrive preview modal layout/header/body style dengan My Files.
 - [x] Step 2: Add Download button di header preview GDrive.
 - [x] Step 3: Tambahkan maximize/minimize/maximized + minimized behavior.
-- [ ] Step 4: Tambahkan image zoom controls jika aman.
+- [x] Step 4: Tambahkan image zoom controls jika aman.
+  - Image-only zoom controls ditambahkan di GDrive preview header.
+  - Zoom controls hanya muncul untuk image (tidak muncul saat minimized).
+  - Zoom scale reset saat open/close.
+  - PDF/video/audio/text tidak diubah (non-image branch tetap).
 - [ ] Step 5: Samakan loading/error/text fallback UI jika memungkinkan tanpa mengubah logic fetch/blob.
 
 Note: Step 1–3 manual browser testing passed (Step 3A: normal/maximized/minimized preview mode, minimized is intentionally non-draggable). Step 4–5 remain pending.
