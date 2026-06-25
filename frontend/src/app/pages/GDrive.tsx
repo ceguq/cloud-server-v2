@@ -1,4 +1,6 @@
 import {
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent,
   useEffect,
   useMemo,
   useRef,
@@ -20,13 +22,21 @@ import {
   HardDrive,
   Image,
   List as ListIcon,
+  Maximize2,
+  Minimize2,
+  Minus,
+  MoreVertical,
   Music,
   Plus,
+  RotateCcw,
   Search,
   Share2,
   Star,
   Trash2,
   Users,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 
@@ -348,6 +358,17 @@ function renderFileIcon(file: GDriveFileUI) {
   );
 }
 
+const PREVIEW_IMAGE_MIN_SCALE = 0.5;
+const PREVIEW_IMAGE_MAX_SCALE = 4;
+const PREVIEW_IMAGE_ZOOM_STEP = 0.1;
+
+function clampPreviewImageScale(scale: number): number {
+  return Math.min(
+    PREVIEW_IMAGE_MAX_SCALE,
+    Math.max(PREVIEW_IMAGE_MIN_SCALE, Number(scale.toFixed(2))),
+  );
+}
+
 export function GDrive() {
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
@@ -464,8 +485,194 @@ export function GDrive() {
   >("normal");
 
   const [previewImageScale, setPreviewImageScale] = useState(1);
+  const [previewImageFitSize, setPreviewImageFitSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [previewImageOffset, setPreviewImageOffset] = useState({ x: 0, y: 0 });
+  const [isPreviewImageDragging, setIsPreviewImageDragging] = useState(false);
+
+  const previewImageViewportRef = useRef<HTMLDivElement | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
+  const previewImageDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+
+  const updatePreviewImageFitSize = () => {
+    const viewport = previewImageViewportRef.current;
+    const image = previewImageRef.current;
+
+    if (!viewport || !image || !image.naturalWidth || !image.naturalHeight) {
+      return;
+    }
+
+    const padding = 24;
+    const availableWidth = Math.max(0, viewport.clientWidth - padding);
+    const availableHeight = Math.max(0, viewport.clientHeight - padding);
+
+    if (!availableWidth || !availableHeight) {
+      return;
+    }
+
+    const scale = Math.min(
+      availableWidth / image.naturalWidth,
+      availableHeight / image.naturalHeight,
+      1,
+    );
+
+    setPreviewImageFitSize({
+      width: image.naturalWidth * scale,
+      height: image.naturalHeight * scale,
+    });
+    setPreviewImageOffset({ x: 0, y: 0 });
+  };
+
+  const setPreviewImageScaleFromAnchor = (
+    nextScaleValue: number,
+    anchorPoint?: { clientX: number; clientY: number },
+  ) => {
+    const oldScale = previewImageScale;
+    const nextScale = clampPreviewImageScale(nextScaleValue);
+
+    if (nextScale === oldScale) {
+      return;
+    }
+
+    const viewport = previewImageViewportRef.current;
+    const image = previewImageRef.current;
+    const imageRect = image?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    const point =
+      anchorPoint ??
+      (viewportRect
+        ? {
+            clientX: viewportRect.left + viewportRect.width / 2,
+            clientY: viewportRect.top + viewportRect.height / 2,
+          }
+        : undefined);
+
+    if (!imageRect || !point || imageRect.width <= 0 || imageRect.height <= 0) {
+      setPreviewImageScale(nextScale);
+      if (nextScale <= 1) setPreviewImageOffset({ x: 0, y: 0 });
+      return;
+    }
+
+    const anchorX = Math.min(
+      1,
+      Math.max(0, (point.clientX - imageRect.left) / imageRect.width),
+    );
+    const anchorY = Math.min(
+      1,
+      Math.max(0, (point.clientY - imageRect.top) / imageRect.height),
+    );
+    const scaleRatio = nextScale / oldScale;
+    const nextWidth = imageRect.width * scaleRatio;
+    const nextHeight = imageRect.height * scaleRatio;
+    const currentCenterX = imageRect.left + imageRect.width / 2;
+    const currentCenterY = imageRect.top + imageRect.height / 2;
+    const nextCenterX = point.clientX - anchorX * nextWidth + nextWidth / 2;
+    const nextCenterY = point.clientY - anchorY * nextHeight + nextHeight / 2;
+
+    setPreviewImageScale(nextScale);
+    setPreviewImageOffset(
+      nextScale <= 1
+        ? { x: 0, y: 0 }
+        : {
+            x: previewImageOffset.x + nextCenterX - currentCenterX,
+            y: previewImageOffset.y + nextCenterY - currentCenterY,
+          },
+    );
+  };
+
+  const resetPreviewImageZoom = () => {
+    previewImageDragRef.current = null;
+    setIsPreviewImageDragging(false);
+    setPreviewImageScale(1);
+    setPreviewImageOffset({ x: 0, y: 0 });
+  };
+
+  const handlePreviewImageWheel = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.deltaY === 0) {
+      return;
+    }
+
+    setPreviewImageScaleFromAnchor(
+      previewImageScale +
+        (event.deltaY < 0 ? PREVIEW_IMAGE_ZOOM_STEP : -PREVIEW_IMAGE_ZOOM_STEP),
+      { clientX: event.clientX, clientY: event.clientY },
+    );
+  };
+
+  const handlePreviewImageDoubleClick = (event: React.MouseEvent<HTMLImageElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (previewImageScale > 1) {
+      resetPreviewImageZoom();
+      return;
+    }
+
+    setPreviewImageScaleFromAnchor(2, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  };
+
+  const handlePreviewImagePointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (previewImageScale <= 1) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    const viewport = previewImageViewportRef.current;
+    if (!viewport) return;
+
+    previewImageDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: previewImageOffset.x,
+      offsetY: previewImageOffset.y,
+    };
+    setIsPreviewImageDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const handlePreviewImagePointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const drag = previewImageDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    setPreviewImageOffset({
+      x: drag.offsetX + event.clientX - drag.startX,
+      y: drag.offsetY + event.clientY - drag.startY,
+    });
+    event.preventDefault();
+  };
+
+  const finishPreviewImageDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = previewImageDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    if (event.currentTarget.hasPointerCapture(drag.pointerId)) {
+      event.currentTarget.releasePointerCapture(drag.pointerId);
+    }
+
+    previewImageDragRef.current = null;
+    setIsPreviewImageDragging(false);
+  };
 
   const TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
 
 
 
@@ -1170,7 +1377,7 @@ export function GDrive() {
     event: React.MouseEvent<HTMLElement>,
     file: GDriveFileUI,
   ) => {
-    // Preserve clicks on internal controls (⋯ button, menu items, links, etc.)
+    // Preserve clicks on internal controls (more actions button, menu items, links, etc.)
     const target = event.target as HTMLElement | null;
     if (target) {
       const tag = target.tagName?.toLowerCase?.() ?? "";
@@ -1395,9 +1602,33 @@ export function GDrive() {
     return isGDriveBinaryExtensionPreviewable(ext);
   };
 
+  useEffect(() => {
+    if (!previewFile || !previewUrl) return;
+    if (resolvePreviewContentKind(previewFile, previewContentType || "") !== "image") {
+      return;
+    }
+
+    const handleResize = () => {
+      updatePreviewImageFitSize();
+    };
+
+    const frameId = window.requestAnimationFrame(handleResize);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [previewFile, previewUrl, previewContentType, previewModalMode, previewTextContent]);
+
   const closePreviewModal = () => {
     setPreviewModalMode("normal");
     setPreviewImageScale(1);
+    setPreviewImageFitSize(null);
+    setPreviewImageOffset({ x: 0, y: 0 });
+    previewImageDragRef.current = null;
+    setIsPreviewImageDragging(false);
+
     previewRequestIdRef.current += 1;
 
     if (previewUrl) {
@@ -1433,6 +1664,11 @@ export function GDrive() {
   const handlePreviewFile = async (file: GDriveFileUI) => {
     setPreviewModalMode("normal");
     setPreviewImageScale(1);
+    setPreviewImageFitSize(null);
+    setPreviewImageOffset({ x: 0, y: 0 });
+    previewImageDragRef.current = null;
+    setIsPreviewImageDragging(false);
+
     if (!activeAccountId) return;
 
 
@@ -1718,7 +1954,7 @@ const actionBase: CSSProperties = {
             background: isOpen ? `${accentColor}12` : "transparent",
           }}
         >
-          <span style={{ fontSize: 18, lineHeight: 1, transform: "translateY(-1px)" }}>⋯</span>
+          <MoreVertical size={16} />
         </button>
 
                 {isOpen ? (
@@ -2135,7 +2371,7 @@ const actionBase: CSSProperties = {
                 aria-label="Close preview"
                 title="Close preview"
               >
-                &times;
+                <X size={16} />
               </button>
             </div>
           </div>
@@ -2186,7 +2422,7 @@ const actionBase: CSSProperties = {
                     aria-label="Close preview"
                     title="Close preview"
                   >
-                    &times;
+                    <X size={16} />
                   </button>
 
                   <div className="min-w-0">
@@ -2281,17 +2517,18 @@ const actionBase: CSSProperties = {
                       return null;
                     }
 
-                    const canZoomOut = previewImageScale > 0.5;
-                    const canZoomIn = previewImageScale < 3;
-                    const canReset = previewImageScale !== 1;
+                    const canZoomOut = previewImageScale > PREVIEW_IMAGE_MIN_SCALE;
+                    const canZoomIn = previewImageScale < PREVIEW_IMAGE_MAX_SCALE;
+                    const canReset = Math.abs(previewImageScale - 1) > 0.001;
+                    const zoomLabel = `${Math.round(previewImageScale * 100)}%`;
 
                     return (
                       <>
                         <button
                           type="button"
                           onClick={() =>
-                            setPreviewImageScale((scale) =>
-                              Math.max(0.5, Number((scale - 0.25).toFixed(2))),
+                            setPreviewImageScaleFromAnchor(
+                              previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
                             )
                           }
                           disabled={!canZoomOut}
@@ -2306,14 +2543,14 @@ const actionBase: CSSProperties = {
                           aria-label="Zoom out"
                           title="Zoom out"
                         >
-                          −
+                          <ZoomOut size={15} />
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => setPreviewImageScale(1)}
+                          onClick={resetPreviewImageZoom}
                           disabled={!canReset}
-                          className="flex h-8 w-16 items-center justify-center rounded-lg text-xs font-semibold"
+                          className="flex h-8 w-[76px] items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold"
                           style={{
                             color: colors.muted2,
                             background: colors.panelBg,
@@ -2324,14 +2561,15 @@ const actionBase: CSSProperties = {
                           aria-label="Reset zoom"
                           title="Reset zoom"
                         >
-                          100%
+                          <RotateCcw size={13} />
+                          <span>{zoomLabel}</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() =>
-                            setPreviewImageScale((scale) =>
-                              Math.min(3, Number((scale + 0.25).toFixed(2))),
+                            setPreviewImageScaleFromAnchor(
+                              previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
                             )
                           }
                           disabled={!canZoomIn}
@@ -2346,7 +2584,7 @@ const actionBase: CSSProperties = {
                           aria-label="Zoom in"
                           title="Zoom in"
                         >
-                          +
+                          <ZoomIn size={15} />
                         </button>
                       </>
                     );
@@ -2364,7 +2602,7 @@ const actionBase: CSSProperties = {
                     aria-label="Minimize preview"
                     title="Minimize preview"
                   >
-                    –
+                    <Minus size={15} />
                   </button>
 
                   <button
@@ -2383,7 +2621,11 @@ const actionBase: CSSProperties = {
                     aria-label="Toggle maximize preview"
                     title="Toggle maximize preview"
                   >
-                    {previewModalMode === "maximized" ? "⤢" : "⤢"}
+                    {previewModalMode === "maximized" ? (
+                      <Minimize2 size={15} />
+                    ) : (
+                      <Maximize2 size={15} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -2450,19 +2692,52 @@ const actionBase: CSSProperties = {
                       if (previewUrl && kind === "image") {
                         return (
                           <div
-                            className="w-full flex justify-center overflow-auto"
-                            style={{ minHeight: 520 }}
+                            ref={previewImageViewportRef}
+                            className="h-full w-full overflow-hidden"
+                            style={{
+                              minHeight: 520,
+                              cursor: isPreviewImageDragging
+                                ? "grabbing"
+                                : previewImageScale > 1
+                                  ? "grab"
+                                  : "zoom-in",
+                              overscrollBehavior: "contain",
+                              position: "relative",
+                              touchAction: "none",
+                              userSelect: "none",
+                            }}
+                            onWheel={handlePreviewImageWheel}
+                            onPointerDown={handlePreviewImagePointerDown}
+                            onPointerMove={handlePreviewImagePointerMove}
+                            onPointerUp={finishPreviewImageDrag}
+                            onPointerCancel={finishPreviewImageDrag}
+                            onLostPointerCapture={finishPreviewImageDrag}
                           >
-                            <img
-                              key={previewUrl || previewFile?.id}
-                              src={previewUrl}
-                              alt={previewFile.name}
-                              className="block max-h-[520px] object-contain"
-                              style={{
-                                transform: `scale(${previewImageScale})`,
-                                transformOrigin: "center center",
-                              }}
-                            />
+                            <div className="flex min-h-full min-w-full items-center justify-center p-3">
+                              <img
+                                key={previewUrl || previewFile?.id}
+                                ref={previewImageRef}
+                                src={previewUrl}
+                                alt={previewFile?.name ?? "Preview"}
+                                onLoad={updatePreviewImageFitSize}
+                                onDoubleClick={handlePreviewImageDoubleClick}
+                                draggable={false}
+                                className="block object-contain"
+                                style={{
+                                  width: previewImageFitSize
+                                    ? `${previewImageFitSize.width}px`
+                                    : "auto",
+                                  height: previewImageFitSize
+                                    ? `${previewImageFitSize.height}px`
+                                    : "auto",
+                                  maxWidth: "none",
+                                  maxHeight: "none",
+                                  transform: `translate3d(${previewImageOffset.x}px, ${previewImageOffset.y}px, 0) scale(${previewImageScale})`,
+                                  transformOrigin: "center center",
+                                  willChange: "transform",
+                                }}
+                              />
+                            </div>
                           </div>
                         );
                       }
