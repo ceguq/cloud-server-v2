@@ -459,7 +459,11 @@ export function GDrive() {
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
 
   const [previewFile, setPreviewFile] = useState<GDriveFileUI | null>(null);
+  const [previewModalMode, setPreviewModalMode] = useState<
+    "normal" | "maximized" | "minimized"
+  >("normal");
   const TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
 
   const previewRequestIdRef = useRef(0);
 
@@ -1382,7 +1386,9 @@ export function GDrive() {
   };
 
   const closePreviewModal = () => {
+    setPreviewModalMode("normal");
     previewRequestIdRef.current += 1;
+
 
     if (previewUrl) {
       try {
@@ -1414,7 +1420,9 @@ export function GDrive() {
   }, [previewUrl]);
 
   const handlePreviewFile = async (file: GDriveFileUI) => {
+    setPreviewModalMode("normal");
     if (!activeAccountId) return;
+
 
     if (!file?.id?.trim()) {
       setPreviewFile(file);
@@ -2058,7 +2066,70 @@ const actionBase: CSSProperties = {
       />
 
 
-      {previewFile ? (
+      {previewFile && previewModalMode === "minimized" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed bottom-4 right-4 z-50"
+          style={{
+            background: colors.surfaceBg,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 12,
+            boxShadow: colors.shadow,
+            width: 320,
+            maxWidth: "calc(100vw - 32px)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="flex items-center justify-between gap-3 px-3 py-2"
+            style={{ borderBottom: `1px solid ${colors.border}` }}
+          >
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold" style={{ color: colors.title }}>
+                {previewFile.name}
+              </div>
+              <div className="mt-0.5 text-[10px]" style={{ color: colors.muted2 }}>
+                Preview minimized
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewModalMode("normal")}
+                className="flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold"
+                style={{
+                  background: `${accentColor}14`,
+                  border: `1px solid ${accentColor}33`,
+                  color: accentColor,
+                }}
+                aria-label="Restore preview"
+                title="Restore preview"
+              >
+                Restore
+              </button>
+
+              <button
+                type="button"
+                onClick={closePreviewModal}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
+                style={{
+                  color: colors.muted2,
+                  background: colors.panelBg,
+                  border: `1px solid ${colors.border}`,
+                }}
+                aria-label="Close preview"
+                title="Close preview"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewFile && previewModalMode !== "minimized" ? (
         <div
           role="dialog"
           aria-modal="true"
@@ -2074,7 +2145,10 @@ const actionBase: CSSProperties = {
               background: colors.surfaceBg,
               borderColor: colors.border,
               boxShadow: colors.shadow,
-              maxHeight: "min(85vh, 900px)",
+              maxHeight: previewModalMode === "maximized" ? "none" : "min(85vh, 900px)",
+              maxWidth: previewModalMode === "maximized" ? "none" : undefined,
+              width: previewModalMode === "maximized" ? "calc(100vw - 32px)" : undefined,
+              height: previewModalMode === "maximized" ? "calc(100vh - 32px)" : undefined,
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2130,20 +2204,56 @@ const actionBase: CSSProperties = {
                 <Download size={14} />
               </button>
 
-              <button
-                type="button"
-                onClick={closePreviewModal}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
-                style={{
-                  color: colors.muted2,
-                  background: colors.panelBg,
-                  border: `1px solid ${colors.border}`,
-                }}
-                aria-label="Close preview"
-                title="Close preview"
-              >
-                &times;
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalMode("minimized")}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                  style={{
+                    color: colors.muted2,
+                    background: colors.panelBg,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                  aria-label="Minimize preview"
+                  title="Minimize preview"
+                >
+                  –
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewModalMode((mode) =>
+                      mode === "maximized" ? "normal" : "maximized",
+                    )
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                  style={{
+                    color: colors.muted2,
+                    background: colors.panelBg,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                  aria-label="Toggle maximize preview"
+                  title="Toggle maximize preview"
+                >
+                  {previewModalMode === "maximized" ? "⤢" : "⤢"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closePreviewModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
+                  style={{
+                    color: colors.muted2,
+                    background: colors.panelBg,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                  aria-label="Close preview"
+                  title="Close preview"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 flex min-h-0 flex-1 flex-col">
