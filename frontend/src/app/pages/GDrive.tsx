@@ -51,7 +51,7 @@ import {
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
-type TabKey = "all" | "starred" | "shared" | "recent";
+type TabKey = "all" | "files" | "starred" | "shared" | "recent";
 type IconComponent = typeof FileText;
 
 type GDriveFileUI = {
@@ -906,6 +906,11 @@ export function GDrive() {
     const query = search.trim().toLowerCase();
     let base = [...gdriveAllFiles];
 
+    if (tab === "files") {
+      base = base.filter(
+        (file) => file.mime !== "application/vnd.google-apps.folder",
+      );
+    }
     if (tab === "starred") base = base.filter((file) => file.starred);
     if (tab === "shared") base = base.filter((file) => file.shared);
     if (tab === "recent") {
@@ -942,6 +947,7 @@ export function GDrive() {
 
   const tabs: Array<{ key: TabKey; label: string; Icon?: IconComponent }> = [
     { key: "all", label: "All Files" },
+    { key: "files", label: "Files" },
     { key: "starred", label: "Starred", Icon: Star },
     { key: "shared", label: "Shared", Icon: Share2 },
     { key: "recent", label: "Recent", Icon: HardDrive },
