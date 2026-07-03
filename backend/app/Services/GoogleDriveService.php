@@ -47,15 +47,18 @@ class GoogleDriveService
         ];
     }
 
-    public function listFiles(GDriveAccount $account, ?string $pageToken = null, int $pageSize = 50): array
+    public function listFiles(GDriveAccount $account, ?string $pageToken = null, int $pageSize = 50, ?string $folderId = null): array
     {
         $account = $this->ensureFreshAccessToken($account);
+        $folderId = is_string($folderId) ? trim($folderId) : '';
 
         $query = [
             'pageSize' => min(max($pageSize, 1), 100),
             'fields' => 'nextPageToken,files(id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred)',
             'orderBy' => 'modifiedTime desc',
-            'q' => 'trashed = false',
+            'q' => $folderId !== ''
+                ? "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $folderId) . "' in parents and trashed = false"
+                : 'trashed = false',
         ];
 
         if (! empty($pageToken)) {
@@ -275,6 +278,79 @@ class GoogleDriveService
         throw new RuntimeException('Google Drive permanent delete failed.', $status ?: 500);
     }
 
+    public function updateFileVisibility(GDriveAccount $account, string $fileId, string $visibility): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        if ($visibility === 'public') {
+            $anyonePermissions = $this->listAnyonePermissions($account, $fileId);
+
+            if (count($anyonePermissions) === 0) {
+                $encodedFileId = rawurlencode($fileId);
+
+                Http::withToken($account->access_token)
+                    ->post(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions?sendNotificationEmail=false&fields=id', [
+                        'type' => 'anyone',
+                        'role' => 'reader',
+                        'allowFileDiscovery' => false,
+                    ])
+                    ->throw();
+            }
+        } elseif ($visibility === 'private') {
+            foreach ($this->listAnyonePermissions($account, $fileId) as $permission) {
+                $permissionId = $permission['id'] ?? null;
+                if (! is_string($permissionId) || trim($permissionId) === '') {
+                    continue;
+                }
+
+                $encodedFileId = rawurlencode($fileId);
+                $encodedPermissionId = rawurlencode($permissionId);
+
+                Http::withToken($account->access_token)
+                    ->delete(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions/' . $encodedPermissionId)
+                    ->throw();
+            }
+        } else {
+            throw new RuntimeException('Invalid Google Drive visibility.', 422);
+        }
+
+        return $this->getFileMetadata($account, $fileId);
+    }
+
+    private function listAnyonePermissions(GDriveAccount $account, string $fileId): array
+    {
+        $encodedFileId = rawurlencode($fileId);
+
+        $response = Http::withToken($account->access_token)
+            ->get(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions', [
+                'fields' => 'permissions(id,type,role,allowFileDiscovery)',
+            ])
+            ->throw()
+            ->json();
+
+        $permissions = is_array($response) && isset($response['permissions']) && is_array($response['permissions'])
+            ? $response['permissions']
+            : [];
+
+        return array_values(array_filter($permissions, function ($permission) {
+            return is_array($permission) && ($permission['type'] ?? null) === 'anyone';
+        }));
+    }
+
+    private function getFileMetadata(GDriveAccount $account, string $fileId): array
+    {
+        $encodedFileId = rawurlencode($fileId);
+
+        $response = Http::withToken($account->access_token)
+            ->get(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId, [
+                'fields' => 'id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred',
+            ])
+            ->throw()
+            ->json();
+
+        return is_array($response) ? $response : [];
+    }
+
     private function updateTrashState(GDriveAccount $account, string $fileId, bool $trashed): array
 
     {
@@ -300,6 +376,35 @@ class GoogleDriveService
             'id' => $response['id'] ?? $fileId,
             'name' => $response['name'] ?? null,
             'trashed' => $response['trashed'] ?? $trashed,
+            'mimeType' => $response['mimeType'] ?? null,
+            'modifiedTime' => $response['modifiedTime'] ?? null,
+        ];
+    }
+
+    public function renameFile(GDriveAccount $account, string $fileId, string $newName): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $response = Http::withToken($account->access_token)
+            ->patch(self::DRIVE_FILES_ENDPOINT . '/' . $fileId, [
+                'name' => $newName,
+            ], [
+                'fields' => self::DRIVE_FILE_UPDATE_FIELDS,
+            ])
+            ->throw()
+            ->json();
+
+        if (! is_array($response)) {
+            return [
+                'id' => $fileId,
+                'name' => $newName,
+            ];
+        }
+
+        return [
+            'id' => $response['id'] ?? $fileId,
+            'name' => $response['name'] ?? $newName,
+            'trashed' => $response['trashed'] ?? false,
             'mimeType' => $response['mimeType'] ?? null,
             'modifiedTime' => $response['modifiedTime'] ?? null,
         ];
@@ -449,6 +554,34 @@ class GoogleDriveService
 
         if (! is_array($response)) {
             throw new RuntimeException('Google Drive upload failed.', 500);
+        }
+
+        return $response;
+    }
+
+    public function createFolder(GDriveAccount $account, string $name, ?string $parentId = null): array
+    {
+        $account = $this->ensureFreshAccessToken($account);
+
+        $metadata = [
+            'name' => $name,
+            'mimeType' => 'application/vnd.google-apps.folder',
+        ];
+
+        if (is_string($parentId) && trim($parentId) !== '') {
+            $metadata['parents'] = [$parentId];
+        }
+
+        $fields = 'id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred';
+        $url = self::DRIVE_FILES_ENDPOINT . '?fields=' . urlencode($fields);
+
+        $response = Http::withToken($account->access_token)
+            ->post($url, $metadata)
+            ->throw()
+            ->json();
+
+        if (! is_array($response)) {
+            throw new RuntimeException('Google Drive create folder failed.', 500);
         }
 
         return $response;

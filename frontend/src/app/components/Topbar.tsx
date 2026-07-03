@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Upload, Bell, ChevronDown } from "lucide-react";
+import { Upload, Bell, ChevronDown } from "lucide-react";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -60,8 +60,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
 }
 
 export function Topbar({ activePage, onLogout }: TopbarProps) {
-  const [searchValue, setSearchValue] = useState("");
-
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement | null>(null);
 
@@ -225,8 +223,6 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
           logoutHover: "rgba(239, 68, 68, 0.18)",
         };
 
-  const systemModeAccentCaret = accentColor;
-
   // Notifications are not wired up yet; keep UI honest.
   const notifications: Array<{ id: string }> = [];
 
@@ -247,42 +243,6 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
       <div className="shrink-0">
         <span className="text-sm font-semibold" style={{ color: topbarColors.title }}>
           {pageTitles[activePage] || "Dashboard"}
-        </span>
-      </div>
-
-      {/* Search Bar */}
-      <div className="flex-1 max-w-xl relative">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2"
-          style={{ color: topbarColors.icon }}
-        />
-        <input
-          type="text"
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          placeholder="Search files, folders, and more..."
-          className="w-full pl-9 pr-4 py-2 rounded-lg text-sm outline-none transition-all"
-          style={{
-            background: topbarColors.inputBg,
-            border: `1px solid ${topbarColors.inputBorder}`,
-            color: topbarColors.inputText,
-            caretColor: systemModeAccentCaret,
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = systemModeAccentCaret;
-            e.currentTarget.style.boxShadow = `0 0 0 2px ${systemModeAccentCaret}26`;
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = topbarColors.inputBorder;
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        />
-        <span
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded"
-          style={{ background: topbarColors.shortcutBg, color: topbarColors.shortcutText }}
-        >
-          ⌘K
         </span>
       </div>
 

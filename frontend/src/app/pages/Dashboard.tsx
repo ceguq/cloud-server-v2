@@ -51,7 +51,6 @@ import {
   FileCode,
   Cpu,
   MemoryStick,
-  Activity,
   CheckCircle,
   RefreshCw,
   Clock,
@@ -635,19 +634,6 @@ export function Dashboard() {
             Here's what's happening with your cloud today.
           </p>
         </div>
-        <button
-          type="button"
-          title="Customize Dashboard"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-90"
-          style={{
-            background: dashboardColors.panelBg,
-            border: `1px solid ${dashboardColors.border}`,
-            color: dashboardColors.muted2,
-          }}
-        >
-          <Activity size={13} />
-          Customize Dashboard
-        </button>
       </div>
 
       {/* Stat Cards */}
@@ -945,26 +931,24 @@ export function Dashboard() {
 
                 return (
                   <div className="relative">
-                    <ResponsiveContainer width={140} height={140}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx={65}
-                          cy={65}
-                          innerRadius={45}
-                          outerRadius={65}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {pieData.map((entry) => (
-                            <Cell
-                              key={entry.key}
-                              fill={categoryColorByKey[entry.key] ?? "#3b82f6"}
-                            />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <PieChart width={140} height={140}>
+                      <Pie
+                        data={pieData}
+                        cx={65}
+                        cy={65}
+                        innerRadius={45}
+                        outerRadius={65}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry) => (
+                          <Cell
+                            key={entry.key}
+                            fill={categoryColorByKey[entry.key] ?? "#3b82f6"}
+                          />
+                        ))}
+                      </Pie>
+                    </PieChart>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span
                         className="text-lg font-bold"

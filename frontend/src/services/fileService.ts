@@ -119,6 +119,8 @@ export async function cancelUpload(id: string) {
 
 export function canPreviewFile(file: FileModel): boolean {
   const mime = (file.mime_type ?? "").toLowerCase();
+  const name = (file.original_name ?? "").toLowerCase();
+  const extension = name.includes(".") ? name.split(".").pop() ?? "" : "";
 
   return (
     mime.startsWith("image/") ||
@@ -136,7 +138,36 @@ export function canPreviewFile(file: FileModel): boolean {
     mime === "text/html" ||
     mime === "text/markdown" ||
     mime === "text/csv" ||
-    mime === "application/typescript"
+    mime === "application/typescript" ||
+    [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "webp",
+      "bmp",
+      "svg",
+      "pdf",
+      "mp4",
+      "webm",
+      "mov",
+      "m4v",
+      "mp3",
+      "wav",
+      "ogg",
+      "m4a",
+      "txt",
+      "md",
+      "markdown",
+      "json",
+      "xml",
+      "js",
+      "ts",
+      "css",
+      "html",
+      "csv",
+      "log",
+    ].includes(extension)
   );
 }
 

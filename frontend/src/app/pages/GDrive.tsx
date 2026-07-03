@@ -12,8 +12,10 @@ import {
 import {
   Archive,
   CheckCircle2,
+  Copy,
   Database,
   Download,
+  Edit3,
   Eye,
   FileText,
   Film,
@@ -51,9 +53,12 @@ import {
   getGDriveConnectUrl,
   getGDriveFileBlob,
   getTrashedGDriveFiles,
+  renameGDriveFile,
   restoreGDriveFile,
   trashGDriveFile,
   uploadGDriveFile,
+  createGDriveFolder,
+  updateGDriveFileVisibility,
   deleteGDriveFilePermanently,
   type GDriveAccount,
   type GDriveFile,
@@ -79,7 +84,13 @@ type GDriveFileUI = {
   webContentLink: string;
 };
 
+type GDriveFolderCrumb = {
+  id: string;
+  name: string;
+};
+
 const GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE = "Google Drive account not found.";
+const GOOGLE_DRIVE_ACCOUNT_DISCONNECTED_MESSAGE = "Google Drive account is disconnected.";
 const ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE =
   "Selected Google Drive account is not available for this user. Please reconnect or choose another account.";
 const GENERIC_FILES_ERROR_MESSAGE = "Failed to load Google Drive files.";
@@ -108,8 +119,10 @@ function isAccountUnavailableError(error: unknown): boolean {
 
   return (
     message === GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE ||
+    message === GOOGLE_DRIVE_ACCOUNT_DISCONNECTED_MESSAGE ||
     message.includes("No query results for model [App\\Models\\GDriveAccount]") ||
-    status === 404
+    status === 404 ||
+    status === 422
   );
 }
 
@@ -453,6 +466,7 @@ export function GDrive() {
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [accountsError, setAccountsError] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string>("");
+  const [gdriveFolderPath, setGdriveFolderPath] = useState<GDriveFolderCrumb[]>([]);
 
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -468,6 +482,11 @@ export function GDrive() {
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
+  const currentFolderId =
+    gdriveFolderPath.length > 0
+      ? gdriveFolderPath[gdriveFolderPath.length - 1].id
+      : null;
+
 
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -478,6 +497,19 @@ export function GDrive() {
   const [downloadingFileId, setDownloadingFileId] = useState<string>("");
   const [detailsFile, setDetailsFile] = useState<GDriveFileUI | null>(null);
   const [openActionFileId, setOpenActionFileId] = useState<string | null>(null);
+  const [openSharePanelFileId, setOpenSharePanelFileId] = useState<string | null>(null);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [selectedFileForRename, setSelectedFileForRename] = useState<GDriveFileUI | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string>("");
+  const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
+  const [selectedFileForTrash, setSelectedFileForTrash] = useState<GDriveFileUI | null>(null);
+  const [isChecklistMode, setIsChecklistMode] = useState(false);
+  const [checkedRowKeys, setCheckedRowKeys] = useState<string[]>([]);
+  const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
+  const [isBulkTrashModalOpen, setIsBulkTrashModalOpen] = useState(false);
+  const [bulkTrashLoading, setBulkTrashLoading] = useState(false);
 
   const [previewFile, setPreviewFile] = useState<GDriveFileUI | null>(null);
   const [previewModalMode, setPreviewModalMode] = useState<
@@ -485,6 +517,10 @@ export function GDrive() {
   >("normal");
 
   const [previewImageScale, setPreviewImageScale] = useState(1);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [folderModalName, setFolderModalName] = useState("");
+  const [folderModalError, setFolderModalError] = useState("");
+  const [folderActionLoading, setFolderActionLoading] = useState(false);
   const [previewImageFitSize, setPreviewImageFitSize] = useState<{
     width: number;
     height: number;
@@ -692,8 +728,10 @@ export function GDrive() {
 
   const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
   const [deletingPermanentFileId, setDeletingPermanentFileId] = useState<string | null>(null);
+  const [sharingFileId, setSharingFileId] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
-  const ACTION_MENU_WIDTH = 176;
+  const ACTION_MENU_WIDTH = 260;
 
   const hasValidGDriveFileId = (file: GDriveFileUI): boolean => {
     return Boolean(file.id && file.id.trim());
@@ -970,6 +1008,7 @@ export function GDrive() {
       });
 
       if (activeAccountId === accountId) {
+        setGdriveFolderPath([]);
         setGdriveFiles([]);
       }
 
@@ -1030,7 +1069,10 @@ export function GDrive() {
       try {
         const res =
           driveListMode === "files"
-            ? await getGDriveAccountFiles(accountId, { page_size: 50 })
+            ? await getGDriveAccountFiles(accountId, {
+                page_size: 50,
+                folder_id: currentFolderId,
+              })
             : await getTrashedGDriveFiles(accountId, { page_size: 50 });
 
         if (cancelled) return;
@@ -1081,7 +1123,7 @@ export function GDrive() {
     return () => {
       cancelled = true;
     };
-  }, [accountsLoaded, activeAccountId, connectedAccountIdsKey, refreshTick, driveListMode]);
+  }, [accountsLoaded, activeAccountId, connectedAccountIdsKey, refreshTick, driveListMode, currentFolderId]);
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
@@ -1161,12 +1203,16 @@ export function GDrive() {
   ];
 
   const tableGridTemplate = "minmax(0, 1fr) 140px 170px 112px 132px 44px";
+  const effectiveTableGridTemplate = isChecklistMode
+    ? `40px ${tableGridTemplate}`
+    : tableGridTemplate;
 
   const selectAccount = (account: GDriveAccount) => {
     if (!account.is_connected) return;
 
     const nextActiveAccountId = normalizeAccountId(account.id);
     setActiveAccountId(nextActiveAccountId);
+    setGdriveFolderPath([]);
     setFilesError(false);
     setFilesErrorMessage("");
     setGdriveFiles([]);
@@ -1181,12 +1227,6 @@ export function GDrive() {
     selectAccount(account);
   };
 
-  const openFile = (file: GDriveFileUI) => {
-    const url = file.webViewLink || file.webContentLink;
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
   const downloadFile = async (file: GDriveFileUI) => {
     if (downloadingFileId) return;
     if (!file.accountId || !file.id) return;
@@ -1199,6 +1239,53 @@ export function GDrive() {
       window.alert("Failed to download Google Drive file.");
     } finally {
       setDownloadingFileId("");
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    if (bulkDownloadLoading) return;
+    const all = folderItems.concat(regularFileItems);
+    const selectedFiles = checkedRowKeys
+      .map((key) => all.find((f) => f.rowKey === key))
+      .filter(Boolean) as GDriveFileUI[];
+    if (selectedFiles.length === 0) return;
+
+    setBulkDownloadLoading(true);
+    try {
+      for (const file of selectedFiles) {
+        if (!file.accountId || !file.id) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await downloadGDriveFile(file.accountId, file.id, file.name);
+      }
+    } finally {
+      setBulkDownloadLoading(false);
+    }
+  };
+
+  const handleConfirmBulkTrash = async () => {
+    if (bulkTrashLoading) return;
+    const all = folderItems.concat(regularFileItems);
+    const selectedFiles = checkedRowKeys
+      .map((key) => all.find((f) => f.rowKey === key))
+      .filter(Boolean) as GDriveFileUI[];
+    if (selectedFiles.length === 0) return;
+
+    setBulkTrashLoading(true);
+    try {
+      for (const file of selectedFiles) {
+        if (!file.accountId || !file.id) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await trashGDriveFile(file.accountId, file.id);
+      }
+
+      setIsBulkTrashModalOpen(false);
+      setCheckedRowKeys([]);
+      setIsChecklistMode(false);
+      setRefreshTick((v) => v + 1);
+    } catch {
+      setTrashError("Failed to move some files to trash.");
+    } finally {
+      setBulkTrashLoading(false);
     }
   };
 
@@ -1231,6 +1318,105 @@ export function GDrive() {
       window.setTimeout(() => setCopiedFileId(""), 1400);
     } catch {
       window.prompt("Copy Google Drive link", url);
+    }
+  };
+
+  const applyUpdatedGDriveFile = (updatedFile: GDriveFile) => {
+    const updatedId = String(updatedFile.id ?? "");
+    const updatedAccountId = String(updatedFile.account_id ?? "");
+
+    setGdriveFiles((prev) =>
+      prev.map((file) => {
+        const sameFile =
+          String(file.id ?? "") === updatedId &&
+          String(file.account_id ?? "") === updatedAccountId;
+
+        return sameFile ? { ...file, ...updatedFile } : file;
+      }),
+    );
+
+    setDetailsFile((prev) => {
+      if (!prev || prev.id !== updatedId || prev.accountId !== updatedAccountId) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        shared: !!updatedFile.shared,
+        webViewLink: updatedFile.web_view_link || prev.webViewLink,
+        webContentLink: updatedFile.web_content_link || prev.webContentLink,
+      };
+    });
+  };
+
+  const handleUpdateFileVisibility = async (
+    file: GDriveFileUI,
+    visibility: "public" | "private",
+  ) => {
+    if (!file.accountId || !file.id?.trim()) {
+      setShareError("Action unavailable because this item has no Google Drive file id.");
+      return;
+    }
+
+    setShareError(null);
+    setSharingFileId(file.rowKey);
+
+    try {
+      const res = await updateGDriveFileVisibility(file.accountId, file.id, visibility);
+      if (res?.data) {
+        applyUpdatedGDriveFile(res.data);
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.message;
+      setShareError(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Failed to update Google Drive sharing.",
+      );
+    } finally {
+      setSharingFileId(null);
+    }
+  };
+
+  const handleRenameFile = async () => {
+    if (!selectedFileForRename || !renameValue.trim()) {
+      setRenameError("Please enter a file name.");
+      return;
+    }
+
+    if (!selectedFileForRename.accountId || !selectedFileForRename.id?.trim()) {
+      setRenameError("Action unavailable because this item has no Google Drive file id.");
+      return;
+    }
+
+    setRenameError("");
+    setRenamingFileId(selectedFileForRename.rowKey);
+
+    try {
+      const res = await renameGDriveFile(
+        selectedFileForRename.accountId,
+        selectedFileForRename.id,
+        renameValue.trim()
+      );
+      if (res?.data) {
+        const updatedFile = {
+          ...res.data,
+          account_id: res.data.account_id ?? selectedFileForRename.accountId,
+        };
+        applyUpdatedGDriveFile(updatedFile);
+      }
+      setIsRenameModalOpen(false);
+      setSelectedFileForRename(null);
+      setRenameValue("");
+    } catch (error: any) {
+      const message = error?.response?.data?.message;
+      setRenameError(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Failed to rename Google Drive file.",
+      );
+    } finally {
+      setRenamingFileId(null);
     }
   };
 
@@ -1371,6 +1557,44 @@ export function GDrive() {
   const closeActionMenu = () => {
     setOpenActionFileId(null);
     setActionMenuPosition(null);
+    setShareError(null);
+  };
+
+  const isGDriveInteractiveClickTarget = (target: EventTarget | null): boolean => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+
+    const tag = element.tagName?.toLowerCase?.() ?? "";
+    return (
+      tag === "button" ||
+      tag === "a" ||
+      element.getAttribute?.("role") === "menuitem" ||
+      element.closest?.("[data-gdrive-action-menu='true']") !== null
+    );
+  };
+
+  const openGDriveFolder = (file: GDriveFileUI) => {
+    if (!isGDriveFolder(file) || !file.id || driveListMode === "trash") return;
+
+    closeActionMenu();
+    setDriveListMode("files");
+    setFilesError(false);
+    setFilesErrorMessage("");
+    setGdriveFiles([]);
+    setGdriveFolderPath((prev) => {
+      const existingIndex = prev.findIndex((crumb) => crumb.id === file.id);
+      if (existingIndex >= 0) return prev.slice(0, existingIndex + 1);
+      return [...prev, { id: file.id, name: file.name || "Untitled" }];
+    });
+  };
+
+  const navigateToGDriveFolder = (index: number) => {
+    closeActionMenu();
+    setDriveListMode("files");
+    setFilesError(false);
+    setFilesErrorMessage("");
+    setGdriveFiles([]);
+    setGdriveFolderPath((prev) => (index < 0 ? [] : prev.slice(0, index + 1)));
   };
 
   const handleFileContextMenu = (
@@ -1434,6 +1658,56 @@ export function GDrive() {
     }
 
     uploadInputRef.current?.click();
+  };
+
+  const openCreateFolderModal = () => {
+    setFolderModalName("");
+    setFolderModalError("");
+    setIsFolderModalOpen(true);
+  };
+
+  const closeFolderModal = () => {
+    if (folderActionLoading) return;
+    setIsFolderModalOpen(false);
+  };
+
+  const submitFolderModal = async () => {
+    if (folderActionLoading) return;
+
+    if (!activeAccountId) {
+      setFolderModalError("Select a Google Drive account before creating a folder.");
+      return;
+    }
+
+    if (driveListMode === "trash") {
+      setFolderModalError("Switch to Files before creating a folder.");
+      return;
+    }
+
+    const name = folderModalName.trim();
+    if (!name) {
+      setFolderModalError("Nama folder tidak boleh kosong.");
+      return;
+    }
+
+    try {
+      setFolderActionLoading(true);
+      setFolderModalError("");
+
+      await createGDriveFolder(activeAccountId, name, currentFolderId);
+      setRefreshTick((value) => value + 1);
+      setIsFolderModalOpen(false);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || error?.message || "Gagal membuat folder.";
+      setFolderModalError(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Gagal membuat folder.",
+      );
+    } finally {
+      setFolderActionLoading(false);
+    }
   };
 
   const handleUploadFileChange = async (
@@ -1510,16 +1784,16 @@ export function GDrive() {
     | "unknown" => {
     const resolvedType = (contentType || "").trim().toLowerCase();
 
-    const workspaceMime = (file.mime || "").toLowerCase();
-    if (workspaceMime.startsWith("application/vnd.google-apps.")) return "unknown";
-
     if (previewTextContent !== null) return "text";
-    if (isGDriveTextPreviewable(file)) return "text";
 
     if (resolvedType.startsWith("image/")) return "image";
     if (resolvedType === "application/pdf") return "pdf";
     if (resolvedType.startsWith("video/")) return "video";
     if (resolvedType.startsWith("audio/")) return "audio";
+
+    const workspaceMime = (file.mime || "").toLowerCase();
+    if (workspaceMime.startsWith("application/vnd.google-apps.")) return "unknown";
+    if (isGDriveTextPreviewable(file)) return "text";
 
     const ext = getGDriveFileExtensionFromFile(file);
     if (!resolvedType || resolvedType === "application/octet-stream") {
@@ -1587,6 +1861,14 @@ export function GDrive() {
 
   const isGDrivePreviewable = (file: GDriveFileUI): boolean => {
     const mime = (file.mime || "").toLowerCase();
+
+    if (
+      mime === "application/vnd.google-apps.document" ||
+      mime === "application/vnd.google-apps.presentation" ||
+      mime === "application/vnd.google-apps.drawing"
+    ) {
+      return true;
+    }
 
     if (mime.startsWith("application/vnd.google-apps.")) return false;
 
@@ -1711,7 +1993,8 @@ export function GDrive() {
 
     if (!isGDrivePreviewable(file)) {
       setPreviewLoading(false);
-      setPreviewError("");
+      setPreviewError("Preview unavailable. Use Download instead.");
+      closeActionMenu();
       return;
     }
 
@@ -1729,7 +2012,7 @@ export function GDrive() {
           setPreviewTextContent(null);
           setPreviewUrl("");
           setPreviewContentType("");
-          setPreviewError("Text preview is limited to 1 MB. Use Download or Open instead.");
+          setPreviewError("Text preview is limited to 1 MB. Use Download instead.");
           setPreviewLoading(false);
           return;
         }
@@ -1741,7 +2024,7 @@ export function GDrive() {
           setPreviewTextContent(null);
           setPreviewUrl("");
           setPreviewContentType("");
-          setPreviewError("Text preview is limited to 1 MB. Use Download or Open instead.");
+          setPreviewError("Text preview is limited to 1 MB. Use Download instead.");
           setPreviewLoading(false);
           return;
         }
@@ -1804,6 +2087,30 @@ export function GDrive() {
 
     try {
       await trashGDriveFile(activeAccountId, file.id);
+      closeActionMenu();
+      setRefreshTick((value) => value + 1);
+    } catch {
+      setTrashError("Failed to move file to trash.");
+    } finally {
+      setTrashingFileId(null);
+    }
+  };
+
+  const handleConfirmTrashFile = async () => {
+    const file = selectedFileForTrash;
+    if (!activeAccountId) return;
+    if (!file?.id?.trim()) {
+      setTrashError("Action unavailable because this file has no Google Drive file id.");
+      return;
+    }
+
+    setTrashingFileId(file.rowKey);
+    setTrashError(null);
+
+    try {
+      await trashGDriveFile(activeAccountId, file.id);
+      setIsTrashModalOpen(false);
+      setSelectedFileForTrash(null);
       closeActionMenu();
       setRefreshTick((value) => value + 1);
     } catch {
@@ -1876,24 +2183,68 @@ const renderFileActions = (file: GDriveFileUI) => {
 
     const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
     const isGDriveFileIdValid = hasValidGDriveFileId(file);
+    const canPreview = !isGDriveFolder(file) && isGDriveFileIdValid;
 
     const isOpen = openActionFileId === file.rowKey;
 
-
-
-const actionBase: CSSProperties = {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      border: `1px solid transparent`,
+    const menuItemStyle = (
+      danger = false,
+      disabled = false,
+    ): CSSProperties => ({
+      marginTop: 4,
+      opacity: disabled ? 0.45 : 1,
+      cursor: disabled ? "not-allowed" : "pointer",
+      color: danger ? "#ef4444" : colors.text,
       background: "transparent",
-      color: colors.muted,
-    };
+    });
 
-
+    const renderMenuItem = ({
+      label,
+      icon,
+      onClick,
+      disabled = false,
+      danger = false,
+      title,
+      ariaLabel,
+    }: {
+      label: string;
+      icon: React.ReactNode;
+      onClick: () => void;
+      disabled?: boolean;
+      danger?: boolean;
+      title?: string;
+      ariaLabel?: string;
+    }) => (
+      <button
+        type="button"
+        role="menuitem"
+        aria-label={ariaLabel ?? label}
+        title={title ?? label}
+        className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+        disabled={disabled}
+        style={menuItemStyle(danger, disabled)}
+        onMouseEnter={(event) => {
+          if (disabled) return;
+          event.currentTarget.style.background = danger
+            ? "rgba(239,68,68,0.12)"
+            : `${accentColor}10`;
+        }}
+        onMouseLeave={(event) => {
+          event.currentTarget.style.background = "transparent";
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (disabled) return;
+          onClick();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <span>{label}</span>
+        </div>
+      </button>
+    );
 
     const downloadTitle =
       file.mime === "application/vnd.google-apps.document"
@@ -1907,163 +2258,88 @@ const actionBase: CSSProperties = {
               : "Download";
 
     return (
-      <div className="relative flex items-center justify-end" data-gdrive-action-menu="true">
+      <div className="relative">
         <button
           type="button"
+          aria-label={`More actions for ${file.name}`}
           title="More actions"
-                  ref={(el) => {
-            actionButtonRefs.current[file.rowKey] = el;
-          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
 
-          onClick={(e) => {
-            e.stopPropagation();
-
-            const nextOpen =
-              openActionFileId === file.rowKey ? null : file.rowKey;
-
-
-            if (!nextOpen) {
+            if (openActionFileId === file.rowKey) {
               closeActionMenu();
               return;
             }
 
             closeActionMenu();
-
             setOpenActionFileId(file.rowKey);
 
-
-
-            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-
+            const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
             const menuWidth = ACTION_MENU_WIDTH;
             const left = Math.min(
               window.innerWidth - menuWidth - 12,
               Math.max(12, rect.right - menuWidth),
             );
-            const top = Math.min(window.innerHeight - 220, rect.bottom + 6);
+            const top = Math.min(window.innerHeight - 300, rect.bottom + 6);
 
             setActionMenuPosition({ top, left });
-
           }}
-
+          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
           style={{
-            ...actionBase,
-            cursor: "pointer",
-            color: colors.muted,
-            borderColor: isOpen ? `${accentColor}33` : "transparent",
             background: isOpen ? `${accentColor}12` : "transparent",
+            border: `1px solid ${isOpen ? `${accentColor}33` : "transparent"}`,
+            color: isOpen ? colors.text : colors.muted,
           }}
         >
           <MoreVertical size={16} />
         </button>
 
-                {isOpen ? (
+        {isOpen ? (
           <div
             ref={actionMenuRef}
             role="menu"
-
-            aria-label="File actions"
-            data-gdrive-action-menu="true"
+            aria-label={`File actions ${file.name}`}
+            onMouseDown={(event) => event.stopPropagation()}
             style={{
-
               position: "fixed",
               top: actionMenuPosition?.top,
               left: actionMenuPosition?.left,
               width: ACTION_MENU_WIDTH,
-              zIndex: 99999,
-
+              zIndex: 9999,
               background: colors.panelBg,
               border: `1px solid ${colors.border}`,
               borderRadius: 10,
               padding: 6,
-              boxShadow: colors.shadow,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
             }}
           >
 
-            {driveListMode !== "trash" && isGDriveFileIdValid && isGDrivePreviewable(file) ? (
-              <button
-
-                type="button"
-                role="menuitem"
-                aria-label="Preview"
-                title="Preview"
-                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={previewLoading}
-                style={{
-                  opacity: previewLoading ? 0.65 : 1,
-                  cursor: previewLoading ? "not-allowed" : "pointer",
-                  color: colors.text,
-                  background: "transparent",
-                }}
-                onClick={() => {
+            {driveListMode !== "trash" && !isGDriveFolder(file) ? (
+              renderMenuItem({
+                label: previewLoading ? "Opening..." : "Preview",
+                icon: <Eye size={14} />,
+                disabled: !canPreview || previewLoading,
+                ariaLabel: `Preview ${file.name}`,
+                onClick: () => {
                   closeActionMenu();
                   void handlePreviewFile(file);
-                }}
-              >
-
-                <div className="flex items-center gap-2">
-                  <Eye size={14} />
-                  <span>Preview</span>
-                </div>
-              </button>
+                },
+              })
             ) : null}
 
 
             {driveListMode !== "trash" ? (
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Open"
-                title="Open"
-                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={!hasOpenUrl}
-                style={{
-                  opacity: hasOpenUrl ? 1 : 0.45,
-                  cursor: hasOpenUrl ? "pointer" : "not-allowed",
-                  color: colors.text,
-                  background: "transparent",
-                }}
-                onClick={() => {
-                  closeActionMenu();
-                  openFile(file);
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Eye size={14} />
-                  <span>Open</span>
-                </div>
-              </button>
-            ) : null}
-
-
-
-
-
-            {driveListMode !== "trash" ? (
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="Details"
-                title="Details"
-                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={!file.id}
-                style={{
-                  marginTop: 4,
-                  opacity: file.id ? 1 : 0.45,
-                  cursor: file.id ? "pointer" : "not-allowed",
-                  color: colors.text,
-                  background: "transparent",
-                }}
-                onClick={() => {
+              renderMenuItem({
+                label: "Details",
+                icon: <FileText size={14} />,
+                disabled: !file.id,
+                ariaLabel: `Details ${file.name}`,
+                onClick: () => {
                   closeActionMenu();
                   setDetailsFileAndReset(file);
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <FileText size={14} />
-                  <span>Details</span>
-                </div>
-              </button>
+                },
+              })
             ) : null}
 
 
@@ -2072,232 +2348,242 @@ const actionBase: CSSProperties = {
 
             {driveListMode !== "trash" ? (
               <>
-                {isGDriveFolder(file) ? null : (
-              <button
-                    type="button"
-                    role="menuitem"
-                    aria-label="Download"
-                    title={downloadTitle}
-                    className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                    disabled={
-                      downloadingFileId === file.rowKey || !file.accountId || !file.id
-                    }
-
-                    style={{
-                    marginTop: 4,
-                      opacity:
-                      downloadingFileId === file.rowKey || !file.accountId || !file.id
-                        ? 0.45
-                        : 1,
-
-                    cursor:
-                          downloadingFileId === file.rowKey || !file.accountId || !file.id
-                        ? "not-allowed"
-                        : "pointer",
-
-                    color: colors.text,
-                    background: "transparent",
-                  }}
-                  onClick={() => {
+                {isGDriveFolder(file) ? null : renderMenuItem({
+                  label: "Download",
+                  icon: <Download size={14} />,
+                  disabled:
+                    downloadingFileId === file.rowKey || !file.accountId || !file.id,
+                  ariaLabel: `Download ${file.name}`,
+                  title: downloadTitle,
+                  onClick: () => {
                     closeActionMenu();
                     void downloadFile(file);
-                  }}
+                  },
+                })}
 
-                >
-                  <div className="flex items-center gap-2">
-                    <Download size={14} />
-                    <span>Download</span>
+                {renderMenuItem({
+                  label: openSharePanelFileId === file.rowKey ? "Share" : "Share",
+                  icon: <Share2 size={14} />,
+                  disabled: !hasOpenUrl,
+                  ariaLabel: `Share ${file.name}`,
+                  onClick: () => {
+                    setOpenSharePanelFileId(
+                      openSharePanelFileId === file.rowKey ? null : file.rowKey
+                    );
+                  },
+                })}
+
+                {openSharePanelFileId === file.rowKey ? (
+                  <div
+                    className="mt-2 rounded-lg border p-2"
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.panelBg,
+                    }}
+                  >
+                    <div
+                      className="mb-1 text-[10px] font-semibold"
+                      style={{ color: colors.muted2 }}
+                    >
+                      Link
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <div
+                        className="min-w-0 flex-1 truncate rounded-md border px-2 py-1 text-[10px]"
+                        style={{
+                          borderColor: colors.border,
+                          color: hasOpenUrl ? colors.text : colors.muted2,
+                          background: colors.panelBg,
+                        }}
+                        title={file.webViewLink || file.webContentLink || "No link available"}
+                      >
+                        {hasOpenUrl ? (file.webViewLink || file.webContentLink) : "No link"}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Copy link ${file.name}`}
+                        title="Copy link"
+                        disabled={!hasOpenUrl}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                        style={{
+                          opacity: !hasOpenUrl ? 0.45 : 1,
+                          cursor: !hasOpenUrl ? "not-allowed" : "pointer",
+                          border: `1px solid ${colors.border}`,
+                          color: hasOpenUrl ? accentColor : colors.muted2,
+                          background: colors.panelBg,
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (!hasOpenUrl) return;
+                          void copyFileLink(file);
+                          setCopiedFileId(file.id);
+                          window.setTimeout(() => setCopiedFileId(""), 1400);
+                        }}
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
                   </div>
-                </button>
-)}
+                ) : null}
 
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Copy link"
-                  title="Copy link"
-                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                  disabled={!hasOpenUrl}
-                  style={{
-                    marginTop: 4,
-                    opacity: hasOpenUrl ? 1 : 0.45,
-                    cursor: hasOpenUrl ? "pointer" : "not-allowed",
-                    color: colors.text,
-                    background: "transparent",
-                  }}
-                  onClick={() => {
-                    closeActionMenu();
-                    void copyFileLink(file);
-                  }}
-
+                <div
+                  className="mt-2 border-t pt-2"
+                  style={{ borderColor: colors.border }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Share2 size={14} />
-                    <span>Copy link</span>
+                  <div
+                    className="mb-1 text-[10px] font-semibold"
+                    style={{ color: colors.muted2 }}
+                  >
+                    Status
                   </div>
-                </button>
+                  <div className="mt-1 grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Set private ${file.name}`}
+                      title="Private"
+                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
+                      disabled={!isGDriveFileIdValid || sharingFileId === file.rowKey}
+                      style={{
+                        opacity: !isGDriveFileIdValid || sharingFileId === file.rowKey ? 0.45 : 1,
+                        cursor:
+                          !isGDriveFileIdValid || sharingFileId === file.rowKey
+                            ? "not-allowed"
+                            : "pointer",
+                        color: !file.shared ? accentColor : colors.text,
+                        background: !file.shared ? `${accentColor}12` : "transparent",
+                        border: `1px solid ${
+                          !file.shared ? `${accentColor}33` : "transparent"
+                        }`,
+                      }}
+                      onClick={() => {
+                        void handleUpdateFileVisibility(file, "private");
+                      }}
+                    >
+                      Private
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Set shared ${file.name}`}
+                      title="Shared"
+                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
+                      disabled={!isGDriveFileIdValid || sharingFileId === file.rowKey}
+                      style={{
+                        opacity: !isGDriveFileIdValid || sharingFileId === file.rowKey ? 0.45 : 1,
+                        cursor:
+                          !isGDriveFileIdValid || sharingFileId === file.rowKey
+                            ? "not-allowed"
+                            : "pointer",
+                        color: file.shared ? accentColor : colors.text,
+                        background: file.shared ? `${accentColor}12` : "transparent",
+                        border: `1px solid ${
+                          file.shared ? `${accentColor}33` : "transparent"
+                        }`,
+                      }}
+                      onClick={() => {
+                        void handleUpdateFileVisibility(file, "public");
+                      }}
+                    >
+                      Shared
+                    </button>
+                  </div>
+                </div>
               </>
             ) : null}
 
+                <div
+                  className="mt-2 border-t pt-2"
+                  style={{ borderColor: colors.border }}
+                >
+                  {renderMenuItem({
+                    label: "Rename",
+                    icon: <Edit3 size={14} />,
+                    disabled: !isGDriveFileIdValid || driveListMode === "trash",
+                    ariaLabel: `Rename ${file.name}`,
+                    title: driveListMode === "trash" ? "Cannot rename files in trash" : "Rename",
+                    onClick: () => {
+                      closeActionMenu();
+                      setSelectedFileForRename(file);
+                      setRenameValue(file.name);
+                      setRenameError("");
+                      setIsRenameModalOpen(true);
+                    },
+                  })}
+                </div>
+
                 {driveListMode === "trash" && isGDriveFileIdValid ? (
               <>
-                <button
-
-                  type="button"
-                  role="menuitem"
-                  aria-label="Restore"
-                  title="Restore"
-                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                      disabled={!activeAccountId || restoringFileId === file.rowKey}
-
-                  style={{
-                    marginTop: 4,
-                    opacity: !activeAccountId
-                      ? 0.45
-                      : restoringFileId === file.id
-                        ? 0.65
-                        : 1,
-                    cursor:
-                      !activeAccountId
-                        ? "not-allowed"
-                        : restoringFileId === file.id
-                          ? "not-allowed"
-                          : "pointer",
-                    color: "#22c55e",
-                    background: "transparent",
-                  }}
-                  onClick={() => {
-                    void handleRestoreFile(file);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
+                {renderMenuItem({
+                  label: restoringFileId === file.rowKey ? "Restoring..." : "Restore",
+                  icon: (
                     <Trash2
                       size={14}
                       style={{ transform: "rotate(180deg)" }}
                     />
-                  <span>
-                      {restoringFileId === file.rowKey ? "Restoring..." : "Restore"}
-                     </span>
+                  ),
+                  disabled: !activeAccountId || restoringFileId === file.rowKey,
+                  ariaLabel: `Restore ${file.name}`,
+                  onClick: () => {
+                    void handleRestoreFile(file);
+                  },
+                })}
 
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Delete Permanently"
-                  title="Delete Permanently"
-                  className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                  disabled={deletingPermanentFileId === file.rowKey}
-
-                  style={{
-                    marginTop: 4,
-                    opacity:
-                      deletingPermanentFileId === file.rowKey ? 0.65 : 1,
-                    cursor:
-                      deletingPermanentFileId === file.rowKey
-                        ? "not-allowed"
-                        : "pointer",
-
-                    color: "#ef4444",
-                    background: "transparent",
-                  }}
-                  onClick={() => {
+                {renderMenuItem({
+                  label: deletingPermanentFileId === file.rowKey
+                    ? "Deleting..."
+                    : "Delete Permanently",
+                  icon: <Trash2 size={14} />,
+                  disabled: deletingPermanentFileId === file.rowKey,
+                  danger: true,
+                  ariaLabel: `Delete permanently ${file.name}`,
+                  onClick: () => {
                     void handleDeletePermanentlyFile(file);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Trash2 size={14} />
-                    <span>
-                      {deletingPermanentFileId === file.rowKey
-                        ? "Deleting..."
-                        : "Delete Permanently"}
-                    </span>
-
-                  </div>
-                </button>
+                  },
+                })}
               </>
             ) : null}
 
 
             {driveListMode !== "trash" && driveListMode === "files" && isGDriveFileIdValid ? (
-              <button
-
-                type="button"
-                role="menuitem"
-                aria-label="Trash"
-                title="Trash"
-                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-                disabled={!activeAccountId || trashingFileId === file.rowKey}
-
-                style={{
-                  marginTop: 4,
-                    opacity: !activeAccountId
-                      ? 0.45
-                      : trashingFileId === file.rowKey
-                        ? 0.65
-                        : 1,
-                  cursor:
-                    !activeAccountId
-                      ? "not-allowed"
-                      : trashingFileId === file.rowKey
-                        ? "not-allowed"
-                        : "pointer",
-
-                  color: "#ef4444",
-                  background: "transparent",
-                }}
-                onClick={() => {
-                  void handleTrashFile(file);
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Trash2 size={14} />
-                  <span>{trashingFileId === file.rowKey ? "Trashing..." : "Trash"}</span>
-
-                </div>
-              </button>
+              renderMenuItem({
+                label: trashingFileId === file.rowKey ? "Trashing..." : "Trash",
+                icon: <Trash2 size={14} />,
+                disabled: !activeAccountId || trashingFileId === file.rowKey,
+                danger: true,
+                ariaLabel: `Trash ${file.name}`,
+                  onClick: () => {
+                    setSelectedFileForTrash(file);
+                    setTrashError("");
+                    closeActionMenu();
+                    setIsTrashModalOpen(true);
+                  },
+              })
             ) : null}
 
 
-            {trashError && driveListMode !== "trash" && openActionFileId === file.rowKey ? (
-
-              <div
-                className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
-                style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
-                role="alert"
-              >
-                {trashError}
-              </div>
-            ) : null}
-
-            {restoreError && driveListMode === "trash" && openActionFileId === file.rowKey ? (
-
-              <div
-                className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
-                style={{ background: "rgba(34,197,94,0.10)", color: "#22c55e" }}
-                role="alert"
-              >
-                {restoreError}
-              </div>
-            ) : null}
-
-            {permanentDeleteError &&
-            driveListMode === "trash" &&
+            {(shareError ||
+              trashError ||
+              restoreError ||
+              permanentDeleteError) &&
             openActionFileId === file.rowKey ? (
-
               <div
                 className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
-                style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
+                style={{
+                  background:
+                    restoreError ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
+                  color: restoreError ? "#22c55e" : "#ef4444",
+                }}
                 role="alert"
               >
-                {permanentDeleteError}
+                {shareError || trashError || permanentDeleteError || restoreError}
               </div>
             ) : null}
 
           </div>
         ) : null}
-
       </div>
     );
   };
@@ -2389,15 +2675,21 @@ const actionBase: CSSProperties = {
           onClick={closePreviewModal}
         >
           <div
-            className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border p-4 md:max-w-3xl"
+            className="flex flex-col overflow-hidden rounded-xl border"
             style={{
               background: colors.surfaceBg,
               borderColor: colors.border,
               boxShadow: colors.shadow,
-              maxHeight: previewModalMode === "maximized" ? "none" : "min(85vh, 900px)",
-              maxWidth: previewModalMode === "maximized" ? "none" : undefined,
-              width: previewModalMode === "maximized" ? "calc(100vw - 32px)" : undefined,
-              height: previewModalMode === "maximized" ? "calc(100vh - 32px)" : undefined,
+              width:
+                previewModalMode === "maximized"
+                  ? "calc(100vw - 8px)"
+                  : "min(1120px, calc(100vw - 48px))",
+              height:
+                previewModalMode === "maximized"
+                  ? "calc(100vh - 8px)"
+                  : "min(82vh, 760px)",
+              maxWidth: "none",
+              maxHeight: "none",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2405,26 +2697,10 @@ const actionBase: CSSProperties = {
             <div className="flex flex-col" style={{ borderBottom: `1px solid ${colors.border}` }}>
               {/* Top menu bar */}
               <div
-                className="flex items-start justify-between gap-3"
+                className="flex items-start justify-between gap-3 px-3"
                 style={{ paddingTop: 6, paddingBottom: 8 }}
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <button
-                    type="button"
-                    onClick={closePreviewModal}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
-                    style={{
-                      color: colors.muted2,
-                      background: colors.panelBg,
-                      border: `1px solid ${colors.border}`,
-                      flexShrink: 0,
-                    }}
-                    aria-label="Close preview"
-                    title="Close preview"
-                  >
-                    <X size={16} />
-                  </button>
-
                   <div className="min-w-0">
                     <div
                       className="truncate text-sm font-semibold"
@@ -2432,20 +2708,6 @@ const actionBase: CSSProperties = {
                       title={previewFile.name}
                     >
                       {previewFile.name}
-                    </div>
-
-                    <div
-                      className="mt-1 flex flex-wrap gap-4"
-                      style={{
-                        color: colors.muted2,
-                        fontSize: 12,
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      <span style={{ color: colors.muted2, fontWeight: 600 }}>File</span>
-                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Lihat</span>
-                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Alat</span>
-                      <span style={{ color: colors.muted2, fontWeight: 600 }}>Bantuan</span>
                     </div>
                   </div>
                 </div>
@@ -2455,7 +2717,7 @@ const actionBase: CSSProperties = {
 
               {/* Action toolbar bar */}
               <div
-                className="flex items-center justify-between gap-3"
+                className="flex items-center justify-between gap-3 px-3"
                 style={{ paddingTop: 4, paddingBottom: 0 }}
               >
                 <div className="min-w-0">
@@ -2513,7 +2775,7 @@ const actionBase: CSSProperties = {
                       : "unsupported";
                     const isPreviewImage = previewHeaderKind === "image";
 
-                    if (!isPreviewImage || previewModalMode === "minimized") {
+                    if (!isPreviewImage) {
                       return null;
                     }
 
@@ -2618,8 +2880,16 @@ const actionBase: CSSProperties = {
                       background: colors.panelBg,
                       border: `1px solid ${colors.border}`,
                     }}
-                    aria-label="Toggle maximize preview"
-                    title="Toggle maximize preview"
+                    aria-label={
+                      previewModalMode === "maximized"
+                        ? "Restore preview size"
+                        : "Maximize preview"
+                    }
+                    title={
+                      previewModalMode === "maximized"
+                        ? "Restore preview size"
+                        : "Maximize preview"
+                    }
                   >
                     {previewModalMode === "maximized" ? (
                       <Minimize2 size={15} />
@@ -2627,11 +2897,26 @@ const actionBase: CSSProperties = {
                       <Maximize2 size={15} />
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={closePreviewModal}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                    style={{
+                      color: colors.muted2,
+                      background: colors.panelBg,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                    aria-label="Close preview"
+                    title="Close preview"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
               {previewLoading ? (
                 <div className="flex items-center gap-2" style={{ color: colors.muted }}>
                   <LoadingSpinner size={14} color={accentColor} />
@@ -2649,7 +2934,7 @@ const actionBase: CSSProperties = {
 
               {!previewLoading && !previewError ? (
                 <div
-                  className="mt-3 flex min-h-0 flex-1 overflow-hidden rounded-xl border"
+                  className="flex min-h-0 flex-1 overflow-hidden rounded-xl border"
                   style={{
                     borderColor: colors.border,
                     background: resolvedTheme === "light" ? "#fff" : colors.softBg,
@@ -2745,10 +3030,10 @@ const actionBase: CSSProperties = {
 
                       if (previewUrl && kind === "pdf") {
                         return (
-                          <div key={previewUrl || previewFile?.id} style={{ height: 520 }}>
+                          <div key={previewUrl || previewFile?.id} className="h-full min-h-0">
                             <iframe
                               title="PDF preview"
-                              src={previewUrl}
+                              src={`${previewUrl}#toolbar=1&navpanes=0&scrollbar=1`}
                               className="h-full w-full"
                             />
                           </div>
@@ -2776,7 +3061,7 @@ const actionBase: CSSProperties = {
                           className="p-4 text-xs font-semibold"
                           style={{ color: colors.muted }}
                         >
-                          Preview unavailable. Use Download or Open instead.
+                          Preview unavailable. Use Download instead.
                         </div>
                       );
                     })()}
@@ -2787,6 +3072,204 @@ const actionBase: CSSProperties = {
           </div>
         </div>
       ) : null}
+
+      {/* Trash Confirmation Modal */}
+      {isTrashModalOpen && selectedFileForTrash && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gdrive-trash-confirm-title"
+          onClick={() => {
+            setIsTrashModalOpen(false);
+            setSelectedFileForTrash(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border bg-[#0f1729] p-6"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="gdrive-trash-confirm-title"
+                  className="text-sm font-semibold"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  Pindahkan file ke Trash?
+                </h2>
+                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                  File "{selectedFileForTrash.name}" akan dipindahkan ke Trash.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTrashModalOpen(false);
+                  setSelectedFileForTrash(null);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+                aria-label="Tutup modal trash"
+              >
+                &times;
+              </button>
+            </div>
+
+            {trashingFileId === selectedFileForTrash.rowKey && (
+              <div
+                className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs flex items-center gap-2"
+                style={{ color: "#67e8f9" }}
+                role="status"
+              >
+                <LoadingSpinner size={12} />
+                Memindahkan file ke Trash...
+              </div>
+            )}
+
+            {trashError && (
+              <div className="mb-3 text-xs" style={{ color: "#ef4444" }} role="alert">
+                {trashError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={trashingFileId === selectedFileForTrash.rowKey}
+                onClick={() => {
+                  setIsTrashModalOpen(false);
+                  setSelectedFileForTrash(null);
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-medium"
+                style={{
+                  background: "#0f1729",
+                  color: "#e2e8f0",
+                  border: `1px solid ${colors.border}`,
+                  opacity: trashingFileId === selectedFileForTrash.rowKey ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={trashingFileId === selectedFileForTrash.rowKey}
+                onClick={() => void handleConfirmTrashFile()}
+                className="px-3 py-2 rounded-xl text-xs font-semibold"
+                style={{
+                  background: "#f87171",
+                  border: `1px solid rgba(248,113,113,0.4)`,
+                  color: "#fff",
+                  opacity: trashingFileId === selectedFileForTrash.rowKey ? 0.75 : 1,
+                }}
+              >
+                {trashingFileId === selectedFileForTrash.rowKey ? "Trashing..." : "Move to Trash"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBulkTrashModalOpen && checkedRowKeys.length > 0 && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gdrive-bulk-trash-confirm-title"
+          onClick={() => setIsBulkTrashModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border bg-[#0f1729] p-6"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="gdrive-bulk-trash-confirm-title"
+                  className="text-sm font-semibold"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  Pindahkan file terpilih ke Trash?
+                </h2>
+                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
+                  {checkedRowKeys.length} file akan dipindahkan ke Trash.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsBulkTrashModalOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
+                style={{
+                  background: "#0d1829",
+                  border: "1px solid #1a2540",
+                  color: "#94a3b8",
+                }}
+                aria-label="Tutup modal bulk trash"
+              >
+                &times;
+              </button>
+            </div>
+
+            {bulkTrashLoading && (
+              <div
+                className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs flex items-center gap-2"
+                style={{ color: "#67e8f9" }}
+                role="status"
+              >
+                <LoadingSpinner size={12} />
+                Memindahkan file ke Trash...
+              </div>
+            )}
+
+            {trashError && (
+              <div className="mb-3 text-xs" style={{ color: "#ef4444" }} role="alert">
+                {trashError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={bulkTrashLoading}
+                onClick={() => setIsBulkTrashModalOpen(false)}
+                className="px-3 py-2 rounded-xl text-xs font-medium"
+                style={{
+                  background: "#0f1729",
+                  color: "#e2e8f0",
+                  border: `1px solid ${colors.border}`,
+                  opacity: bulkTrashLoading ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={bulkTrashLoading}
+                onClick={() => void handleConfirmBulkTrash()}
+                className="px-3 py-2 rounded-xl text-xs font-semibold"
+                style={{
+                  background: "#f87171",
+                  border: `1px solid rgba(248,113,113,0.4)`,
+                  color: "#fff",
+                  opacity: bulkTrashLoading ? 0.75 : 1,
+                }}
+              >
+                {bulkTrashLoading ? "Trashing..." : "Move to Trash"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {detailsFile ? (
 
@@ -2907,6 +3390,179 @@ const actionBase: CSSProperties = {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isRenameModalOpen && selectedFileForRename ? (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0, 0, 0, 0.5)", zIndex: 99999 }}
+          onClick={() => setIsRenameModalOpen(false)}
+        >
+          <div
+            className="rounded-2xl border p-6 w-full max-w-sm"
+            style={{
+              background: colors.panelBg,
+              borderColor: colors.border,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4">
+              <div className="text-base font-semibold" style={{ color: colors.title }}>
+                Rename File
+              </div>
+              <div className="mt-1 text-xs" style={{ color: colors.muted }}>
+                {selectedFileForRename.name}
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleRenameFile();
+              }}
+            >
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                placeholder="Enter new file name"
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{
+                  borderColor: renameError ? "#ef4444" : colors.border,
+                  background: colors.inputBg,
+                  color: colors.text,
+                }}
+                autoFocus
+                disabled={renamingFileId !== null}
+              />
+
+              {renameError && (
+                <div className="mt-2 text-xs" style={{ color: "#ef4444" }}>
+                  {renameError}
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRenameModalOpen(false)}
+                  disabled={renamingFileId !== null}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                  style={{
+                    background: colors.panelBg,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.text,
+                    cursor: renamingFileId !== null ? "not-allowed" : "pointer",
+                    opacity: renamingFileId !== null ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!renameValue.trim() || renamingFileId !== null}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                  style={{
+                    background: accentColor,
+                    color: "#ffffff",
+                    cursor: !renameValue.trim() || renamingFileId !== null ? "not-allowed" : "pointer",
+                    opacity: !renameValue.trim() || renamingFileId !== null ? 0.5 : 1,
+                  }}
+                >
+                  {renamingFileId ? "Renaming..." : "Rename"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isFolderModalOpen ? (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0, 0, 0, 0.5)", zIndex: 99999 }}
+          onClick={closeFolderModal}
+        >
+          <div
+            className="rounded-2xl border p-6 w-full max-w-sm"
+            style={{
+              background: colors.panelBg,
+              borderColor: colors.border,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4">
+              <div className="text-base font-semibold" style={{ color: colors.title }}>
+                New Folder
+              </div>
+              <div className="mt-1 text-xs" style={{ color: colors.muted }}>
+                Create a new folder in the current Google Drive folder.
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitFolderModal();
+              }}
+            >
+              <input
+                type="text"
+                value={folderModalName}
+                onChange={(e) => {
+                  setFolderModalName(e.target.value);
+                  if (folderModalError) setFolderModalError("");
+                }}
+                placeholder="Folder name"
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{
+                  borderColor: folderModalError ? "#ef4444" : colors.border,
+                  background: colors.inputBg,
+                  color: colors.text,
+                }}
+                autoFocus
+                disabled={folderActionLoading}
+              />
+
+              {folderModalError && (
+                <div className="mt-2 text-xs" style={{ color: "#ef4444" }}>
+                  {folderModalError}
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeFolderModal}
+                  disabled={folderActionLoading}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                  style={{
+                    background: colors.panelBg,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.text,
+                    cursor: folderActionLoading ? "not-allowed" : "pointer",
+                    opacity: folderActionLoading ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!folderModalName.trim() || folderActionLoading}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+                  style={{
+                    background: accentColor,
+                    color: "#ffffff",
+                    cursor: !folderModalName.trim() || folderActionLoading ? "not-allowed" : "pointer",
+                    opacity: !folderModalName.trim() || folderActionLoading ? 0.5 : 1,
+                  }}
+                >
+                  {folderActionLoading ? "Creating..." : "Create Folder"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
@@ -3098,6 +3754,7 @@ const actionBase: CSSProperties = {
                     title="Files"
                     onClick={() => {
                       setDriveListMode("files");
+                      setGdriveFolderPath([]);
                       closeActionMenu();
                       setFilesError(false);
                       setFilesErrorMessage("");
@@ -3121,6 +3778,7 @@ const actionBase: CSSProperties = {
                     title="Trash"
                     onClick={() => {
                       setDriveListMode("trash");
+                      setGdriveFolderPath([]);
                       closeActionMenu();
                       setFilesError(false);
                       setFilesErrorMessage("");
@@ -3158,6 +3816,39 @@ const actionBase: CSSProperties = {
 
                   <button
                     type="button"
+                    title="Tambah Folder"
+                    disabled={driveListMode === "trash" || !activeAccountId}
+                    onClick={openCreateFolderModal}
+                    className="flex h-9 items-center justify-center rounded-full border px-3 text-xs font-semibold"
+                    style={{
+                      background:
+                        driveListMode === "trash" || !activeAccountId
+                          ? "transparent"
+                          : `${accentColor}14`,
+                      borderColor:
+                        driveListMode === "trash" || !activeAccountId
+                          ? colors.border
+                          : `${accentColor}22`,
+                      color:
+                        driveListMode === "trash" || !activeAccountId
+                          ? colors.muted2
+                          : accentColor,
+                      cursor:
+                        driveListMode === "trash" || !activeAccountId
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        driveListMode === "trash" || !activeAccountId ? 0.65 : 1,
+                      whiteSpace: "nowrap",
+                      marginLeft: 0,
+                    }}
+                  >
+                    <Plus size={13} className="mr-1" />
+                    New Folder
+                  </button>
+
+                  <button
+                    type="button"
                     title="Upload"
                     disabled={uploadingFile || driveListMode === "trash"}
                     onClick={handleUploadButtonClick}
@@ -3187,7 +3878,93 @@ const actionBase: CSSProperties = {
                     {uploadingFile ? "Uploading..." : "Upload"}
                   </button>
 
+                  <button
+                    type="button"
+                    title={isChecklistMode ? "Exit select mode" : "Enter select mode"}
+                    onClick={() => {
+                      const next = !isChecklistMode;
+                      setIsChecklistMode(next);
+                      if (!next) setCheckedRowKeys([]);
+                    }}
+                    className="flex h-9 items-center justify-center rounded-full border px-3 text-xs font-semibold"
+                    style={{
+                      background: isChecklistMode ? `${accentColor}14` : "transparent",
+                      borderColor: isChecklistMode ? `${accentColor}22` : colors.border,
+                      color: isChecklistMode ? accentColor : colors.muted,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      marginLeft: 8,
+                    }}
+                  >
+                    {isChecklistMode ? "Selecting" : "Select"}
+                  </button>
+
                 </div>
+
+              {checkedRowKeys.length > 0 ? (
+                <div
+                  className="mb-3 px-4 py-3 rounded-xl"
+                  style={{ background: colors.panelBg, border: `1px solid ${colors.border}` }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs" style={{ color: colors.muted }}>
+                      <span style={{ color: colors.title, fontWeight: 700 }}>{checkedRowKeys.length}</span> file dipilih
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{
+                          background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                          color: "#fff",
+                          border: `1px solid ${accentColor}55`,
+                        }}
+                        disabled={bulkDownloadLoading}
+                        onClick={() => void handleBulkDownload()}
+                      >
+                        {bulkDownloadLoading ? (
+                          <>
+                            <LoadingSpinner size={12} /> Memproses...
+                          </>
+                        ) : (
+                          "Download"
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{
+                          background: "#f87171",
+                          color: "#fff",
+                          border: `1px solid rgba(248,113,113,0.4)`,
+                        }}
+                        disabled={bulkTrashLoading}
+                        onClick={() => setIsBulkTrashModalOpen(true)}
+                      >
+                        {bulkTrashLoading ? "Trashing..." : "Move to Trash"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-lg text-xs font-medium"
+                        style={{
+                          background: colors.inputBg,
+                          border: `1px solid ${colors.border}`,
+                          color: colors.text,
+                        }}
+                        onClick={() => {
+                          setCheckedRowKeys([]);
+                          setIsChecklistMode(false);
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
                   <div className="hidden shrink-0 text-[11px] md:block" style={{ color: colors.muted2, flexShrink: 0, whiteSpace: "nowrap" }}>
                     {activeAccount || anyFiles ? `${filteredFiles.length} item(s)` : ""}
@@ -3239,6 +4016,51 @@ const actionBase: CSSProperties = {
                   );
                 })}
               </div>
+
+              {driveListMode === "files" && gdriveFolderPath.length > 0 ? (
+                <div className="flex min-w-0 items-center gap-1 overflow-x-auto text-[9px] leading-none">
+                  <button
+                    type="button"
+                    onClick={() => navigateToGDriveFolder(-1)}
+                    className="shrink-0 px-0 py-0 font-medium"
+                    style={{
+                      background: "transparent",
+                      color: accentColor,
+                      border: "none",
+                      lineHeight: 1,
+                    }}
+                  >
+                    My Drive
+                  </button>
+                  {gdriveFolderPath.map((crumb, index) => {
+                    const isLast = index === gdriveFolderPath.length - 1;
+
+                    return (
+                      <div key={crumb.id} className="flex min-w-0 items-center gap-1">
+                        <span className="shrink-0" style={{ color: colors.muted2 }}>
+                          /
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => navigateToGDriveFolder(index)}
+                          disabled={isLast}
+                          className="max-w-[120px] truncate px-0 py-0 font-medium"
+                          style={{
+                            background: "transparent",
+                            color: isLast ? colors.title : colors.muted,
+                            border: "none",
+                            cursor: isLast ? "default" : "pointer",
+                            lineHeight: 1,
+                          }}
+                          title={crumb.name}
+                        >
+                          {crumb.name}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
 
             </div>
 
@@ -3315,12 +4137,34 @@ const actionBase: CSSProperties = {
                               <div
                                 className="grid items-center px-3 py-2 text-[11px] font-semibold"
                                 style={{
-                                  gridTemplateColumns: tableGridTemplate,
+                                  gridTemplateColumns: effectiveTableGridTemplate,
                                   color: colors.header,
                                   background: colors.rowHover,
                                   borderBottom: `1px solid ${colors.border}`,
                                 }}
                               >
+                                {isChecklistMode ? (
+                                  <span>
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Select all visible files"
+                                      checked={
+                                        folderItems.concat(regularFileItems).length > 0 &&
+                                        checkedRowKeys.length ===
+                                          folderItems.concat(regularFileItems).length
+                                      }
+                                      onChange={() => {
+                                        const all = folderItems.concat(regularFileItems).map((f) => f.rowKey);
+                                        if (checkedRowKeys.length === all.length) {
+                                          setCheckedRowKeys([]);
+                                        } else {
+                                          setCheckedRowKeys(all);
+                                        }
+                                      }}
+                                    />
+                                  </span>
+                                ) : null}
+
                                 <span>Name</span>
                                 <span>Type</span>
                                 <span>Visibility</span>
@@ -3332,14 +4176,27 @@ const actionBase: CSSProperties = {
                               {folderItems.map((file) => (
                                 <div
                                   key={file.rowKey}
+                                  role="button"
+                                  tabIndex={0}
                                   className="group grid items-center px-3 py-2 transition-colors"
                                   style={{
-                                    gridTemplateColumns: tableGridTemplate,
+                                    gridTemplateColumns: effectiveTableGridTemplate,
                                     background: colors.surfaceBg,
                                     borderBottom: `1px solid ${colors.border}`,
                                     color: colors.text,
+                                    cursor: "pointer",
                                   }}
                                   onContextMenu={(event) => handleFileContextMenu(event, file)}
+                                  onClick={(event) => {
+                                    if (isGDriveInteractiveClickTarget(event.target)) return;
+                                    openGDriveFolder(file);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (isGDriveInteractiveClickTarget(event.target)) return;
+                                    if (event.key !== "Enter" && event.key !== " ") return;
+                                    event.preventDefault();
+                                    openGDriveFolder(file);
+                                  }}
                                   onMouseEnter={(event) => {
                                     event.currentTarget.style.background = colors.rowHover;
                                   }}
@@ -3347,6 +4204,22 @@ const actionBase: CSSProperties = {
                                     event.currentTarget.style.background = colors.surfaceBg;
                                   }}
                                 >
+                                  {isChecklistMode ? (
+                                    <div>
+                                      <input
+                                        type="checkbox"
+                                        checked={checkedRowKeys.includes(file.rowKey)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          const next = checkedRowKeys.includes(file.rowKey)
+                                            ? checkedRowKeys.filter((k) => k !== file.rowKey)
+                                            : [...checkedRowKeys, file.rowKey];
+                                          setCheckedRowKeys(next);
+                                        }}
+                                      />
+                                    </div>
+                                  ) : null}
                                   <div className="flex min-w-0 items-center gap-3">
                                     {renderFileIcon(file)}
                                     <div className="min-w-0">
@@ -3429,12 +4302,34 @@ const actionBase: CSSProperties = {
                               <div
                                 className="grid items-center px-3 py-2 text-[11px] font-semibold"
                                 style={{
-                                  gridTemplateColumns: tableGridTemplate,
+                                  gridTemplateColumns: effectiveTableGridTemplate,
                                   color: colors.header,
                                   background: colors.rowHover,
                                   borderBottom: `1px solid ${colors.border}`,
                                 }}
                               >
+                                {isChecklistMode ? (
+                                  <span>
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Select all visible files"
+                                      checked={
+                                        folderItems.concat(regularFileItems).length > 0 &&
+                                        checkedRowKeys.length ===
+                                          folderItems.concat(regularFileItems).length
+                                      }
+                                      onChange={() => {
+                                        const all = folderItems.concat(regularFileItems).map((f) => f.rowKey);
+                                        if (checkedRowKeys.length === all.length) {
+                                          setCheckedRowKeys([]);
+                                        } else {
+                                          setCheckedRowKeys(all);
+                                        }
+                                      }}
+                                    />
+                                  </span>
+                                ) : null}
+
                                 <span>Name</span>
                                 <span>Type</span>
                                 <span>Visibility</span>
@@ -3448,7 +4343,7 @@ const actionBase: CSSProperties = {
                                   key={file.rowKey}
                                   className="group grid items-center px-3 py-2 transition-colors"
                                   style={{
-                                    gridTemplateColumns: tableGridTemplate,
+                                    gridTemplateColumns: effectiveTableGridTemplate,
                                     background: colors.surfaceBg,
                                     borderBottom: `1px solid ${colors.border}`,
                                     color: colors.text,
@@ -3461,6 +4356,22 @@ const actionBase: CSSProperties = {
                                     event.currentTarget.style.background = colors.surfaceBg;
                                   }}
                                 >
+                                  {isChecklistMode ? (
+                                    <div>
+                                      <input
+                                        type="checkbox"
+                                        checked={checkedRowKeys.includes(file.rowKey)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          const next = checkedRowKeys.includes(file.rowKey)
+                                            ? checkedRowKeys.filter((k) => k !== file.rowKey)
+                                            : [...checkedRowKeys, file.rowKey];
+                                          setCheckedRowKeys(next);
+                                        }}
+                                      />
+                                    </div>
+                                  ) : null}
                                   <div className="flex min-w-0 items-center gap-3">
                                     {renderFileIcon(file)}
                                     <div className="min-w-0">
@@ -3556,15 +4467,44 @@ const actionBase: CSSProperties = {
                             {folderItems.map((file) => (
                               <div
                                 key={file.rowKey}
+                                role="button"
+                                tabIndex={0}
                                 className="group relative rounded-xl border"
                                 style={{
                                   background: colors.surfaceBg,
                                   borderColor: colors.border,
                                   padding: 12,
                                   color: colors.text,
+                                  cursor: "pointer",
                                 }}
                                 onContextMenu={(event) => handleFileContextMenu(event, file)}
+                                onClick={(event) => {
+                                  if (isGDriveInteractiveClickTarget(event.target)) return;
+                                  openGDriveFolder(file);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (isGDriveInteractiveClickTarget(event.target)) return;
+                                  if (event.key !== "Enter" && event.key !== " ") return;
+                                  event.preventDefault();
+                                  openGDriveFolder(file);
+                                }}
                               >
+                                {isChecklistMode ? (
+                                  <div style={{ position: "absolute", left: 8, top: 8 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checkedRowKeys.includes(file.rowKey)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        const next = checkedRowKeys.includes(file.rowKey)
+                                          ? checkedRowKeys.filter((k) => k !== file.rowKey)
+                                          : [...checkedRowKeys, file.rowKey];
+                                        setCheckedRowKeys(next);
+                                      }}
+                                    />
+                                  </div>
+                                ) : null}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
                                     {renderFileIcon(file)}
@@ -3655,6 +4595,22 @@ const actionBase: CSSProperties = {
                                 }}
                                 onContextMenu={(event) => handleFileContextMenu(event, file)}
                               >
+                                {isChecklistMode ? (
+                                  <div style={{ position: "absolute", left: 8, top: 8 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checkedRowKeys.includes(file.rowKey)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        const next = checkedRowKeys.includes(file.rowKey)
+                                          ? checkedRowKeys.filter((k) => k !== file.rowKey)
+                                          : [...checkedRowKeys, file.rowKey];
+                                        setCheckedRowKeys(next);
+                                      }}
+                                    />
+                                  </div>
+                                ) : null}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
                                     {renderFileIcon(file)}

@@ -24,6 +24,47 @@ use Throwable;
 
 class GDriveController extends Controller
 {
+    private function isInvalidGrantException(Throwable $e): bool
+    {
+        if (! $e instanceof RequestException || $e->response === null) {
+            return false;
+        }
+
+        if ($e->response->status() !== 400) {
+            return false;
+        }
+
+        try {
+            $payload = $e->response->json();
+        } catch (Throwable) {
+            $payload = null;
+        }
+
+        if (is_array($payload) && ($payload['error'] ?? null) === 'invalid_grant') {
+            return true;
+        }
+
+        return str_contains($e->getMessage(), 'invalid_grant');
+    }
+
+    private function markAccountRevoked(GDriveAccount $account): GDriveAccount
+    {
+        if ($account->revoked_at === null) {
+            $account->revoked_at = Carbon::now();
+            $account->save();
+        }
+
+        return $account->fresh() ?? $account;
+    }
+
+    private function disconnectedAccountResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Google Drive account is disconnected.',
+            'error_code' => 'gdrive_account_disconnected',
+            'reconnect_recommended' => true,
+        ], 422);
+    }
 
 
     public function index(Request $request, GoogleDriveService $googleDriveService): JsonResponse
@@ -71,6 +112,11 @@ class GDriveController extends Controller
                         ];
                     }
                 } catch (Throwable $e) {
+                    if ($this->isInvalidGrantException($e)) {
+                        $account = $this->markAccountRevoked($account);
+                        $isRevoked = true;
+                    }
+
                     $storageQuota = null;
                 }
             }
@@ -372,6 +418,10 @@ class GDriveController extends Controller
                 $files = $files->merge($mappedFiles);
                 $nextPageTokens[$account->id] = $response['nextPageToken'] ?? null;
             } catch (Throwable $e) {
+                if ($this->isInvalidGrantException($e)) {
+                    $this->markAccountRevoked($account);
+                }
+
                 $errors[] = [
                     'account_id' => $account->id,
                     'account_email' => $account->email,
@@ -409,12 +459,14 @@ class GDriveController extends Controller
 
         $pageToken = $request->query('page_token');
         $pageSize = (int) $request->query('page_size', 50);
+        $folderId = $request->query('folder_id');
 
         try {
             $response = $googleDriveService->listFiles(
                 $account,
                 is_string($pageToken) ? $pageToken : null,
-                $pageSize
+                $pageSize,
+                is_string($folderId) ? $folderId : null
             );
 
             $files = collect($response['files'] ?? [])->map(function (array $file) use ($account) {
@@ -445,6 +497,7 @@ class GDriveController extends Controller
                 'meta' => [
                     'account_id' => $account->id,
                     'account_email' => $account->email,
+                    'folder_id' => is_string($folderId) ? $folderId : null,
                     'next_page_token' => $response['nextPageToken'] ?? null,
                 ],
             ]);
@@ -469,6 +522,15 @@ class GDriveController extends Controller
             // If this is an HTTP client exception, avoid dumping full response body.
             if ($e instanceof RequestException && $e->response !== null) {
                 $context['http_status'] = $e->response->status();
+            }
+
+            if ($this->isInvalidGrantException($e)) {
+                $account = $this->markAccountRevoked($account);
+                $context['revoked_at'] = $account->revoked_at?->toISOString();
+
+                Log::warning('GDrive account token revoked', $context);
+
+                return $this->disconnectedAccountResponse();
             }
 
             Log::error('GDrive files load failed', $context);
@@ -560,6 +622,15 @@ class GDriveController extends Controller
             // Avoid logging any tokens/secrets.
             if ($e instanceof RequestException && $e->response !== null) {
                 $context['http_status'] = $e->response->status();
+            }
+
+            if ($this->isInvalidGrantException($e)) {
+                $account = $this->markAccountRevoked($account);
+                $context['revoked_at'] = $account->revoked_at?->toISOString();
+
+                Log::warning('GDrive account token revoked', $context);
+
+                return $this->disconnectedAccountResponse();
             }
 
             Log::error('GDrive trashed files load failed', $context);
@@ -761,8 +832,202 @@ class GDriveController extends Controller
         }
     }
 
-    public function uploadFile(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
+    public function updateVisibility(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
 
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        $validated = $request->validate([
+            'visibility' => ['required', 'in:public,private'],
+        ]);
+
+        try {
+            $file = $googleDriveService->updateFileVisibility(
+                $account,
+                $fileId,
+                (string) $validated['visibility'],
+            );
+
+            $owner = $file['owners'][0] ?? [];
+
+            return response()->json([
+                'success' => true,
+                'message' => $validated['visibility'] === 'public'
+                    ? 'Google Drive link is now public.'
+                    : 'Google Drive link is now private.',
+                'data' => [
+                    'id' => $file['id'] ?? $fileId,
+                    'account_id' => $account->id,
+                    'account_email' => $account->email,
+                    'name' => $file['name'] ?? null,
+                    'mime_type' => $file['mimeType'] ?? null,
+                    'icon_link' => $file['iconLink'] ?? null,
+                    'web_view_link' => $file['webViewLink'] ?? null,
+                    'web_content_link' => $file['webContentLink'] ?? null,
+                    'size' => $file['size'] ?? null,
+                    'created_time' => $file['createdTime'] ?? null,
+                    'modified_time' => $file['modifiedTime'] ?? null,
+                    'shared' => $file['shared'] ?? null,
+                    'starred' => $file['starred'] ?? null,
+                    'owner_name' => $owner['displayName'] ?? null,
+                    'owner_email' => $owner['emailAddress'] ?? null,
+                    'source' => 'gdrive',
+                ],
+            ]);
+        } catch (Throwable $e) {
+            $statusCode = (int) $e->getCode();
+
+            if (in_array($statusCode, [401, 403], true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Google Drive sharing permission denied. Please reconnect this Google Drive account with sharing permission.',
+                    'error_code' => 'gdrive_share_permission_denied',
+                ], 403);
+            }
+
+            Log::warning('Google Drive visibility update failed', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'account_id' => $account->id ?? null,
+                'file_id' => $fileId,
+                'user_id' => $request->user()?->id,
+                'http_status' => $statusCode,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update Google Drive sharing.',
+                'error_code' => 'gdrive_visibility_update_failed',
+            ], 502);
+        }
+    }
+
+    public function rename(Request $request, GDriveAccount $account, string $fileId, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $result = $googleDriveService->renameFile(
+                $account,
+                $fileId,
+                $validated['name']
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File renamed successfully.',
+                'data' => array_merge(
+                    [
+                        'account_id' => $account->id,
+                        'account_email' => $account->email,
+                    ],
+                    $result,
+                ),
+            ]);
+        } catch (Throwable $e) {
+            $statusCode = 500;
+            if ($e instanceof \Illuminate\Http\Client\HttpClientException) {
+                $response = $e->response;
+                $statusCode = $response->status();
+
+                if ($statusCode === 404) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Google Drive file not found.',
+                        'error_code' => 'gdrive_file_not_found',
+                    ], 404);
+                }
+
+                if ($statusCode === 403) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Permission denied to rename this file.',
+                        'error_code' => 'gdrive_rename_forbidden',
+                    ], 403);
+                }
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to rename Google Drive file.',
+                'error_code' => 'gdrive_rename_failed',
+                'http_status' => $statusCode,
+            ], 502);
+        }
+    }
+
+    public function createFolder(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if ($account->revoked_at !== null) {
+            return response()->json(['message' => 'Google Drive account is disconnected.'], 422);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'parent_id' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $result = $googleDriveService->createFolder(
+                $account,
+                $validated['name'],
+                $validated['parent_id'] ?? null,
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Folder created successfully.',
+                'data' => array_merge(
+                    [
+                        'account_id' => $account->id,
+                        'account_email' => $account->email,
+                    ],
+                    $result,
+                ),
+            ]);
+        } catch (Throwable $e) {
+            $statusCode = (int) $e->getCode();
+
+            if ($statusCode === 403) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Permission denied to create folder in Google Drive.',
+                    'error_code' => 'gdrive_create_folder_forbidden',
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create Google Drive folder.',
+                'error_code' => 'gdrive_create_folder_failed',
+                'http_status' => $statusCode ?: 502,
+            ], 502);
+        }
+    }
+
+    public function uploadFile(Request $request, GDriveAccount $account, GoogleDriveService $googleDriveService): JsonResponse
     {
         $user = $request->user();
         if (!$user || (string) $account->user_id !== (string) $user->id) {

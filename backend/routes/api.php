@@ -116,8 +116,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gdrive/accounts/{account}/trash', [GDriveController::class, 'trashedFiles']);
     Route::post('/gdrive/accounts/{account}/files/{fileId}/trash', [GDriveController::class, 'trash']);
     Route::post('/gdrive/accounts/{account}/files/{fileId}/restore', [GDriveController::class, 'restore']);
+    Route::post('/gdrive/accounts/{account}/files/{fileId}/visibility', [GDriveController::class, 'updateVisibility']);
+    Route::patch('/gdrive/accounts/{account}/files/{fileId}/rename', [GDriveController::class, 'rename']);
     Route::delete('/gdrive/accounts/{account}/files/{fileId}/permanent', [GDriveController::class, 'permanentDelete']);
-
+    Route::post('/gdrive/accounts/{account}/folders', [GDriveController::class, 'createFolder']);
 
     // Google Drive file upload (MVP)
     Route::post('/gdrive/accounts/{account}/files/upload', [GDriveController::class, 'uploadFile']);

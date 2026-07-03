@@ -1,9 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type WheelEvent as ReactWheelEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
+
+const PREVIEW_IMAGE_MIN_SCALE = 0.5;
+const PREVIEW_IMAGE_MAX_SCALE = 4;
+const PREVIEW_IMAGE_ZOOM_STEP = 0.1;
+
+function clampPreviewImageScale(scale: number): number {
+  return Math.min(
+    PREVIEW_IMAGE_MAX_SCALE,
+    Math.max(PREVIEW_IMAGE_MIN_SCALE, Number(scale.toFixed(2))),
+  );
+}
 
 function safeReadAppearanceTheme(): AppearanceTheme {
   if (typeof window === "undefined") return "dark";
@@ -288,13 +306,23 @@ import {
   Eye,
   Download,
   Share2,
+  Copy,
+  FileText,
   Edit3,
   Trash2,
+  Minus,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  X,
+  ZoomIn,
+  ZoomOut,
   ChevronRight,
   Home,
   Star,
   Clock,
   MoreHorizontal,
+  MoreVertical,
 } from "lucide-react";
 import folderService, {
   type Folder as FolderModel,
@@ -307,6 +335,8 @@ import { FileTypeIcon } from "../components/FileTypeIcon";
 import {
   getPublicShareUrl,
   createShareLink,
+  deleteShareLink,
+  getShareLinks,
   type ShareLink,
 } from "../../services/shareService";
 
@@ -455,11 +485,20 @@ export function MyFiles({
 }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  const checklistVisibilityStyle = {
+    visibility: isSelectionMode ? "visible" : "hidden",
+    pointerEvents: isSelectionMode ? "auto" : "none",
+  } as const;
+
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
+
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
     resolveAppearanceTheme(safeReadAppearanceTheme()),
   );
+
 
 
   // filesRefreshKey changes should only refresh currentFolderId list
@@ -491,6 +530,7 @@ export function MyFiles({
 
     setOpenFileActionId(null);
     setFileActionMenuPosition(null);
+    setFileActionFeedback(null);
 
     const menuWidth = 180;
 
@@ -560,7 +600,7 @@ export function MyFiles({
     "name",
   );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [moveDragDropEnabled, setMoveDragDropEnabled] = useState(false);
+  const [moveDragDropEnabled, setMoveDragDropEnabled] = useState(true);
   const [dragMoveItem, setDragMoveItem] = useState<{
     type: "file" | "folder";
     id: string;
@@ -584,6 +624,18 @@ export function MyFiles({
   );
 
   const clearFolderSelection = () => setSelectedFolderIds(new Set());
+
+  const handleToggleSelectionMode = () => {
+    setIsSelectionMode((current) => {
+      if (current) {
+        clearSelection();
+        clearFolderSelection();
+      }
+
+      return !current;
+    });
+  };
+
 
   const toggleFolderSelection = (folderId: string) => {
     setSelectedFolderIds((prev) => {
@@ -621,9 +673,12 @@ export function MyFiles({
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
   const [previewContentType, setPreviewContentType] = useState("");
   const [previewImageScale, setPreviewImageScale] = useState(1);
+  const [previewImageOffset, setPreviewImageOffset] = useState({ x: 0, y: 0 });
   const [previewModalMode, setPreviewModalMode] = useState<
     "normal" | "maximized" | "minimized"
   >("normal");
+  const previewImageViewportRef = useRef<HTMLDivElement | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
 
   // Text preview modal state
   const [previewText, setPreviewText] = useState<string>("");
@@ -631,16 +686,7 @@ export function MyFiles({
   const [previewTextError, setPreviewTextError] = useState<string>("");
   const [previewIsTextTooLarge, setPreviewIsTextTooLarge] = useState(false);
 
-  const [previewMiniOffset, setPreviewMiniOffset] = useState({ x: 0, y: 0 });
   const [fileModalError, setFileModalError] = useState("");
-
-  const previewMiniDragRef = useRef<{
-
-    startClientX: number;
-    startClientY: number;
-    startOffsetX: number;
-    startOffsetY: number;
-  } | null>(null);
 
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -652,6 +698,25 @@ export function MyFiles({
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState("");
   const [copySuccess, setCopySuccess] = useState("");
+  const [openSharePanelFileId, setOpenSharePanelFileId] = useState<string | null>(
+    null,
+  );
+  const [fileShareLinksByFileId, setFileShareLinksByFileId] = useState<
+    Record<string, ShareLink | null>
+  >({});
+  const [fileSharingActionId, setFileSharingActionId] = useState<string | null>(
+    null,
+  );
+  const [fileActionFeedback, setFileActionFeedback] = useState<{
+    fileId: string;
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [detailsItem, setDetailsItem] = useState<
+    | { type: "file"; item: FileModel }
+    | { type: "folder"; item: FolderModel }
+    | null
+  >(null);
 
   // Move modal state
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -933,55 +998,17 @@ export function MyFiles({
     setPreviewFile(null);
     setPreviewModalMode("normal");
     setPreviewImageScale(1);
-    setPreviewMiniOffset({ x: 0, y: 0 });
-    previewMiniDragRef.current = null;
-      setPreviewUrl(undefined);
-      setPreviewFileName("");
-      setPreviewContentType("");
-      setPreviewFile(null);
+    setPreviewImageOffset({ x: 0, y: 0 });
+    setPreviewUrl(undefined);
+    setPreviewFileName("");
+    setPreviewContentType("");
+    setPreviewFile(null);
 
-      // text preview cleanup
+    // text preview cleanup
     setPreviewText("");
     setPreviewTextLoading(false);
     setPreviewTextError("");
     setPreviewIsTextTooLarge(false);
-  };
-
-  const handlePreviewMiniPointerDown = (
-    event: React.PointerEvent<HTMLDivElement>,
-  ) => {
-    if (previewModalMode !== "minimized") return;
-
-    event.preventDefault();
-
-    previewMiniDragRef.current = {
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      startOffsetX: previewMiniOffset.x,
-      startOffsetY: previewMiniOffset.y,
-    };
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const dragState = previewMiniDragRef.current;
-      if (!dragState) return;
-
-      const deltaX = moveEvent.clientX - dragState.startClientX;
-      const deltaY = moveEvent.clientY - dragState.startClientY;
-
-      setPreviewMiniOffset({
-        x: dragState.startOffsetX + deltaX,
-        y: dragState.startOffsetY + deltaY,
-      });
-    };
-
-    const handlePointerUp = () => {
-      previewMiniDragRef.current = null;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
   };
 
   const handleDownloadFile = async (file: FileModel | null) => {
@@ -993,12 +1020,148 @@ export function MyFiles({
     }
   };
 
-  const handlePreviewFile = async (file: FileModel) => {
-    if (!fileService.canPreviewFile(file)) {
-      setFileError("Preview tidak tersedia untuk tipe file ini.");
+  const setPreviewImageScaleFromAnchor = (
+    nextScaleValue: number,
+    anchorPoint?: { clientX: number; clientY: number },
+  ) => {
+    const oldScale = previewImageScale;
+    const nextScale = clampPreviewImageScale(nextScaleValue);
+
+    if (nextScale === oldScale) return;
+
+    const viewport = previewImageViewportRef.current;
+    const image = previewImageRef.current;
+    const imageRect = image?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    const point =
+      anchorPoint ??
+      (viewportRect
+        ? {
+            clientX: viewportRect.left + viewportRect.width / 2,
+            clientY: viewportRect.top + viewportRect.height / 2,
+          }
+        : undefined);
+
+    if (!imageRect || !point || imageRect.width <= 0 || imageRect.height <= 0) {
+      setPreviewImageScale(nextScale);
+      if (nextScale <= 1) setPreviewImageOffset({ x: 0, y: 0 });
       return;
     }
 
+    const anchorX = Math.min(
+      1,
+      Math.max(0, (point.clientX - imageRect.left) / imageRect.width),
+    );
+    const anchorY = Math.min(
+      1,
+      Math.max(0, (point.clientY - imageRect.top) / imageRect.height),
+    );
+    const scaleRatio = nextScale / oldScale;
+    const nextWidth = imageRect.width * scaleRatio;
+    const nextHeight = imageRect.height * scaleRatio;
+    const currentCenterX = imageRect.left + imageRect.width / 2;
+    const currentCenterY = imageRect.top + imageRect.height / 2;
+    const nextCenterX = point.clientX - anchorX * nextWidth + nextWidth / 2;
+    const nextCenterY = point.clientY - anchorY * nextHeight + nextHeight / 2;
+
+    setPreviewImageScale(nextScale);
+    setPreviewImageOffset(
+      nextScale <= 1
+        ? { x: 0, y: 0 }
+        : {
+            x: previewImageOffset.x + nextCenterX - currentCenterX,
+            y: previewImageOffset.y + nextCenterY - currentCenterY,
+          },
+    );
+  };
+
+  const resetPreviewImageZoom = () => {
+    setPreviewImageScale(1);
+    setPreviewImageOffset({ x: 0, y: 0 });
+  };
+
+  const handlePreviewImageWheel = (
+    event: ReactWheelEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.deltaY === 0) return;
+
+    setPreviewImageScaleFromAnchor(
+      previewImageScale +
+        (event.deltaY < 0 ? PREVIEW_IMAGE_ZOOM_STEP : -PREVIEW_IMAGE_ZOOM_STEP),
+      { clientX: event.clientX, clientY: event.clientY },
+    );
+  };
+
+  const getPreviewContentTypeFromFileName = (
+    fileName: string,
+    contentType?: string,
+  ) => {
+    const normalized = (contentType || "").toLowerCase();
+    if (normalized && normalized !== "application/octet-stream") {
+      return normalized;
+    }
+
+    const ext = fileName.toLowerCase().split(".").pop() ?? "";
+    switch (ext) {
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "gif":
+        return "image/gif";
+      case "webp":
+        return "image/webp";
+      case "bmp":
+        return "image/bmp";
+      case "svg":
+        return "image/svg+xml";
+      case "pdf":
+        return "application/pdf";
+      case "mp4":
+        return "video/mp4";
+      case "webm":
+        return "video/webm";
+      case "mov":
+        return "video/quicktime";
+      case "m4v":
+        return "video/mp4";
+      case "mp3":
+        return "audio/mpeg";
+      case "wav":
+        return "audio/wav";
+      case "ogg":
+        return "audio/ogg";
+      case "m4a":
+        return "audio/mp4";
+      case "txt":
+      case "log":
+      case "md":
+      case "markdown":
+        return "text/plain";
+      case "json":
+        return "application/json";
+      case "xml":
+        return "application/xml";
+      case "js":
+        return "application/javascript";
+      case "ts":
+        return "application/typescript";
+      case "css":
+        return "text/css";
+      case "html":
+        return "text/html";
+      case "csv":
+        return "text/csv";
+      default:
+        return normalized || "application/octet-stream";
+    }
+  };
+
+  const handlePreviewFile = async (file: FileModel) => {
     try {
       setPreviewFile(file);
       setPreviewingFileId(file.id);
@@ -1008,7 +1171,11 @@ export function MyFiles({
         file.id,
       );
 
-      const normalizedContentType = (contentType ?? "").toLowerCase();
+      const resolvedContentType = getPreviewContentTypeFromFileName(
+        file.original_name,
+        contentType,
+      );
+      const normalizedContentType = resolvedContentType.toLowerCase();
 
       // Text preview (no object URL)
       const isTextType =
@@ -1038,11 +1205,11 @@ export function MyFiles({
           }
 
           setPreviewFileName(file.original_name);
-          setPreviewContentType(contentType);
+          setPreviewContentType(resolvedContentType);
           setPreviewUrl(undefined);
           setPreviewModalMode("normal");
           setPreviewImageScale(1);
-          setPreviewMiniOffset({ x: 0, y: 0 });
+          setPreviewImageOffset({ x: 0, y: 0 });
           setPreviewModalOpen(true);
           return;
         } catch {
@@ -1050,11 +1217,11 @@ export function MyFiles({
           setPreviewText("");
           setPreviewIsTextTooLarge(false);
           setPreviewFileName(file.original_name);
-          setPreviewContentType(contentType);
+          setPreviewContentType(resolvedContentType);
           setPreviewUrl(undefined);
           setPreviewModalMode("normal");
           setPreviewImageScale(1);
-          setPreviewMiniOffset({ x: 0, y: 0 });
+          setPreviewImageOffset({ x: 0, y: 0 });
           setPreviewModalOpen(true);
           return;
         } finally {
@@ -1072,38 +1239,31 @@ export function MyFiles({
       ) {
         setPreviewModalMode("normal");
         setPreviewImageScale(1);
-        setPreviewMiniOffset({ x: 0, y: 0 });
+        setPreviewImageOffset({ x: 0, y: 0 });
 
         if (previewUrl) {
           window.URL.revokeObjectURL(previewUrl);
         }
 
         setPreviewUrl(url);
-        setPreviewContentType(contentType);
+        setPreviewContentType(resolvedContentType);
         setPreviewFileName(file.original_name);
         setPreviewModalOpen(true);
         return;
       }
 
-      const opened = window.open(url, "_blank");
+      setPreviewModalMode("normal");
+      setPreviewImageScale(1);
+      setPreviewImageOffset({ x: 0, y: 0 });
 
-      if (!opened) {
-        window.URL.revokeObjectURL(url);
-        setFileError(
-          "Preview diblokir browser. Izinkan pop-up untuk membuka preview.",
-        );
-        return;
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl);
       }
 
-      try {
-        opened.opener = null;
-      } catch {
-        // ignore
-      }
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 60000);
+      setPreviewUrl(url);
+      setPreviewContentType(resolvedContentType);
+      setPreviewFileName(file.original_name);
+      setPreviewModalOpen(true);
     } catch (err) {
       const responseMessage = (err as any)?.response?.data?.message;
       const errorMessage =
@@ -1323,6 +1483,199 @@ export function MyFiles({
     setBulkDownloadLoading(false);
   };
 
+  const closeFileActionMenu = () => {
+    setOpenFileActionId(null);
+    setFileActionMenuPosition(null);
+    setFileActionFeedback(null);
+    setOpenSharePanelFileId(null);
+  };
+
+  const closeFolderActionMenu = () => {
+    setOpenFolderActionId(null);
+    setFolderActionMenuPosition(null);
+  };
+
+  const copyTextToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {
+      // Fallback below.
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      const ok = document.execCommand("copy");
+      if (!ok) throw new Error("Copy command failed");
+    } finally {
+      textarea.remove();
+    }
+  };
+
+  const getExistingFileShareLink = async (file: FileModel) => {
+    const links = await getShareLinks();
+    return links.find((link) => link.file?.id === file.id) ?? null;
+  };
+
+  const getOrCreateFileShareLink = async (file: FileModel) => {
+    const existing = await getExistingFileShareLink(file);
+    if (existing) {
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [file.id]: existing,
+      }));
+      return existing;
+    }
+
+    const created = await createShareLink(file.id);
+    setFileShareLinksByFileId((prev) => ({
+      ...prev,
+      [file.id]: created,
+    }));
+    return created;
+  };
+
+  const loadFileSharePanel = async (file: FileModel) => {
+    if (openSharePanelFileId === file.id) {
+      setOpenSharePanelFileId(null);
+      return;
+    }
+
+    setOpenSharePanelFileId(file.id);
+    setFileActionFeedback(null);
+    setFileSharingActionId(file.id);
+
+    try {
+      const existing = await getExistingFileShareLink(file);
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [file.id]: existing,
+      }));
+    } catch (error: any) {
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "error",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Gagal memuat status share.",
+      });
+    } finally {
+      setFileSharingActionId(null);
+    }
+  };
+
+  const handleCopyFileLink = async (file: FileModel) => {
+    if (fileSharingActionId) return;
+
+    setFileActionFeedback(null);
+
+    try {
+      const shareLink =
+        fileShareLinksByFileId[file.id] ?? (await getExistingFileShareLink(file));
+
+      if (!shareLink) {
+        setFileActionFeedback({
+          fileId: file.id,
+          type: "error",
+          message: "Pilih status Shared dulu untuk membuat link.",
+        });
+        return;
+      }
+
+      await copyTextToClipboard(getPublicShareUrl(shareLink.token));
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "success",
+        message: "Link disalin.",
+      });
+    } catch (error: any) {
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "error",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Gagal copy link.",
+      });
+    }
+  };
+
+  const handleSetFilePublic = async (file: FileModel) => {
+    if (fileSharingActionId) return;
+
+    setFileSharingActionId(file.id);
+    setFileActionFeedback(null);
+
+    try {
+      const shareLink = await getOrCreateFileShareLink(file);
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "success",
+        message: "Status diubah ke Shared.",
+      });
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [file.id]: shareLink,
+      }));
+    } catch (error: any) {
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "error",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Gagal membuat share link.",
+      });
+    } finally {
+      setFileSharingActionId(null);
+    }
+  };
+
+  const handleSetFilePrivate = async (file: FileModel) => {
+    if (fileSharingActionId) return;
+
+    setFileSharingActionId(file.id);
+    setFileActionFeedback(null);
+
+    try {
+      const links = await getShareLinks();
+      const fileLinks = links.filter((link) => link.file?.id === file.id);
+
+      await Promise.all(fileLinks.map((link) => deleteShareLink(link.id)));
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [file.id]: null,
+      }));
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "success",
+        message: "Status diubah ke Private.",
+      });
+    } catch (error: any) {
+      setFileActionFeedback({
+        fileId: file.id,
+        type: "error",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Gagal mengubah file menjadi private.",
+      });
+    } finally {
+      setFileSharingActionId(null);
+    }
+  };
+
   // file action menu helpers
   function openFileMenuAtCursor(
     event: React.MouseEvent,
@@ -1332,15 +1685,15 @@ export function MyFiles({
     event.stopPropagation();
     setOpenFolderActionId(null);
     setFolderActionMenuPosition(null);
+    setFileActionFeedback(null);
 
     if (openFileActionId === fileId) {
-      setOpenFileActionId(null);
-      setFileActionMenuPosition(null);
+      closeFileActionMenu();
       return;
     }
 
-    const menuWidth = 180;
-    const menuHeight = 260;
+    const menuWidth = 260;
+    const menuHeight = 430;
     const rawX = event.clientX;
     const rawY = event.clientY;
 
@@ -2032,272 +2385,365 @@ export function MyFiles({
     return target.closest("button,input,a,textarea,select,[role='menu']") !== null;
   };
 
-  const renderFileActionMenu = (file: FileModel) => (
-    <div className="relative">
-      {/* Wrapper ref for click-outside should only exist when this file menu is open */}
-      <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
-        <button
-          type="button"
-          aria-label={`More actions for ${file.original_name}`}
-          title="More"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
+  const renderFileActionMenu = (file: FileModel) => {
+    const isOpen = openFileActionId === file.id && fileActionMenuPosition;
+    const canPreview = fileService.canPreviewFile(file);
+    const isSharing = fileSharingActionId === file.id;
+    const isSharePanelOpen = openSharePanelFileId === file.id;
+    const shareLink = fileShareLinksByFileId[file.id] ?? null;
+    const shareUrl = shareLink ? getPublicShareUrl(shareLink.token) : "";
+    const feedback =
+      fileActionFeedback?.fileId === file.id ? fileActionFeedback : null;
 
-            // Keep existing menu state/handlers; only toggle open/close and compute position.
-            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-            const rawX = rect.right;
-            const rawY = rect.top;
+    const menuItemStyle = (
+      danger = false,
+      disabled = false,
+    ): React.CSSProperties => ({
+      marginTop: 4,
+      opacity: disabled ? 0.45 : 1,
+      cursor: disabled ? "not-allowed" : "pointer",
+      color: danger ? "#ef4444" : myFilesColors.text,
+      background: "transparent",
+    });
 
-            const menuWidth = 176;
-            const menuHeight = 260;
+    const renderMenuItem = ({
+      label,
+      icon,
+      onClick,
+      disabled = false,
+      danger = false,
+      title,
+      ariaLabel,
+    }: {
+      label: string;
+      icon: React.ReactNode;
+      onClick: () => void;
+      disabled?: boolean;
+      danger?: boolean;
+      title?: string;
+      ariaLabel?: string;
+    }) => (
+      <button
+        type="button"
+        role="menuitem"
+        aria-label={ariaLabel ?? label}
+        title={title ?? label}
+        className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+        disabled={disabled}
+        style={menuItemStyle(danger, disabled)}
+        onMouseEnter={(event) => {
+          if (disabled) return;
+          event.currentTarget.style.background = danger
+            ? "rgba(239,68,68,0.12)"
+            : `${accentColor}10`;
+        }}
+        onMouseLeave={(event) => {
+          event.currentTarget.style.background = "transparent";
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (disabled) return;
+          onClick();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <span>{label}</span>
+        </div>
+      </button>
+    );
 
-            const x =
-              typeof window !== "undefined"
-                ? Math.min(rawX, window.innerWidth - menuWidth)
-                : rawX;
+    return (
+      <div className="relative">
+        <div ref={openFileActionId === file.id ? fileMenuWrapRef : null}>
+          <button
+            type="button"
+            aria-label={`More actions for ${file.original_name}`}
+            title="More actions"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
 
-            const y =
-              typeof window !== "undefined"
-                ? Math.min(rawY, window.innerHeight - menuHeight)
-                : rawY;
+              setOpenFolderActionId(null);
+              setFolderActionMenuPosition(null);
+              setFileActionFeedback(null);
 
-            setOpenFolderActionId(null);
+              if (openFileActionId === file.id) {
+                closeFileActionMenu();
+                return;
+              }
 
-            if (openFileActionId === file.id) {
-              setOpenFileActionId(null);
-              setFileActionMenuPosition(null);
-              return;
-            }
+              const rect = event.currentTarget.getBoundingClientRect();
+              const menuWidth = 260;
+              const left =
+                typeof window !== "undefined"
+                  ? Math.min(
+                      window.innerWidth - menuWidth - 12,
+                      Math.max(12, rect.right - menuWidth),
+                    )
+                  : rect.right - menuWidth;
+              const top =
+                typeof window !== "undefined"
+                  ? Math.min(window.innerHeight - 430, rect.bottom + 6)
+                  : rect.bottom + 6;
 
-            setOpenFileActionId(file.id);
-            setFileActionMenuPosition({
-              x: Math.max(8, x),
-              y: Math.max(8, y),
-            });
-          }}
-          className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors"
-          style={{
-            background: "transparent",
-            border: `1px solid transparent`,
-            color: myFilesColors.muted,
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget;
-            el.style.background = `${accentColor}10`;
-            el.style.borderColor = `${accentColor}55`;
-            el.style.color = myFilesColors.text;
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget;
-            el.style.background = "transparent";
-            el.style.borderColor = "transparent";
-            el.style.color = myFilesColors.muted;
-          }}
-        >
-          <MoreHorizontal size={16} />
-        </button>
-
-        {openFileActionId === file.id && fileActionMenuPosition ? (
-          <div
-            style={{
-              position: "fixed",
-              top: fileActionMenuPosition.y,
-              left: fileActionMenuPosition.x,
-              width: 176,
-              zIndex: 9999,
-              background:
-                resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-              borderRadius: 10,
-              overflow: "hidden",
-              backgroundClip: "padding-box",
-              isolation: "isolate",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              setOpenFileActionId(file.id);
+              setFileActionMenuPosition({
+                x: Math.max(8, left),
+                y: Math.max(8, top),
+              });
             }}
-            role="menu"
-            aria-label={`File actions ${file.original_name}`}
-            onMouseDown={(e) => e.stopPropagation()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+            style={{
+              background: isOpen ? `${accentColor}12` : "transparent",
+              border: `1px solid ${isOpen ? `${accentColor}33` : "transparent"}`,
+              color: isOpen ? myFilesColors.text : myFilesColors.muted,
+            }}
           >
-            {/* NOTE: keep existing handlers/actions; only dropdown visibility changed. */}
-            {fileService.canPreviewFile(file) && (
-              <button
-                type="button"
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                style={{ color: myFilesColors.text, background: "transparent" }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = `${accentColor}10`;
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = "transparent";
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenFileActionId(null);
-                  setFileActionMenuPosition(null);
+            <MoreVertical size={16} />
+          </button>
+
+          {isOpen ? (
+            <div
+              style={{
+                position: "fixed",
+                top: fileActionMenuPosition.y,
+                left: fileActionMenuPosition.x,
+                width: 260,
+                zIndex: 9999,
+                background: myFilesColors.panelBg,
+                border: `1px solid ${myFilesColors.border}`,
+                borderRadius: 10,
+                padding: 6,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              }}
+              role="menu"
+              aria-label={`File actions ${file.original_name}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {renderMenuItem({
+                label:
+                  previewingFileId === file.id ? "Opening..." : "Preview",
+                icon: <Eye size={14} />,
+                disabled: !canPreview || previewingFileId === file.id,
+                ariaLabel: `Preview ${file.original_name}`,
+                onClick: () => {
+                  closeFileActionMenu();
                   void handlePreviewFile(file);
-                }}
-                disabled={previewingFileId === file.id}
-                aria-label={`Preview ${file.original_name}`}
-                title={`Preview ${file.original_name}`}
+                },
+              })}
+
+              {renderMenuItem({
+                label: "Details",
+                icon: <FileText size={14} />,
+                ariaLabel: `Details ${file.original_name}`,
+                onClick: () => {
+                  closeFileActionMenu();
+                  setDetailsItem({ type: "file", item: file });
+                },
+              })}
+
+              {renderMenuItem({
+                label: "Download",
+                icon: <Download size={14} />,
+                ariaLabel: `Download ${file.original_name}`,
+                onClick: () => {
+                  closeFileActionMenu();
+                  void fileService.downloadFile(file.id, file.original_name);
+                },
+              })}
+
+              {renderMenuItem({
+                label: isSharePanelOpen ? "Share" : "Share",
+                icon: <Share2 size={14} />,
+                disabled: isSharing,
+                ariaLabel: `Share ${file.original_name}`,
+                onClick: () => {
+                  void loadFileSharePanel(file);
+                },
+              })}
+
+              {isSharePanelOpen ? (
+                <div
+                  className="mt-2 rounded-lg border p-2"
+                  style={{
+                    borderColor: myFilesColors.border,
+                    background:
+                      resolvedTheme === "light"
+                        ? "#ffffff"
+                        : "rgba(15,23,42,0.55)",
+                  }}
+                >
+                  <div
+                    className="mb-1 text-[10px] font-semibold"
+                    style={{ color: myFilesColors.muted2 }}
+                  >
+                    Link
+                  </div>
+
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <div
+                      className="min-w-0 flex-1 truncate rounded-md border px-2 py-1 text-[10px]"
+                      style={{
+                        borderColor: myFilesColors.border,
+                        color: shareUrl ? myFilesColors.text : myFilesColors.muted2,
+                        background: myFilesColors.cardBg,
+                      }}
+                      title={shareUrl || "Pilih Shared untuk membuat link"}
+                    >
+                      {isSharing
+                        ? "Memuat link..."
+                        : shareUrl || "Belum ada link"}
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Salin link ${file.original_name}`}
+                      title="Salin link"
+                      disabled={!shareUrl || isSharing}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                      style={{
+                        opacity: !shareUrl || isSharing ? 0.45 : 1,
+                        cursor: !shareUrl || isSharing ? "not-allowed" : "pointer",
+                        border: `1px solid ${myFilesColors.border}`,
+                        color: shareUrl ? accentColor : myFilesColors.muted2,
+                        background: myFilesColors.cardBg,
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!shareUrl || isSharing) return;
+                        void handleCopyFileLink(file);
+                      }}
+                    >
+                      <Copy size={13} />
+                    </button>
+                  </div>
+
+                  <div
+                    className="mt-2 text-[10px] font-semibold"
+                    style={{ color: myFilesColors.muted2 }}
+                  >
+                    Status
+                  </div>
+                  <div className="mt-1 grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Set private ${file.original_name}`}
+                      title="Private"
+                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
+                      disabled={isSharing}
+                      style={{
+                        opacity: isSharing ? 0.45 : 1,
+                        cursor: isSharing ? "not-allowed" : "pointer",
+                        color: !shareLink ? accentColor : myFilesColors.text,
+                        background: !shareLink ? `${accentColor}12` : "transparent",
+                        border: `1px solid ${
+                          !shareLink ? `${accentColor}33` : "transparent"
+                        }`,
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (isSharing) return;
+                        void handleSetFilePrivate(file);
+                      }}
+                    >
+                      Private
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`Set shared ${file.original_name}`}
+                      title="Shared"
+                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
+                      disabled={isSharing}
+                      style={{
+                        opacity: isSharing ? 0.45 : 1,
+                        cursor: isSharing ? "not-allowed" : "pointer",
+                        color: shareLink ? accentColor : myFilesColors.text,
+                        background: shareLink ? `${accentColor}12` : "transparent",
+                        border: `1px solid ${
+                          shareLink ? `${accentColor}33` : "transparent"
+                        }`,
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (isSharing) return;
+                        void handleSetFilePublic(file);
+                      }}
+                    >
+                      Shared
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                className="mt-2 border-t pt-2"
+                style={{ borderColor: myFilesColors.border }}
               >
-                <Eye size={12} style={{ color: myFilesColors.muted }} />{" "}
-                {previewingFileId === file.id ? "Opening..." : "Preview"}
-              </button>
-            )}
+                {renderMenuItem({
+                  label: "Rename",
+                  icon: <Edit3 size={14} />,
+                  ariaLabel: `Rename ${file.original_name}`,
+                  onClick: () => {
+                    closeFileActionMenu();
+                    setSelectedFileForAction(file);
+                    setFileRenameName(file.original_name);
+                    setFileModalError("");
+                    setIsFileRenameModalOpen(true);
+                  },
+                })}
 
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-              style={{ color: myFilesColors.text, background: "transparent" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = `${accentColor}10`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                void fileService.downloadFile(file.id, file.original_name);
-                setOpenFileActionId(null);
-                setFileActionMenuPosition(null);
-              }}
-              aria-label={`Download ${file.original_name}`}
-              title={`Download ${file.original_name}`}
-            >
-              <Download size={12} style={{ color: myFilesColors.muted }} /> Download
-            </button>
+                {renderMenuItem({
+                  label: "Move to...",
+                  icon: <Folder size={14} />,
+                  ariaLabel: `Move ${file.original_name}`,
+                  onClick: () => {
+                    closeFileActionMenu();
+                    openMoveFileModal(file);
+                  },
+                })}
 
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-              style={{ color: myFilesColors.text, background: "transparent" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = `${accentColor}10`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedFileForShare(file);
-                setShareError("");
-                setCopySuccess("");
-                setActiveShareLink(null);
-                setIsShareModalOpen(true);
-                setOpenFileActionId(null);
-                setFileActionMenuPosition(null);
+                {renderMenuItem({
+                  label: "Trash",
+                  icon: <Trash2 size={14} />,
+                  danger: true,
+                  ariaLabel: `Trash ${file.original_name}`,
+                  onClick: () => {
+                    closeFileActionMenu();
+                    setSelectedFileForDelete(file);
+                    setDeleteFileError("");
+                    setIsFileDeleteModalOpen(true);
+                  },
+                })}
+              </div>
 
-                (async () => {
-                  try {
-                    setShareLoading(true);
-                    const created = await createShareLink(file.id);
-                    setActiveShareLink(created);
-                  } catch (err: any) {
-                    setShareError(
-                      err?.response?.data?.message ||
-                        err?.message ||
-                        "Gagal membuat share link",
-                    );
-                  } finally {
-                    setShareLoading(false);
-                  }
-                })();
-              }}
-              aria-label={`Share ${file.original_name}`}
-              title={`Share ${file.original_name}`}
-            >
-              <Share2 size={12} style={{ color: myFilesColors.muted }} /> Share
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-              style={{ color: myFilesColors.text, background: "transparent" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = `${accentColor}10`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedFileForAction(file);
-                setFileRenameName(file.original_name);
-                setFileModalError("");
-                setIsFileRenameModalOpen(true);
-                setOpenFileActionId(null);
-                setFileActionMenuPosition(null);
-              }}
-              aria-label={`Rename ${file.original_name}`}
-              title={`Rename ${file.original_name}`}
-            >
-              <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-              style={{ color: myFilesColors.text, background: "transparent" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = `${accentColor}10`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setOpenFileActionId(null);
-                setFileActionMenuPosition(null);
-                openMoveFileModal(file);
-              }}
-              aria-label={`Move ${file.original_name}`}
-            >
-              <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-              style={{ color: "#f87171", background: "transparent" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "rgba(239,68,68,0.12)";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget;
-                el.style.background = "transparent";
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setSelectedFileForDelete(file);
-                setDeleteFileError("");
-                setIsFileDeleteModalOpen(true);
-                setOpenFileActionId(null);
-                setFileActionMenuPosition(null);
-              }}
-              aria-label={`Delete ${file.original_name}`}
-              title={`Delete ${file.original_name}`}
-            >
-              <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
-            </button>
-          </div>
-        ) : null}
+              {feedback ? (
+                <div
+                  className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
+                  style={{
+                    background:
+                      feedback.type === "error"
+                        ? "rgba(239,68,68,0.10)"
+                        : `${accentColor}14`,
+                    color:
+                      feedback.type === "error" ? "#ef4444" : accentColor,
+                  }}
+                  role="alert"
+                >
+                  {feedback.message}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div
@@ -3101,50 +3547,37 @@ export function MyFiles({
             ))}
           </div>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setMoveDragDropEnabled((value) => !value);
-          }}
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
-          aria-pressed={moveDragDropEnabled}
-          aria-label="Toggle drag move"
-          title={moveDragDropEnabled ? "Drag move aktif" : "Drag move mati"}
-          style={{
-            background: moveDragDropEnabled
-              ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
-              : myFilesColors.buttonSoftBg,
-            border: moveDragDropEnabled
-              ? `1px solid ${accentColor}66`
-              : `1px solid ${myFilesColors.border}`,
-            color: moveDragDropEnabled ? "#ffffff" : myFilesColors.text,
-            boxShadow: moveDragDropEnabled
-              ? `0 10px 24px ${accentColor}22`
-              : "none",
-          } as React.CSSProperties}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 999,
-              background: moveDragDropEnabled ? "#22c55e" : myFilesColors.muted,
-              boxShadow: moveDragDropEnabled
-                ? "0 0 0 4px rgba(34,197,94,0.16)"
-                : "none",
-              opacity: moveDragDropEnabled ? 1 : 0.75,
-              transition: "background 160ms ease, box-shadow 160ms ease, opacity 160ms ease",
-              flex: "0 0 auto",
-            }}
-          />
-          <span>
-            Drag Move: {moveDragDropEnabled ? "ON" : "OFF"}
-          </span>
-        </button>
-      </div>
+            <button
+              type="button"
+              onClick={() => handleToggleSelectionMode()}
+              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
+              aria-pressed={isSelectionMode}
+              aria-label={isSelectionMode ? "Exit select mode" : "Enter select mode"}
+              title={isSelectionMode ? "Selection aktif" : "Enter selection mode"}
+              style={{
+                background: isSelectionMode ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : myFilesColors.buttonSoftBg,
+                border: isSelectionMode ? `1px solid ${accentColor}66` : `1px solid ${myFilesColors.border}`,
+                color: isSelectionMode ? "#ffffff" : myFilesColors.text,
+                boxShadow: isSelectionMode ? `0 10px 24px ${accentColor}22` : "none",
+                marginLeft: 8,
+              } as React.CSSProperties}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                if (isSelectionMode) return;
+                el.style.background = `${accentColor}10`;
+                el.style.color = myFilesColors.text;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                if (isSelectionMode) return;
+                el.style.background = myFilesColors.buttonSoftBg;
+                el.style.color = myFilesColors.text;
+              }}
+            >
+              {isSelectionMode ? "Selecting" : "Select"}
+            </button>
+
+</div>
 
 
       {/* Folders */}
@@ -3189,6 +3622,7 @@ export function MyFiles({
                       }}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => {
+
                         const checked = e.target.checked;
                         if (checked) {
                           setSelectedFolderIds((prev) => {
@@ -3204,11 +3638,23 @@ export function MyFiles({
                           });
                         }
                       }}
-                      style={{ width: 14, height: 14, accentColor: "#ef4444" }}
+                      style={{
+                        width: 14,
+                        height: 14,
+                        accentColor: "#ef4444",
+                        ...checklistVisibilityStyle,
+                      }}
                     />
-                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                    <div
+                      className="text-xs"
+                      style={{
+                        color: myFilesColors.muted,
+                        ...checklistVisibilityStyle,
+                      }}
+                    >
                       Pilih semua (tampil)
                     </div>
+
                   </div>
                 ) : null;
               })()}
@@ -3287,7 +3733,26 @@ export function MyFiles({
                 }}
                 onClick={(event) => {
                   if (isInteractiveItemTarget(event.target)) return;
+                  if (!isSelectionMode) return;
                   toggleFolderSelection(folder.id);
+                }}
+                onDragOver={(e) => {
+                  if (!moveDragDropEnabled || !dragMoveItem) return;
+                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  if (!moveDragDropEnabled || !dragMoveItem) return;
+                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                    clearDragMoveItem();
+                    return;
+                  }
+
+                  moveDraggedItemToFolder(folder.id);
                 }}
                 className="grid px-4 py-2.5 items-center cursor-pointer hover:bg-[#0d1829] transition-colors group relative rounded-xl"
                 style={{
@@ -3308,6 +3773,7 @@ export function MyFiles({
                     width: 14,
                     height: 14,
                     accentColor: "#3b82f6",
+                    ...checklistVisibilityStyle,
                   }}
                   aria-label={`Select folder ${folder.name}`}
                 />
@@ -3462,10 +3928,11 @@ export function MyFiles({
                 if (isInteractiveItemTarget(event.target)) return;
                 handleOpenFolder(folder);
               }}
-              onClick={(event) => {
-                if (isInteractiveItemTarget(event.target)) return;
-                toggleFolderSelection(folder.id);
-              }}
+                      onClick={(event) => {
+                        if (isInteractiveItemTarget(event.target)) return;
+                        if (!isSelectionMode) return;
+                        toggleFolderSelection(folder.id);
+                      }}
               className="rounded-xl p-3 cursor-pointer transition-all group"
 
 
@@ -3490,11 +3957,12 @@ export function MyFiles({
                     onClick={(e) => {
                       e.stopPropagation();
                     }}
-                    style={{
-                      width: 14,
-                      height: 14,
-                      accentColor: "#ef4444",
-                    }}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    accentColor: "#ef4444",
+                    ...checklistVisibilityStyle,
+                  }}
                   />
                 </div>
 
@@ -3559,19 +4027,17 @@ export function MyFiles({
       {activeFolderAction && folderActionMenuPosition ? (
         <div
           ref={folderMenuWrapRef}
-          className="rounded-xl shadow-2xl overflow-hidden"
-
+          className="rounded-xl shadow-2xl"
           style={{
             position: "fixed",
             top: folderActionMenuPosition.y,
             left: folderActionMenuPosition.x,
             width: 176,
             zIndex: 9999,
-            background:
-              resolvedTheme === "light" ? "#ffffff" : myFilesColors.cardBg,
+            background: myFilesColors.panelBg,
             border: `1px solid ${myFilesColors.border}`,
-            backgroundClip: "padding-box",
-            isolation: "isolate",
+            borderRadius: 10,
+            padding: 6,
           }}
           role="menu"
           aria-label={`Folder menu ${activeFolderAction.name}`}
@@ -3580,51 +4046,214 @@ export function MyFiles({
         >
           <button
             type="button"
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            role="menuitem"
+            className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
             style={{ color: myFilesColors.text, background: "transparent" }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpenFolderActionId(null);
-              setFolderActionMenuPosition(null);
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = `${accentColor}10`;
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
+            onClick={() => {
+              closeFolderActionMenu();
+              setDetailsItem({ type: "folder", item: activeFolderAction });
+            }}
+            aria-label={`Details ${activeFolderAction.name}`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText size={14} />
+              <span>Details</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
+            style={{ color: myFilesColors.text, background: "transparent" }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = `${accentColor}10`;
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
+            onClick={() => {
+              closeFolderActionMenu();
               setSelectedFolderForAction(activeFolderAction);
               openRenameFolderModal(activeFolderAction);
             }}
             aria-label={`Rename ${activeFolderAction.name}`}
           >
-            <Edit3 size={12} style={{ color: myFilesColors.muted }} /> Rename
+            <div className="flex items-center gap-2">
+              <Edit3 size={14} />
+              <span>Rename</span>
+            </div>
           </button>
 
           <button
             type="button"
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            role="menuitem"
+            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
             style={{ color: myFilesColors.text, background: "transparent" }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setFolderActionMenuPosition(null);
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = `${accentColor}10`;
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
+            onClick={() => {
+              closeFolderActionMenu();
               openMoveFolderModal(activeFolderAction);
             }}
             aria-label={`Move ${activeFolderAction.name}`}
           >
-            <Folder size={12} style={{ color: myFilesColors.muted }} /> Move to...
+            <div className="flex items-center gap-2">
+              <Folder size={14} />
+              <span>Move to...</span>
+            </div>
           </button>
 
           <button
             type="button"
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+            role="menuitem"
+            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
             style={{ color: "#f87171", background: "transparent" }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpenFolderActionId(null);
-              setFolderActionMenuPosition(null);
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "rgba(239,68,68,0.12)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
+            onClick={() => {
+              closeFolderActionMenu();
               openDeleteFolderModal(activeFolderAction);
             }}
             aria-label={`Delete ${activeFolderAction.name}`}
           >
-            <Trash2 size={12} style={{ color: "#f87171" }} /> Delete
+            <div className="flex items-center gap-2">
+              <Trash2 size={14} />
+              <span>Trash</span>
+            </div>
           </button>
+        </div>
+      ) : null}
+
+
+      {/* Details Modal */}
+      {detailsItem ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={() => setDetailsItem(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border p-5"
+            style={{
+              background: myFilesColors.cardBg,
+              borderColor: myFilesColors.border,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {(() => {
+              const item = detailsItem.item;
+              const isFile = detailsItem.type === "file";
+              const title = isFile
+                ? (item as FileModel).original_name
+                : (item as FolderModel).name;
+              const typeLabel = isFile
+                ? getTypeLabel((item as FileModel).mime_type ?? null)
+                : "Folder";
+              const modifiedAt =
+                item.updated_at || item.created_at
+                  ? new Date(item.updated_at ?? item.created_at ?? "").toLocaleString()
+                  : "-";
+              const createdAt = item.created_at
+                ? new Date(item.created_at).toLocaleString()
+                : "-";
+
+              return (
+                <>
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div
+                        className="text-sm font-semibold"
+                        style={{ color: myFilesColors.title }}
+                      >
+                        Details
+                      </div>
+                      <div
+                        className="mt-1 truncate text-xs"
+                        style={{ color: myFilesColors.muted }}
+                        title={title}
+                      >
+                        {title}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDetailsItem(null)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: myFilesColors.panelBg,
+                        border: `1px solid ${myFilesColors.border}`,
+                        color: myFilesColors.muted,
+                      }}
+                      aria-label="Close details"
+                      title="Close"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
+                        Type
+                      </div>
+                      <div className="mt-1" style={{ color: myFilesColors.text }}>
+                        {typeLabel}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
+                        Status
+                      </div>
+                      <div className="mt-1" style={{ color: myFilesColors.text }}>
+                        {isFile ? "Private" : "Folder"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
+                        Modified
+                      </div>
+                      <div className="mt-1" style={{ color: myFilesColors.text }}>
+                        {modifiedAt}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
+                        Size
+                      </div>
+                      <div className="mt-1" style={{ color: myFilesColors.text }}>
+                        {isFile ? formatBytes((item as FileModel).size) : "-"}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
+                        Created
+                      </div>
+                      <div className="mt-1" style={{ color: myFilesColors.text }}>
+                        {createdAt}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </div>
       ) : null}
 
@@ -3739,112 +4368,129 @@ export function MyFiles({
         </div>
       )}
 
-
-      {previewModalOpen && (
+      {previewModalOpen && previewModalMode === "minimized" ? (
         <div
-          className={
-            previewModalMode === "minimized"
-              ? "fixed inset-0 z-[150] pointer-events-none"
-              : "fixed inset-0 z-[150] flex items-center justify-center bg-black/70 px-4"
-          }
-          onMouseDown={
-            previewModalMode === "minimized" ? undefined : closePreviewModal
-          }
+          role="dialog"
+          aria-modal="true"
+          className="fixed bottom-4 right-4 z-[150]"
+          style={{
+            background: myFilesColors.cardBg,
+            border: `1px solid ${myFilesColors.border}`,
+            borderRadius: 12,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
+            width: 320,
+            maxWidth: "calc(100vw - 32px)",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <div
-            className={`pointer-events-auto flex flex-col rounded-2xl p-4 ${
-              previewModalMode === "maximized"
-                ? "h-[96vh] w-[96vw] max-w-none"
-                : previewModalMode === "minimized"
-                  ? "fixed bottom-4 right-4 h-auto w-[360px] max-w-[90vw]"
-                  : "h-[85vh] w-[90vw] max-w-5xl"
-            }`}
+            className="flex items-center justify-between gap-3 px-3 py-2"
+            style={{ borderBottom: `1px solid ${myFilesColors.border}` }}
+          >
+            <div className="min-w-0">
+              <div
+                className="truncate text-xs font-semibold"
+                style={{ color: myFilesColors.title }}
+                title={previewFileName}
+              >
+                {previewFileName}
+              </div>
+              <div
+                className="mt-0.5 text-[10px]"
+                style={{ color: myFilesColors.muted }}
+              >
+                Preview minimized
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewModalMode("normal")}
+                className="flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold"
+                style={{
+                  background: `${accentColor}14`,
+                  border: `1px solid ${accentColor}33`,
+                  color: accentColor,
+                }}
+                aria-label="Restore preview"
+                title="Restore preview"
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                onClick={closePreviewModal}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
+                style={{
+                  color: myFilesColors.muted2,
+                  background: myFilesColors.panelBg,
+                  border: `1px solid ${myFilesColors.border}`,
+                }}
+                aria-label="Close preview"
+                title="Close preview"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewModalOpen && previewModalMode !== "minimized" && (
+        <div
+          className="fixed inset-0 z-[150] flex items-end justify-center md:items-center"
+          style={{
+            background:
+              resolvedTheme === "light"
+                ? "rgba(15,23,42,0.35)"
+                : "rgba(0,0,0,0.55)",
+          }}
+          onMouseDown={closePreviewModal}
+        >
+          <div
+            className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border"
             style={{
               background: myFilesColors.cardBg,
               border: `1px solid ${myFilesColors.border}`,
               boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
-              transform:
-                previewModalMode === "minimized"
-                  ? `translate(${previewMiniOffset.x}px, ${previewMiniOffset.y}px)`
-                  : undefined,
+              width:
+                previewModalMode === "maximized"
+                  ? "calc(100vw - 8px)"
+                  : previewModalMode === "normal"
+                    ? "min(1120px, calc(100vw - 48px))"
+                    : undefined,
+              height:
+                previewModalMode === "maximized"
+                  ? "calc(100vh - 8px)"
+                  : "min(82vh, 760px)",
+              maxWidth: "none",
+              maxHeight: "none",
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div
-              className="mb-3 flex items-center justify-between gap-4 rounded-xl"
+              className="flex items-center justify-between gap-4 px-3 py-2"
               style={{
-                background:
-                  previewModalMode === "minimized" ? myFilesColors.cardBg : undefined,
                 borderBottom: `1px solid ${myFilesColors.border}`,
-                paddingBottom: 12,
               }}
             >
-              <div
-                className="min-w-0"
-                onPointerDown={
-                  previewModalMode === "minimized"
-                    ? handlePreviewMiniPointerDown
-                    : undefined
-                }
-                style={
-                  previewModalMode === "minimized"
-                    ? { cursor: "grab", touchAction: "none" }
-                    : undefined
-                }
-              >
+              <div className="min-w-0">
                 <h2
-                  className="text-sm font-semibold"
+                  className="truncate text-sm font-semibold"
                   style={{ color: myFilesColors.title }}
+                  title={previewFileName}
                 >
-                  Preview
+                  {previewFileName}
                 </h2>
                 <p
                   className="truncate text-xs mt-1"
                   style={{ color: myFilesColors.muted }}
                 >
-                  {previewFileName}
+                  Preview
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                    <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewModalMode((mode) =>
-                      mode === "minimized" ? "normal" : "minimized",
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
-                  style={{
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted2,
-                  }}
-                  aria-label="Minimize preview"
-                  title="Minimize preview"
-                >
-                  -
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewModalMode((mode) =>
-                      mode === "maximized" ? "normal" : "maximized",
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
-                  style={{
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted2,
-                  }}
-                  aria-label="Toggle full page preview"
-                  title="Full page preview"
-                >
-                  {"\u25A1"}
-                </button>
-
                 {(() => {
                   if (!previewFile) return null;
 
@@ -3854,228 +4500,286 @@ export function MyFiles({
                       onClick={() => {
                         handleDownloadFile(previewFile);
                       }}
-                      className="px-3 h-8 flex items-center justify-center rounded-lg text-xs"
+                      className="flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold"
                       style={{
-                        background: previewFile
-                          ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
-                          : myFilesColors.buttonSoftBg,
-                        border: previewFile
-                          ? `1px solid ${accentColor}`
-                          : `1px solid ${myFilesColors.border}`,
-                        color: "#fff",
+                        background: `${accentColor}14`,
+                        border: `1px solid ${accentColor}33`,
+                        color: accentColor,
                       }}
                       aria-label="Download preview file"
                       title="Download"
                     >
-                      Download
+                      <Download size={14} />
                     </button>
                   );
                 })()}
 
                 {previewContentType.startsWith("image/") && (
-                  <div className="flex items-center gap-1">
+                  <>
                     <button
                       type="button"
                       onClick={() =>
-                        setPreviewImageScale((v) =>
-                          Math.max(0.5, Number((v - 0.25).toFixed(2))),
+                        setPreviewImageScaleFromAnchor(
+                          previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
                         )
                       }
-                      className="h-8 rounded-lg px-3 text-xs"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
                       style={{
-                        background: myFilesColors.buttonSoftBg,
+                        background: myFilesColors.panelBg,
                         border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted,
+                        color: myFilesColors.muted2,
                       }}
                       aria-label="Zoom out image"
                       title="Zoom out"
                     >
-                      -
+                      <ZoomOut size={15} />
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setPreviewImageScale(1)}
-                      className="h-8 rounded-lg px-3 text-xs"
+                      onClick={resetPreviewImageZoom}
+                      className="flex h-8 w-[76px] items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold"
                       style={{
-                        background: myFilesColors.buttonSoftBg,
+                        background: myFilesColors.panelBg,
                         border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted,
+                        color: myFilesColors.muted2,
                       }}
                       aria-label="Reset image zoom"
                       title="Reset zoom"
                     >
-                      {Math.round(previewImageScale * 100)}%
+                      <RotateCcw size={13} />
+                      <span>{Math.round(previewImageScale * 100)}%</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() =>
-                        setPreviewImageScale((v) =>
-                          Math.min(3, Number((v + 0.25).toFixed(2))),
+                        setPreviewImageScaleFromAnchor(
+                          previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
                         )
                       }
-                      className="h-8 rounded-lg px-3 text-xs"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
                       style={{
-                        background: myFilesColors.buttonSoftBg,
+                        background: myFilesColors.panelBg,
                         border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted,
+                        color: myFilesColors.muted2,
                       }}
                       aria-label="Zoom in image"
                       title="Zoom in"
                     >
-                      +
+                      <ZoomIn size={15} />
                     </button>
-                  </div>
+                  </>
                 )}
 
                 <button
                   type="button"
-                  onClick={closePreviewModal}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
+                  onClick={() => setPreviewModalMode("minimized")}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
                   style={{
-                    background: myFilesColors.buttonSoftBg,
+                    background: myFilesColors.panelBg,
                     border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted,
+                    color: myFilesColors.muted2,
                   }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = `${accentColor}10`;
+                  aria-label="Minimize preview"
+                  title="Minimize preview"
+                >
+                  <Minus size={15} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewModalMode((mode) =>
+                      mode === "maximized" ? "normal" : "maximized",
+                    )
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                  style={{
+                    background: myFilesColors.panelBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.muted2,
                   }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = myFilesColors.buttonSoftBg;
+                  aria-label={
+                    previewModalMode === "maximized"
+                      ? "Restore preview size"
+                      : "Maximize preview"
+                  }
+                  title={
+                    previewModalMode === "maximized"
+                      ? "Restore preview size"
+                      : "Maximize preview"
+                  }
+                >
+                  {previewModalMode === "maximized" ? (
+                    <Minimize2 size={15} />
+                  ) : (
+                    <Maximize2 size={15} />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closePreviewModal}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
+                  style={{
+                    background: myFilesColors.panelBg,
+                    border: `1px solid ${myFilesColors.border}`,
+                    color: myFilesColors.muted2,
                   }}
                   aria-label="Close preview"
                   title="Close preview"
                 >
-                  &times;
+                  <X size={15} />
                 </button>
               </div>
             </div>
 
-            {previewModalMode !== "minimized" && (
-              <div
-                className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border"
-                style={{
-                  background: myFilesColors.panelBg,
-                  border: `1px solid ${myFilesColors.border}`,
-                }}
-              >
-                {previewContentType.startsWith("image/") ? (
+            <div
+              className="mx-3 mb-3 mt-3 flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border"
+              style={{
+                background: myFilesColors.panelBg,
+                border: `1px solid ${myFilesColors.border}`,
+              }}
+            >
+              {previewContentType.startsWith("image/") ? (
+                <div
+                  ref={previewImageViewportRef}
+                  onWheel={handlePreviewImageWheel}
+                  className="flex h-full w-full items-center justify-center overflow-hidden"
+                  style={{
+                    touchAction: "none",
+                    cursor:
+                      previewImageScale > 1 ? "zoom-out" : "zoom-in",
+                  }}
+                >
                   <img
+                    ref={previewImageRef}
                     src={previewUrl}
                     alt={previewFileName}
                     style={{
-                      transform: `scale(${previewImageScale})`,
+                      transform: `translate3d(${previewImageOffset.x}px, ${previewImageOffset.y}px, 0) scale(${previewImageScale})`,
                       transformOrigin: "center center",
                       maxHeight: "100%",
                       maxWidth: "100%",
                       objectFit: "contain",
+                      transition: "transform 80ms ease-out",
+                      userSelect: "none",
                     }}
+                    draggable={false}
                   />
-                ) : previewContentType === "application/pdf" ? (
-                  <iframe
-                    src={previewUrl}
-                    title={previewFileName}
-                    className="h-full w-full rounded-xl"
-                  />
-                ) : previewContentType.startsWith("video/") ? (
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      background: "#000",
-                      borderRadius: "0.75rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <video
-                      controls
-                      src={previewUrl ?? undefined}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        maxHeight: "100%",
-                        objectFit: "contain",
-                        background: "#000",
-                      }}
-                      preload="metadata"
-                      onError={() => {
-                        setFileError("Gagal memuat preview video.");
-                      }}
-                    />
-                  </div>
-                ) : previewContentType.startsWith("audio/") ? (
-                  <AudioPreviewPlayer
+                </div>
+              ) : previewContentType === "application/pdf" ? (
+                <iframe
+                  src={
+                    previewUrl
+                      ? `${previewUrl}#toolbar=1&navpanes=0&scrollbar=1`
+                      : undefined
+                  }
+                  title={previewFileName}
+                  className="h-full w-full rounded-xl"
+                />
+              ) : previewContentType.startsWith("video/") ? (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    background: "#000",
+                    borderRadius: "0.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
+                >
+                  <video
+                    controls
                     src={previewUrl ?? undefined}
-                    onError={() => {
-                      setFileError("Gagal memuat preview audio.");
-                    }}
-                  />
-                ) : previewContentType.startsWith("text/") ||
-                  previewContentType === "application/json" ||
-                  previewContentType === "application/xml" ||
-                  previewContentType === "text/xml" ||
-                  previewContentType === "application/javascript" ||
-                  previewContentType === "application/x-javascript" ||
-                  previewContentType === "application/typescript" ||
-                  previewContentType === "text/css" ||
-                  previewContentType === "text/html" ||
-                  previewContentType === "text/markdown" ||
-                  previewContentType === "text/csv" ? (
-                  <div
                     style={{
                       width: "100%",
                       height: "100%",
-                      overflow: "hidden",
-                      display: "flex",
-                      flexDirection: "column",
+                      maxHeight: "100%",
+                      objectFit: "contain",
+                      background: "#000",
                     }}
-                  >
-                    {previewTextError ? (
-                      <div className="text-xs" style={{ color: "#f87171" }}>
-                        {previewTextError}
-                      </div>
-                    ) : previewIsTextTooLarge ? (
-                      <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                        Preview text terlalu besar. Silakan download file untuk
-                        melihat isinya.
-                      </div>
-                    ) : previewTextLoading ? (
-                      <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                        Loading preview text...
-                      </div>
-                    ) : (
-                      <pre
-                        style={{
-                          margin: 0,
-                          padding: 16,
-                          color: myFilesColors.text,
-                          background: "transparent",
-                          fontFamily:
-                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
-                          fontSize: 12,
-                          lineHeight: 1.5,
-                          whiteSpace: "pre",
-                          overflow: "auto",
-                          tabSize: 2,
-                        }}
-                      >
-                        {previewText}
-                      </pre>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                    Preview tipe file ini belum tersedia di modal.
-                  </div>
-                )}
-              </div>
-            )}
+                    preload="metadata"
+                    onError={() => {
+                      setFileError("Gagal memuat preview video.");
+                    }}
+                  />
+                </div>
+              ) : previewContentType.startsWith("audio/") ? (
+                <AudioPreviewPlayer
+                  src={previewUrl ?? undefined}
+                  onError={() => {
+                    setFileError("Gagal memuat preview audio.");
+                  }}
+                />
+              ) : previewContentType.startsWith("text/") ||
+                previewContentType === "application/json" ||
+                previewContentType === "application/xml" ||
+                previewContentType === "text/xml" ||
+                previewContentType === "application/javascript" ||
+                previewContentType === "application/x-javascript" ||
+                previewContentType === "application/typescript" ||
+                previewContentType === "text/css" ||
+                previewContentType === "text/html" ||
+                previewContentType === "text/markdown" ||
+                previewContentType === "text/csv" ? (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  {previewTextError ? (
+                    <div className="text-xs" style={{ color: "#f87171" }}>
+                      {previewTextError}
+                    </div>
+                  ) : previewIsTextTooLarge ? (
+                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                      Preview text terlalu besar. Silakan download file untuk
+                      melihat isinya.
+                    </div>
+                  ) : previewTextLoading ? (
+                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                      Loading preview text...
+                    </div>
+                  ) : (
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: 16,
+                        color: myFilesColors.text,
+                        background: "transparent",
+                        fontFamily:
+                          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        whiteSpace: "pre",
+                        overflow: "auto",
+                        tabSize: 2,
+                      }}
+                    >
+                      {previewText}
+                    </pre>
+                  )}
+                </div>
+              ) : previewUrl ? (
+                <iframe
+                  src={previewUrl}
+                  title={previewFileName}
+                  className="h-full w-full rounded-xl"
+                />
+              ) : (
+                <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                  Preview tipe file ini belum tersedia di modal.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -5465,6 +6169,7 @@ export function MyFiles({
                     width: 14,
                     height: 14,
                     accentColor: "#ef4444",
+                    ...checklistVisibilityStyle,
                   }}
                 />
               );
@@ -5537,10 +6242,11 @@ export function MyFiles({
                     if (isInteractiveItemTarget(event.target)) return;
                     void handlePreviewFile(file);
                   }}
-                  onClick={(event) => {
-                    if (isInteractiveItemTarget(event.target)) return;
-                    toggleFileSelection(file.id);
-                  }}
+                      onClick={(event) => {
+                        if (isInteractiveItemTarget(event.target)) return;
+                        if (!isSelectionMode) return;
+                        toggleFileSelection(file.id);
+                      }}
                   onDragStart={(e) => {
                     if (!moveDragDropEnabled) {
                       e.preventDefault();
@@ -5583,6 +6289,7 @@ export function MyFiles({
                         width: 14,
                         height: 14,
                         accentColor: "#ef4444",
+                        ...checklistVisibilityStyle,
                       }}
                     />
                   </div>
@@ -5667,10 +6374,11 @@ export function MyFiles({
                       if (isInteractiveItemTarget(event.target)) return;
                       void handlePreviewFile(file);
                     }}
-                    onClick={(event) => {
-                      if (isInteractiveItemTarget(event.target)) return;
-                      toggleFileSelection(file.id);
-                    }}
+                      onClick={(event) => {
+                        if (isInteractiveItemTarget(event.target)) return;
+                        if (!isSelectionMode) return;
+                        toggleFileSelection(file.id);
+                      }}
                     onDragStart={(e) => {
                       if (!moveDragDropEnabled) {
                         e.preventDefault();
@@ -5713,11 +6421,12 @@ export function MyFiles({
                             });
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          style={{
-                            width: 14,
-                            height: 14,
-                            accentColor: "#ef4444",
-                          }}
+                        style={{
+                          width: 14,
+                          height: 14,
+                          accentColor: "#ef4444",
+                          ...checklistVisibilityStyle,
+                        }}
                         />
 
                         <FileTypeIcon

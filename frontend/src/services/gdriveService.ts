@@ -108,6 +108,7 @@ export async function getGDriveAccountFiles(
   params?: {
     page_size?: number;
     page_token?: string | null;
+    folder_id?: string | null;
   },
 ): Promise<GDriveFilesResponse> {
   const res = await api.get(`/gdrive/accounts/${accountId}/files`, {
@@ -293,6 +294,19 @@ export async function restoreGDriveFile(
   return res.data;
 }
 
+export async function updateGDriveFileVisibility(
+  accountId: string,
+  fileId: string,
+  visibility: "public" | "private",
+): Promise<{ message: string; data: GDriveFile }> {
+  const res = await api.post(
+    `/gdrive/accounts/${accountId}/files/${fileId}/visibility`,
+    { visibility },
+  );
+
+  return res.data;
+}
+
 export async function deleteGDriveFilePermanently(
   accountId: string,
   fileId: string,
@@ -306,6 +320,37 @@ export async function deleteGDriveFilePermanently(
   );
 
   return res.data;
+}
+
+export async function renameGDriveFile(
+  accountId: string,
+  fileId: string,
+  newName: string,
+): Promise<{ message: string; data: GDriveFile }> {
+  const res = await api.patch(
+    `/gdrive/accounts/${accountId}/files/${fileId}/rename`,
+    { name: newName },
+  );
+
+  return res.data;
+}
+
+export async function createGDriveFolder(
+  accountId: string,
+  name: string,
+  parentId?: string | null,
+): Promise<GDriveFile> {
+  const payload: Record<string, any> = { name };
+  if (parentId !== undefined) {
+    payload.parent_id = parentId;
+  }
+
+  const res = await api.post(
+    `/gdrive/accounts/${accountId}/folders`,
+    payload,
+  );
+
+  return res.data?.data ?? res.data;
 }
 
 
