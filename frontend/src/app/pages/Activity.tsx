@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { getActivityLogs } from "../../services/activityLogService";
 import type { ActivityLogItem } from "../../types/activityLog";
+import { localDateLabel, localTimeLabel } from "./activity/activityFormatters";
+import { getActionUI } from "./activity/activityActionUi";
+import { ActivityErrorMessage } from "./activity/components/ActivityErrorMessage";
+import { ActivityLoadingState } from "./activity/components/ActivityLoadingState";
+import { ActivityEmptyState } from "./activity/components/ActivityEmptyState";
 
 // keep icon components loosely typed to avoid TS mismatch with lucide-react types
 // (we only pass them as React components to JSX)
@@ -101,123 +106,6 @@ function writeDeletedActivityIds(ids: Set<string>) {
   } catch {
     // ignore storage failures; current session state still updates
   }
-}
-
-function getActionUI(action: string | null, subjectType: string | null): {
-
-  icon: LucideIcon;
-  color: string;
-  fileIcon: LucideIcon;
-  fileColor: string;
-} {
-
-
-  const a = (action || "").toLowerCase();
-  const st = (subjectType || "").toLowerCase();
-
-  const hasAny = (needles: string[]) => needles.some((n) => a.includes(n));
-
-
-  if (a.includes("upload")) {
-    return { icon: Upload, color: "#22d3ee", fileIcon: FileText, fileColor: "#ef4444" };
-  }
-  if (a.includes("download")) {
-    return { icon: Download, color: "#34d399", fileIcon: FileText, fileColor: "#22c55e" };
-  }
-  if (a.includes("share")) {
-    return { icon: Share2, color: "#3b82f6", fileIcon: Folder, fileColor: "#f59e0b" };
-  }
-  if (
-    hasAny([
-      "login",
-      "logged_in",
-      "logged in",
-      "sign in",
-      "signed in",
-      "auth.login",
-      "user_login",
-    ])
-  ) {
-    return { icon: LogIn, color: "#06b6d4", fileIcon: FileText, fileColor: "#22c55e" };
-  }
-
-  if (
-    hasAny([
-      "trash",
-      "trashed",
-      "move_to_trash",
-      "moved_to_trash",
-      "file_trashed",
-      "folder_trashed",
-    ])
-  ) {
-    return { icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#f59e0b" };
-  }
-
-  if (
-    hasAny([
-      "restore",
-      "restored",
-      "file_restored",
-      "folder_restored",
-    ])
-  ) {
-    return { icon: RotateCcw, color: "#10b981", fileIcon: Archive, fileColor: "#34d399" };
-  }
-
-  if (
-    hasAny([
-      "move",
-      "moved",
-      "file_moved",
-      "folder_moved",
-      "moved_file",
-      "moved_folder",
-      "parent changed",
-      "folder changed",
-    ])
-  ) {
-    return { icon: ArrowRightLeft, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
-  }
-
-  if (a.includes("delete")) {
-    return { icon: Trash2, color: "#ef4444", fileIcon: Archive, fileColor: "#64748b" };
-  }
-  if (a.includes("rename") || a.includes("edit")) {
-    return { icon: Edit3, color: "#f59e0b", fileIcon: Image, fileColor: "#a78bfa" };
-  }
-
-  if (a.includes("view")) {
-    return { icon: LogIn, color: "#94a3b8", fileIcon: FileText, fileColor: "#ef4444" };
-  }
-
-  if (st.includes("folder")) {
-    return { icon: ArrowRightLeft, color: "#f59e0b", fileIcon: Folder, fileColor: "#f59e0b" };
-  }
-
-
-  return { icon: Clock, color: "#94a3b8", fileIcon: FileText, fileColor: "#94a3b8" };
-}
-
-function localDateLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Unknown";
-
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfThatDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diffDays = Math.round((startOfThatDay.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === -1) return "Yesterday";
-
-      return d.toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "2-digit" });
-}
-
-function localTimeLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 function mapBackendToUIRows(rows: ActivityLogItem[]): ActivityUIItem[] {
@@ -748,14 +636,22 @@ export function Activity() {
       </div>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-red-400/20 px-4 py-4 text-sm" style={{ background: activityColors.cardBg, borderColor: "rgba(248,113,113,0.4)", color: "#f87171" }}>
-          <div className="font-semibold">Gagal memuat aktivitas</div>
-          <div className="mt-1" style={{ color: activityColors.text, fontSize: 12 }}>{error}</div>
-        </div>
+        <ActivityErrorMessage
+          message={error}
+          textColor={activityColors.text}
+          backgroundColor={activityColors.cardBg}
+          borderColor="rgba(248,113,113,0.4)"
+          role="alert"
+          ariaLive="assertive"
+        />
       ) : loading ? (
-        <div className="mb-4 rounded-xl border px-4 py-4 text-xs" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}`, color: activityColors.text }}>
-          Memuat aktivitas...
-        </div>
+        <ActivityLoadingState
+          title="Memuat aktivitas..."
+          textColor={activityColors.text}
+          mutedColor={activityColors.muted}
+          backgroundColor={activityColors.cardBg}
+          borderColor={activityColors.border}
+        />
       ) : filteredActivities.length > 0 && (
 
         <div
@@ -968,10 +864,15 @@ export function Activity() {
 
       {/* Activity Feed */}
       {!loading && !error && filteredActivities.length === 0 && (
-        <div className="mt-6 flex flex-col items-center justify-center rounded-xl px-4 py-12 text-center" style={{ background: activityColors.cardBg, border: `1px solid ${activityColors.border}` }}>
-          <div className="text-sm font-semibold" style={{ color: activityColors.title }}>Activity masih kosong</div>
-          <div className="mt-1 text-xs" style={{ color: activityColors.muted }}>Belum ada aktivitas untuk filter pencarian yang dipilih.</div>
-        </div>
+        <ActivityEmptyState
+          title="Activity masih kosong"
+          description="Belum ada aktivitas untuk filter pencarian yang dipilih."
+          textColor={activityColors.title}
+          mutedColor={activityColors.muted}
+          backgroundColor={activityColors.cardBg}
+          borderColor={activityColors.border}
+          accentColor="rgba(168, 85, 247, 0.4)"
+        />
       )}
 
       <div className="space-y-6">
