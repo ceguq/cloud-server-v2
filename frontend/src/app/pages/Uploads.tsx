@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, CheckCircle, XCircle, Clock, RefreshCcw } from "lucide-react";
 import { useUploadManager } from "../upload/UploadManagerContext";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { UploadsEmptyState } from "./uploads/components/UploadsEmptyState";
+import { formatBytes } from "./uploads/uploadFormatters";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -37,19 +39,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   } catch {
     return "dark";
   }
-}
-
-function formatBytes(bytes: number): string {
-  const v = typeof bytes === "number" ? bytes : 0;
-  if (v === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(
-    Math.floor(Math.log(v) / Math.log(1024)),
-    units.length - 1,
-  );
-  const num = v / Math.pow(1024, i);
-  const fixed = num >= 10 ? 1 : 2;
-  return `${num.toFixed(fixed)} ${units[i]}`;
 }
 
 type UploadRowStatusConfig = {
@@ -309,9 +298,15 @@ export function Uploads() {
         </div>
 
         {total === 0 ? (
-          <div className="px-4 py-5 text-xs" style={{ color: uploadsColors.muted }}>
-            Belum ada aktivitas upload
-          </div>
+          <UploadsEmptyState
+            title="Belum ada aktivitas upload"
+            textColor={uploadsColors.title}
+            mutedColor={uploadsColors.muted}
+            backgroundColor="transparent"
+            borderColor={undefined}
+            accentColor={accentColor}
+            className="px-4 py-5 text-xs"
+          />
         ) : (
           queue.map((it) => {
             const cfg = statusConfig[it.status] as UploadRowStatusConfig;
