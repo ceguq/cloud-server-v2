@@ -1,15 +1,16 @@
 import { useState } from "react";
 import {
-  Cloud,
   Eye,
   EyeOff,
-  Github,
   Lock,
   Mail,
   User,
 } from "lucide-react";
 import { authService } from "../../services/authService";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { LoginBrandLogo } from "./login/LoginBrandLogo";
+import { LoginErrorMessage } from "./login/LoginErrorMessage";
+import { LoginSocialIcons } from "./login/LoginSocialIcons";
 
 type LoginPageProps = {
   onLoginSuccess: () => void;
@@ -60,34 +61,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   function toggleMode(next: boolean) {
     setIsRegisterMode(next);
     // Keep existing login error/loading behavior intact.
-  }
-
-  function renderLogo() {
-    return (
-      <div
-        className="nimbus-logo-float mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-300/20 bg-gradient-to-br from-blue-500 to-cyan-400 shadow-[0_14px_45px_rgba(59,130,246,0.38)]"
-        aria-label="Nimbus logo"
-      >
-        <Cloud size={27} className="text-white" />
-      </div>
-    );
-  }
-
-  function renderSocialIcons() {
-    const iconClass = "h-4 w-4";
-    const buttonClass =
-      "flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-slate-200 transition hover:border-blue-300/40 hover:bg-white/[0.08]";
-
-    return (
-      <div className="flex items-center justify-center gap-3">
-        <button type="button" className={buttonClass} aria-label="Google">
-          <span className="text-sm font-semibold leading-none">G</span>
-        </button>
-        <button type="button" className={buttonClass} aria-label="GitHub">
-          <Github className={iconClass} />
-        </button>
-      </div>
-    );
   }
 
   function renderTextInput({
@@ -182,7 +155,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <h1 className="text-center text-3xl font-semibold tracking-normal text-white">
           Login
         </h1>
-        <div className="mt-5">{renderSocialIcons()}</div>
+        <div className="mt-5">
+          <LoginSocialIcons />
+        </div>
         <p className="mt-4 text-center text-xs text-blue-100/55">
           or use your account
         </p>
@@ -210,11 +185,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           })}
         </div>
 
-        {error && (
-          <div className="mt-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-center text-xs text-red-200">
-            {error}
-          </div>
-        )}
+        {error ? <LoginErrorMessage message={error} /> : null}
 
         <button
           type="button"
@@ -254,7 +225,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <h1 className="text-center text-3xl font-semibold tracking-normal text-white">
           Registration
         </h1>
-        <div className="mt-5">{renderSocialIcons()}</div>
+        <div className="mt-5">
+          <LoginSocialIcons />
+        </div>
         <p className="mt-4 text-center text-xs text-blue-100/55">
           or use your email for registration
         </p>
@@ -311,7 +284,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[linear-gradient(135deg,#2563eb_0%,#3b82f6_48%,#22d3ee_100%)] px-10 text-center text-white">
         <div className="max-w-[280px]">
-          <div className="mb-7">{renderLogo()}</div>
+          <div className="mb-7">
+            <LoginBrandLogo />
+          </div>
           <h2 className="text-3xl font-semibold tracking-normal">
             {isLoginPanel ? "Welcome Back!" : "Hello, Welcome!"}
           </h2>
@@ -423,7 +398,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           aria-label="Authentication panel"
         >
           <div className="bg-[linear-gradient(135deg,#2563eb_0%,#3b82f6_52%,#22d3ee_100%)] px-6 py-6 text-center text-white">
-            <div className="mb-5">{renderLogo()}</div>
+            <div className="mb-5">
+              <LoginBrandLogo />
+            </div>
             <h2 className="text-2xl font-semibold tracking-normal">
               {isRegisterMode ? "Welcome Back!" : "Hello, Welcome!"}
             </h2>
