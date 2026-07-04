@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Monitor,
-  Smartphone,
-  Laptop,
-  Tablet,
   Plus,
   Clock,
   HardDrive,
@@ -15,6 +12,10 @@ import {
 } from "lucide-react";
 
 import { getDevices, type Device } from "../../services/deviceService";
+import { formatLastSeen, getDeviceStatus, getIcon } from "./devices/deviceFormatters";
+import { DevicesLoadingState } from "./devices/components/DevicesLoadingState";
+import { DevicesErrorMessage } from "./devices/components/DevicesErrorMessage";
+import { DevicesEmptyState } from "./devices/components/DevicesEmptyState";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -51,21 +52,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-
-function getDeviceStatus(device: Device): "online" | "offline" {
-  if (!device.last_seen_at) return "offline";
-  const last = new Date(device.last_seen_at).getTime();
-  if (Number.isNaN(last)) return "offline";
-  const now = Date.now();
-  return now - last <= 15 * 60 * 1000 ? "online" : "offline";
-}
-
-function formatLastSeen(lastSeen: string | null): string {
-  if (!lastSeen) return "Never seen";
-  const d = new Date(lastSeen);
-  if (Number.isNaN(d.getTime())) return "Never seen";
-  return d.toLocaleString();
-}
 
 export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -166,15 +152,6 @@ export function Devices() {
   const trustedCount = useMemo(() => devices.filter((d) => d.trusted).length, [devices]);
   const offlineCount = Math.max(0, devices.length - onlineCount);
 
-  const getIcon = (device: Device) => {
-    const t = device.device_type;
-    if (t === "laptop") return Laptop;
-    if (t === "mobile") return Smartphone;
-    if (t === "tablet") return Tablet;
-    if (t === "desktop") return Monitor;
-    return Monitor;
-  };
-
   const deviceColors =
     resolvedTheme === "light"
       ? {
@@ -236,39 +213,29 @@ export function Devices() {
       </div>
 
       {loading && (
-        <div className="text-xs" style={{ color: deviceColors.muted }}>
-          Loading devices...
-        </div>
+        <DevicesLoadingState
+          title="Loading devices..."
+          textColor={deviceColors.muted}
+          className="text-xs"
+        />
       )}
 
 
       {error && (
-        <div
-          className="text-xs p-3 rounded-lg mb-4"
-          style={{
-            background: "rgba(248,113,113,0.12)",
-            border: "1px solid rgba(248,113,113,0.25)",
-            color: "#f87171",
-          }}
-        >
-          {error}
-        </div>
+        <DevicesErrorMessage message={error} />
       )}
 
 
       {!loading && !error && devices.length === 0 && (
-        <div
+        <DevicesEmptyState
+          title="No devices found yet."
+          description="Devices will appear here after device tracking is available."
+          textColor={deviceColors.title}
+          mutedColor={deviceColors.muted}
+          backgroundColor={deviceColors.cardBg}
+          borderColor={deviceColors.border}
           className="rounded-xl p-6"
-          style={{ background: deviceColors.cardBg, border: `1px solid ${deviceColors.border}` }}
-        >
-          <div className="text-sm font-semibold" style={{ color: deviceColors.title }}>
-            No devices found yet.
-          </div>
-          <div className="text-xs mt-1" style={{ color: deviceColors.muted }}>
-
-            Devices will appear here after device tracking is available.
-          </div>
-        </div>
+        />
       )}
 
       {!loading && !error && devices.length > 0 && (
