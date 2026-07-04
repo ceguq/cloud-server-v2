@@ -40,11 +40,6 @@ import {
   Eye,
   Copy,
   Trash2,
-  FileText,
-  Image,
-  Film,
-  Music,
-  Archive,
   Globe,
   Clock,
   Download,
@@ -56,45 +51,14 @@ import {
   getPublicShareUrl,
   type ShareLink,
 } from "../../services/shareService";
-import { LoadingSpinner } from "../components/LoadingSpinner";
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function formatBytes(bytes?: number | null): string {
-  const v = typeof bytes === "number" ? bytes : 0;
-  if (v === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(
-    Math.floor(Math.log(v) / Math.log(1024)),
-    units.length - 1,
-  );
-  const num = v / Math.pow(1024, i);
-  return `${num.toFixed(num >= 10 ? 1 : 2)} ${units[i]}`;
-}
-
-function formatDate(iso?: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function getMimeIcon(mime?: string | null) {
-  if (!mime) return { Icon: FileText, color: "#64748b" };
-  if (mime.startsWith("image/")) return { Icon: Image, color: "#a78bfa" };
-  if (mime.startsWith("video/")) return { Icon: Film, color: "#f59e0b" };
-  if (mime.startsWith("audio/")) return { Icon: Music, color: "#22d3ee" };
-  if (
-    mime.includes("zip") ||
-    mime.includes("compressed") ||
-    mime.includes("tar")
-  )
-    return { Icon: Archive, color: "#34d399" };
-  if (mime.includes("pdf")) return { Icon: FileText, color: "#ef4444" };
-  return { Icon: FileText, color: "#3b82f6" };
-}
+import { SharedEmptyState } from "./shared/components/SharedEmptyState";
+import { SharedErrorMessage } from "./shared/components/SharedErrorMessage";
+import { SharedLoadingState } from "./shared/components/SharedLoadingState";
+import {
+  formatBytes,
+  formatDate,
+  getMimeIcon,
+} from "./shared/shareFormatters";
 
 /** Copy text with clipboard API + textarea fallback */
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -433,65 +397,38 @@ export function Shared() {
 
       {/* Global error */}
       {error && (
-        <div
+        <SharedErrorMessage
+          message={error}
           className="mb-4 px-4 py-3 rounded-xl text-xs"
-          style={{
-            background: "rgba(248,113,113,0.08)",
-            border: "1px solid rgba(248,113,113,0.25)",
-            color: sharedColors.errorText,
-          }}
+          backgroundColor="rgba(248,113,113,0.08)"
+          borderColor="rgba(248,113,113,0.25)"
+          textColor={sharedColors.errorText}
           role="alert"
-        >
-          {error}
-        </div>
+          ariaLive="polite"
+        />
       )}
 
       {/* Loading skeleton */}
       {loading && (
-        <div
+        <SharedLoadingState
+          title="Memuat share link..."
           className="rounded-xl px-4 py-6 text-xs"
-          style={{
-            background: sharedColors.cardBg,
-            border: `1px solid ${sharedColors.border}`,
-            color: sharedColors.muted,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <LoadingSpinner size={12} />
-            Memuat share link...
-          </div>
-        </div>
+          backgroundColor={sharedColors.cardBg}
+          borderColor={sharedColors.border}
+          textColor={sharedColors.muted}
+        />
       )}
 
       {/* Empty state */}
       {!loading && !error && shareLinks.length === 0 && (
-        <div
+        <SharedEmptyState
           className="rounded-xl px-4 py-10 flex flex-col items-center gap-3"
-          style={{
-            background: sharedColors.cardBg,
-            border: `1px solid ${sharedColors.border}`,
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "rgba(59,130,246,0.1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Link2 size={22} style={{ color: "#3b82f6" }} />
-          </div>
-          <div style={{ color: sharedColors.muted, fontSize: 13 }}>
-            Belum ada link share.
-          </div>
-          <div style={{ color: sharedColors.muted2, fontSize: 11 }}>
-            Buka MyFiles → klik ⋯ pada file → Share untuk membuat link.
-          </div>
-        </div>
+          backgroundColor={sharedColors.cardBg}
+          borderColor={sharedColors.border}
+          textColor={sharedColors.muted}
+          mutedColor={sharedColors.muted2}
+          accentColor="#3b82f6"
+        />
       )}
 
       {/* Bulk action bar */}
