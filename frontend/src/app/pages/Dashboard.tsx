@@ -98,6 +98,8 @@ import {
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
 import { FileTypeIcon } from "../components/FileTypeIcon";
+import { DashboardStatCard } from "./dashboard/components/DashboardStatCard";
+import { toLoadAverage, toPercent } from "./dashboard/dashboardFormatters";
 
 
 type RecentFileUI = RecentFile & {
@@ -153,19 +155,6 @@ const statCards = [
 
 // Dummy recent files removed; Dashboard uses backend GET /api/files/recent.
 
-
-
-const toPercent = (value: number | null | undefined) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.min(100, Math.max(0, Math.round(numeric)));
-};
-
-const toLoadAverage = (value: number | null | undefined) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Number(numeric.toFixed(2));
-};
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length) {
@@ -674,55 +663,30 @@ export function Dashboard() {
           const showStorageLoading =
             loading && (card.kind === "storage" || card.kind === "files");
           return (
-            <div
+            <DashboardStatCard
               key={card.label}
+              title={card.label}
+              value={showStorageLoading ? <LoadingSpinner size={20} /> : storageValue ?? card.value}
+              subtitle={storageSub ?? card.sub}
+              changeLabel={card.change}
+              changeTone={card.up ? "up" : "down"}
+              changeIcon={card.up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+              icon={
+                Icon ? (
+                  <Icon size={18} style={{ color: card.color }} />
+                ) : (
+                  <span style={{ color: card.color }}>{"•"}</span>
+                )
+              }
+              textColor={dashboardColors.title}
+              mutedColor={dashboardColors.muted}
+              mutedColor2={dashboardColors.muted2}
+              backgroundColor={dashboardColors.cardBg}
+              borderColor={dashboardColors.border}
+              iconBackgroundColor={dashboardColors.iconBg}
+              iconBorderColor={dashboardColors.iconBorder}
               className="rounded-xl p-4 transition-all hover:scale-[1.02]"
-              style={{ background: dashboardColors.cardBg, border: `1px solid ${dashboardColors.border}` }}
-
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{
-                    background: dashboardColors.iconBg,
-                    border: `1px solid ${dashboardColors.iconBorder}`,
-                  }}
-
-                >
-                  {Icon ? (
-                    <Icon size={18} style={{ color: card.color }} />
-                  ) : (
-                    <span style={{ color: card.color }}>{"\u2022"}</span>
-                  )}
-                </div>
-                <span
-                  className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-md"
-                  style={{
-                    color: card.up ? "#34d399" : "#f87171",
-                    background: card.up
-                      ? "rgba(52,211,153,0.1)"
-                      : "rgba(248,113,113,0.1)",
-                  }}
-
-                >
-                  {card.up ? (
-                    <TrendingUp size={10} />
-                  ) : (
-                    <TrendingDown size={10} />
-                  )}
-                  {card.change}
-                </span>
-              </div>
-              <div className="text-2xl font-bold" style={{ color: dashboardColors.title }}>
-                {showStorageLoading ? <LoadingSpinner size={20} /> : storageValue ?? card.value}
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: dashboardColors.muted }}>
-                {card.label}
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: dashboardColors.muted2 }}>
-                {storageSub ?? card.sub}
-              </div>
-            </div>
+            />
           );
         })}
       </div>
