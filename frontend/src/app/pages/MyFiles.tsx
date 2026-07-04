@@ -6,292 +6,18 @@ import {
   useRef,
   useState,
 } from "react";
-
-
-
-type AppearanceTheme = "dark" | "light" | "system";
-type ResolvedTheme = "dark" | "light";
-
-const PREVIEW_IMAGE_MIN_SCALE = 0.5;
-const PREVIEW_IMAGE_MAX_SCALE = 4;
-const PREVIEW_IMAGE_ZOOM_STEP = 0.1;
-
-function clampPreviewImageScale(scale: number): number {
-  return Math.min(
-    PREVIEW_IMAGE_MAX_SCALE,
-    Math.max(PREVIEW_IMAGE_MIN_SCALE, Number(scale.toFixed(2))),
-  );
-}
-
-function safeReadAppearanceTheme(): AppearanceTheme {
-  if (typeof window === "undefined") return "dark";
-  try {
-    const raw = window.localStorage.getItem("nimbus_appearance_theme");
-    if (raw === "dark" || raw === "light" || raw === "system") return raw;
-  } catch {
-    // ignore
-  }
-  return "dark";
-}
-
-function safeReadAccentColor(): string {
-  if (typeof window === "undefined") return "#3b82f6";
-  try {
-    const raw = window.localStorage.getItem("nimbus_accent_color");
-    if (typeof raw === "string" && raw.trim().length > 0) return raw;
-  } catch {
-    // ignore
-  }
-  return "#3b82f6";
-}
-
-function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
-  try {
-    if (theme === "light" || theme === "dark") return theme;
-    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
-    return mq?.matches ? "dark" : "light";
-  } catch {
-    return "dark";
-  }
-}
-
-
-function formatTime(seconds?: number | null): string {
-  const s =
-    typeof seconds === "number" && Number.isFinite(seconds) ? seconds : 0;
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60);
-  return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-type AudioPreviewPlayerProps = {
-  src: string | undefined;
-  onError: (message: string) => void;
-};
-
-function AudioPreviewPlayer({ src, onError }: AudioPreviewPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  // Reset player state when src changes
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-
-    const el = audioRef.current;
-    if (!el) return;
-
-    el.pause();
-    el.currentTime = 0;
-  }, [src]);
-
-  const togglePlayPause = async () => {
-    const el = audioRef.current;
-    if (!el) return;
-
-    try {
-      if (el.paused) {
-        const p = el.play();
-        if (p && typeof (p as Promise<void>).then === "function") {
-          await p;
-        }
-        setIsPlaying(true);
-      } else {
-        el.pause();
-        setIsPlaying(false);
-      }
-    } catch {
-      onError("Gagal memuat preview audio.");
-      setIsPlaying(false);
-    }
-  };
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        borderRadius: "1rem",
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.10)",
-        padding: 16,
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <audio
-          ref={audioRef}
-          src={src ?? undefined}
-          preload="metadata"
-          className="hidden"
-          onLoadedMetadata={() => {
-            const el = audioRef.current;
-            if (!el) return;
-            setDuration(Number.isFinite(el.duration) ? el.duration : 0);
-          }}
-          onTimeUpdate={() => {
-            const el = audioRef.current;
-            if (!el) return;
-            setCurrentTime(el.currentTime || 0);
-          }}
-          onEnded={() => {
-            const el = audioRef.current;
-            if (el) {
-              el.currentTime = 0;
-            }
-            setIsPlaying(false);
-            setCurrentTime(0);
-          }}
-          onError={() => {
-            onError("Gagal memuat preview audio.");
-            setIsPlaying(false);
-          }}
-        />
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* Play button + decorative equalizer */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 14,
-              paddingTop: 2,
-              paddingBottom: 2,
-            }}
-          >
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 14,
-                background: "rgba(59,130,246,0.14)",
-                border: "1px solid rgba(59,130,246,0.25)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#60a5fa",
-                flex: "0 0 auto",
-                fontSize: 18,
-              }}
-              aria-hidden="true"
-            >
-              {"\u266A"}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void togglePlayPause()}
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 999,
-                border: "1px solid rgba(59,130,246,0.35)",
-                background:
-                  "linear-gradient(135deg, rgba(59,130,246,0.35), rgba(34,211,238,0.15))",
-                color: "#e2e8f0",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 20,
-              }}
-            >
-              {isPlaying ? "\u23F8" : "\u25B6"}
-            </button>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 4,
-                height: 24,
-                width: 120,
-                opacity: isPlaying ? 1 : 0.6,
-              }}
-            >
-              {Array.from({ length: 10 }).map((_, idx) => {
-                const base = 6 + (idx % 5) * 3;
-                const h = isPlaying ? base + (idx % 3) * 2 : base;
-                const animate = isPlaying ? "pulse" : "none";
-                const delay = `${idx * 60}ms`;
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      width: 6,
-                      height: h,
-                      borderRadius: 999,
-                      background: "rgba(96,165,250,0.75)",
-                      animation: isPlaying
-                        ? "bb-audio-eq 1.05s infinite ease-in-out"
-                        : undefined,
-                      animationDelay: isPlaying ? delay : undefined,
-                      transition: "height 160ms ease",
-                    }}
-                    aria-hidden="true"
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Seek + time */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                color: "#94a3b8",
-                fontSize: 12,
-                width: 44,
-                textAlign: "left",
-              }}
-            >
-              {formatTime(currentTime)}
-            </div>
-
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={Math.min(currentTime, duration || 0)}
-              onChange={(e) => {
-                const el = audioRef.current;
-                if (!el) return;
-                const v = Number(e.target.value);
-                el.currentTime = Number.isFinite(v) ? v : 0;
-                setCurrentTime(el.currentTime || 0);
-              }}
-              style={{ width: "100%" }}
-              aria-label="Seek audio"
-            />
-
-            <div
-              style={{
-                color: "#94a3b8",
-                fontSize: 12,
-                width: 44,
-                textAlign: "right",
-              }}
-            >
-              {formatTime(duration)}
-            </div>
-          </div>
-          </div>
-      </div>
-
-      <style>{`
-        @keyframes bb-audio-eq {
-          0% { transform: scaleY(0.75); opacity: 0.75; }
-          50% { transform: scaleY(1.25); opacity: 1; }
-          100% { transform: scaleY(0.85); opacity: 0.8; }
-        }
-      `}</style>
-    </div>
-  );
-}
+import {
+  PREVIEW_IMAGE_ZOOM_STEP,
+  clampPreviewImageScale,
+  getPreviewContentTypeFromFileName,
+} from "./my-files/myFilesPreviewUtils";
+import {
+  type AppearanceTheme,
+  type ResolvedTheme,
+  resolveAppearanceTheme,
+  safeReadAccentColor,
+  safeReadAppearanceTheme,
+} from "./my-files/myFilesThemeUtils";
 
 import {
   Folder,
@@ -310,13 +36,6 @@ import {
   FileText,
   Edit3,
   Trash2,
-  Minus,
-  Maximize2,
-  Minimize2,
-  RotateCcw,
-  X,
-  ZoomIn,
-  ZoomOut,
   ChevronRight,
   Home,
   Star,
@@ -331,6 +50,40 @@ import fileService, { type FileModel } from "../../services/fileService";
 import { useUploadManager } from "../upload/UploadManagerContext";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { FileTypeIcon } from "../components/FileTypeIcon";
+import {
+  fileTypeFilterLabel,
+  formatBytes,
+  getTypeLabel,
+  type FileTypeFilterValue,
+} from "./my-files/myFilesFormatters";
+import { fileMatchesTypeFilter } from "./my-files/myFilesFilters";
+import {
+  sortFiles,
+  sortFolders,
+  type SortBy,
+  type SortDirection,
+} from "./my-files/myFilesSorting";
+import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
+import { MenuItemButton } from "./my-files/components/MenuItemButton";
+import { EmptyFilterMessage } from "./my-files/components/EmptyFilterMessage";
+import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
+import { EmptySearchState } from "./my-files/components/EmptySearchState";
+import { InlineStatusMessage } from "./my-files/components/InlineStatusMessage";
+import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
+import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
+import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
+import { SearchHelperText } from "./my-files/components/SearchHelperText";
+import { SearchToolbarField } from "./my-files/components/SearchToolbarField";
+import { SelectionCountPill } from "./my-files/components/SelectionCountPill";
+import { ViewModeToggle } from "./my-files/components/ViewModeToggle";
+import {
+  copyTextToClipboard,
+  isInteractiveItemTarget,
+} from "./my-files/myFilesDomUtils";
+import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
+import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
+import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 
 import {
   getPublicShareUrl,
@@ -339,142 +92,6 @@ import {
   getShareLinks,
   type ShareLink,
 } from "../../services/shareService";
-
-function formatBytes(bytes?: number | null): string {
-  const v = typeof bytes === "number" ? bytes : 0;
-  if (v === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(
-    Math.floor(Math.log(v) / Math.log(1024)),
-    units.length - 1,
-  );
-  const num = v / Math.pow(1024, i);
-  const fixed = num >= 10 ? 1 : 2;
-  return `${num.toFixed(fixed)} ${units[i]}`;
-}
-
-function getTypeLabel(mime?: string | null): string {
-  if (!mime) return "FILE";
-
-  const normalized = String(mime).trim().toLowerCase();
-
-  // Office (prefer explicit MIME when available)
-  if (
-    normalized === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    normalized === "application/msword" ||
-    normalized.includes("wordprocessingml") ||
-    normalized.includes("msword") ||
-    normalized.includes("/word")
-  ) {
-    return "DOCX";
-  }
-
-  if (
-    normalized === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    normalized === "application/vnd.ms-excel" ||
-    normalized.includes("spreadsheetml") ||
-    normalized.includes("/excel")
-  ) {
-    return "XLSX";
-  }
-
-  if (
-    normalized === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-    normalized === "application/vnd.ms-powerpoint" ||
-    normalized.includes("presentationml") ||
-    normalized.includes("/powerpoint")
-  ) {
-    return "PPTX";
-  }
-
-  // PDF
-  if (
-    normalized === "application/pdf" ||
-    normalized.endsWith("/pdf") ||
-    normalized.includes("+pdf")
-  ) {
-    return "PDF";
-  }
-
-  // Images
-  if (
-    normalized === "image/jpeg" ||
-    normalized === "image/jpg" ||
-    normalized.endsWith("/jpeg") ||
-    normalized.endsWith("/jpg")
-  ) {
-    return "JPG";
-  }
-
-  if (normalized === "image/png" || normalized.endsWith("/png")) return "PNG";
-  if (normalized === "image/webp" || normalized.endsWith("/webp")) return "WEBP";
-  if (normalized === "image/gif" || normalized.endsWith("/gif")) return "GIF";
-  if (normalized.startsWith("image/")) return "IMAGE";
-
-  // Video
-  if (normalized.startsWith("video/")) return "VIDEO";
-
-  // Audio
-  if (normalized.startsWith("audio/")) return "AUDIO";
-
-  // Archives
-  if (
-    normalized === "application/zip" ||
-    normalized.includes("/zip") ||
-    normalized.includes("zip")
-  ) {
-    return "ZIP";
-  }
-
-  // Text / CSV / JSON / XML
-  if (
-    normalized.startsWith("text/") ||
-    normalized.includes("json") ||
-    normalized.includes("xml") ||
-    normalized.includes("csv")
-  ) {
-    return "TXT";
-  }
-
-  return "FILE";
-}
-
-
-function fileTypeFilterLabel(
-  value:
-    | "all"
-    | "folders"
-    | "images"
-    | "pdf"
-    | "documents"
-    | "videos"
-    | "audio"
-    | "archives"
-    | "others",
-): string {
-  switch (value) {
-    case "all":
-      return "All";
-    case "folders":
-      return "Folders";
-    case "images":
-      return "Images";
-    case "pdf":
-      return "PDF";
-    case "documents":
-      return "Documents";
-    case "videos":
-      return "Videos";
-    case "audio":
-      return "Audio";
-    case "archives":
-      return "Archives";
-    case "others":
-      return "Others";
-    default:
-      return "All";
-  }
-}
 
 export function MyFiles({
   filesRefreshKey,
@@ -581,25 +198,14 @@ export function MyFiles({
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const [fileTypeFilter, setFileTypeFilter] = useState<
-
-    | "all"
-    | "folders"
-    | "images"
-    | "pdf"
-    | "documents"
-    | "videos"
-    | "audio"
-    | "archives"
-    | "others"
-  >("all");
+  const [fileTypeFilter, setFileTypeFilter] =
+    useState<FileTypeFilterValue>("all");
 
   const [sortMenuOpen, setSortMenuOpen] = useState<boolean>(false);
 
-  const [sortBy, setSortBy] = useState<"name" | "date" | "size" | "type">(
-    "name",
-  );
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<SortBy>("name");
+  const [sortDirection, setSortDirection] =
+    useState<SortDirection>("asc");
   const [moveDragDropEnabled, setMoveDragDropEnabled] = useState(true);
   const [dragMoveItem, setDragMoveItem] = useState<{
     type: "file" | "folder";
@@ -1024,55 +630,17 @@ export function MyFiles({
     nextScaleValue: number,
     anchorPoint?: { clientX: number; clientY: number },
   ) => {
-    const oldScale = previewImageScale;
-    const nextScale = clampPreviewImageScale(nextScaleValue);
-
-    if (nextScale === oldScale) return;
-
-    const viewport = previewImageViewportRef.current;
-    const image = previewImageRef.current;
-    const imageRect = image?.getBoundingClientRect();
-    const viewportRect = viewport?.getBoundingClientRect();
-    const point =
-      anchorPoint ??
-      (viewportRect
-        ? {
-            clientX: viewportRect.left + viewportRect.width / 2,
-            clientY: viewportRect.top + viewportRect.height / 2,
-          }
-        : undefined);
-
-    if (!imageRect || !point || imageRect.width <= 0 || imageRect.height <= 0) {
-      setPreviewImageScale(nextScale);
-      if (nextScale <= 1) setPreviewImageOffset({ x: 0, y: 0 });
-      return;
-    }
-
-    const anchorX = Math.min(
-      1,
-      Math.max(0, (point.clientX - imageRect.left) / imageRect.width),
-    );
-    const anchorY = Math.min(
-      1,
-      Math.max(0, (point.clientY - imageRect.top) / imageRect.height),
-    );
-    const scaleRatio = nextScale / oldScale;
-    const nextWidth = imageRect.width * scaleRatio;
-    const nextHeight = imageRect.height * scaleRatio;
-    const currentCenterX = imageRect.left + imageRect.width / 2;
-    const currentCenterY = imageRect.top + imageRect.height / 2;
-    const nextCenterX = point.clientX - anchorX * nextWidth + nextWidth / 2;
-    const nextCenterY = point.clientY - anchorY * nextHeight + nextHeight / 2;
+    const { nextScale, nextOffset } = calculatePreviewImageZoomState({
+      currentScale: previewImageScale,
+      currentOffset: previewImageOffset,
+      nextScaleValue,
+      imageRect: previewImageRef.current?.getBoundingClientRect(),
+      viewportRect: previewImageViewportRef.current?.getBoundingClientRect(),
+      anchorPoint,
+    });
 
     setPreviewImageScale(nextScale);
-    setPreviewImageOffset(
-      nextScale <= 1
-        ? { x: 0, y: 0 }
-        : {
-            x: previewImageOffset.x + nextCenterX - currentCenterX,
-            y: previewImageOffset.y + nextCenterY - currentCenterY,
-          },
-    );
+    setPreviewImageOffset(nextOffset);
   };
 
   const resetPreviewImageZoom = () => {
@@ -1093,72 +661,6 @@ export function MyFiles({
         (event.deltaY < 0 ? PREVIEW_IMAGE_ZOOM_STEP : -PREVIEW_IMAGE_ZOOM_STEP),
       { clientX: event.clientX, clientY: event.clientY },
     );
-  };
-
-  const getPreviewContentTypeFromFileName = (
-    fileName: string,
-    contentType?: string,
-  ) => {
-    const normalized = (contentType || "").toLowerCase();
-    if (normalized && normalized !== "application/octet-stream") {
-      return normalized;
-    }
-
-    const ext = fileName.toLowerCase().split(".").pop() ?? "";
-    switch (ext) {
-      case "jpg":
-      case "jpeg":
-        return "image/jpeg";
-      case "png":
-        return "image/png";
-      case "gif":
-        return "image/gif";
-      case "webp":
-        return "image/webp";
-      case "bmp":
-        return "image/bmp";
-      case "svg":
-        return "image/svg+xml";
-      case "pdf":
-        return "application/pdf";
-      case "mp4":
-        return "video/mp4";
-      case "webm":
-        return "video/webm";
-      case "mov":
-        return "video/quicktime";
-      case "m4v":
-        return "video/mp4";
-      case "mp3":
-        return "audio/mpeg";
-      case "wav":
-        return "audio/wav";
-      case "ogg":
-        return "audio/ogg";
-      case "m4a":
-        return "audio/mp4";
-      case "txt":
-      case "log":
-      case "md":
-      case "markdown":
-        return "text/plain";
-      case "json":
-        return "application/json";
-      case "xml":
-        return "application/xml";
-      case "js":
-        return "application/javascript";
-      case "ts":
-        return "application/typescript";
-      case "css":
-        return "text/css";
-      case "html":
-        return "text/html";
-      case "csv":
-        return "text/csv";
-      default:
-        return normalized || "application/octet-stream";
-    }
   };
 
   const handlePreviewFile = async (file: FileModel) => {
@@ -1493,38 +995,6 @@ export function MyFiles({
   const closeFolderActionMenu = () => {
     setOpenFolderActionId(null);
     setFolderActionMenuPosition(null);
-  };
-
-  const copyTextToClipboard = async (text: string) => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-      }
-    } catch {
-      // Fallback below.
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    textarea.style.top = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-
-    try {
-      const ok = document.execCommand("copy");
-      if (!ok) throw new Error("Copy command failed");
-    } finally {
-      textarea.remove();
-    }
-  };
-
-  const getExistingFileShareLink = async (file: FileModel) => {
-    const links = await getShareLinks();
-    return links.find((link) => link.file?.id === file.id) ?? null;
   };
 
   const getOrCreateFileShareLink = async (file: FileModel) => {
@@ -2153,77 +1623,6 @@ export function MyFiles({
     );
   }, [files, searchQuery]);
 
-  const fileMatchesTypeFilter = (
-    file: FileModel,
-    filter: typeof fileTypeFilter,
-  ): boolean => {
-    if (filter === "all") return true;
-
-    const mime = (file.mime_type ?? "").toLowerCase();
-    const nameLower = (file.original_name ?? "").toLowerCase();
-    const ext = nameLower.includes(".")
-      ? (nameLower.split(".").pop() ?? "")
-      : "";
-
-    const isImage =
-      mime.startsWith("image/") ||
-      ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext);
-
-    const isPdf = mime === "application/pdf" || ext === "pdf";
-
-    const isDocument =
-      ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"].includes(
-        ext,
-      ) ||
-      mime.includes("word") ||
-      mime.includes("officedocument") ||
-      mime.includes("presentation") ||
-      mime.includes("spreadsheet");
-
-    const isVideo =
-      mime.startsWith("video/") ||
-      ["mp4", "mkv", "avi", "mov", "webm"].includes(ext);
-
-    const isAudio =
-      mime.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a"].includes(ext);
-
-    const isArchive =
-      ["zip", "rar", "7z", "tar", "gz"].includes(ext) ||
-      mime.includes("zip") ||
-      mime.includes("compressed") ||
-      mime.includes("tar");
-
-    const isOthers = !(
-      isImage ||
-      isPdf ||
-      isDocument ||
-      isVideo ||
-      isAudio ||
-      isArchive
-    );
-
-    switch (filter) {
-      case "images":
-        return isImage;
-      case "pdf":
-        return isPdf;
-      case "documents":
-        return isDocument;
-      case "videos":
-        return isVideo;
-      case "audio":
-        return isAudio;
-      case "archives":
-        return isArchive;
-      case "others":
-        return isOthers;
-      case "folders":
-        return false;
-      default:
-        return true;
-    }
-  };
-
   // filtered & typed folders (filter diterapkan setelah search)
   const typedFolders = useMemo(() => {
     if (fileTypeFilter === "all" || fileTypeFilter === "folders")
@@ -2239,94 +1638,12 @@ export function MyFiles({
     );
   }, [filteredFiles, fileTypeFilter]);
 
-  const getFolderDateValue = (folder: FolderModel): number => {
-    const created = folder.created_at
-      ? new Date(folder.created_at).getTime()
-      : 0;
-    const updated = folder.updated_at
-      ? new Date(folder.updated_at).getTime()
-      : 0;
-    return created || updated || 0;
-  };
-
-  const getFileDateValue = (file: FileModel): number => {
-    const created = file.created_at ? new Date(file.created_at).getTime() : 0;
-    const updated = file.updated_at ? new Date(file.updated_at).getTime() : 0;
-    return created || updated || 0;
-  };
-
-  const getFileTypeValue = (file: FileModel): string => {
-    const mime = (file.mime_type ?? "").toLowerCase();
-    if (mime) {
-      if (mime.includes("pdf")) return "pdf";
-      if (mime.includes("presentation")) return "pptx";
-      if (mime.includes("image")) return "image";
-      if (mime.includes("zip")) return "zip";
-      if (mime.includes("audio")) return "audio";
-      if (mime.includes("video")) return "video";
-      if (mime.includes("spreadsheet")) return "xlsx";
-      const ext = mime.split("/")[1];
-      return ext ?? mime;
-    }
-    // fallback to extension from original name
-    const parts = (file.original_name ?? "").split(".");
-    return (parts[parts.length - 1] ?? "").toLowerCase();
-  };
-
   const sortedFolders = useMemo(() => {
-    const arr = [...typedFolders];
-    arr.sort((a, b) => {
-      const dir = sortDirection === "asc" ? 1 : -1;
-
-      if (sortBy === "name") {
-        const an = (a.name ?? "").toLowerCase();
-        const bn = (b.name ?? "").toLowerCase();
-        return an.localeCompare(bn) * dir;
-      }
-
-      if (sortBy === "date") {
-        return (getFolderDateValue(a) - getFolderDateValue(b)) * dir;
-      }
-
-      // folders: size = 0, type = "folder" (semua sama, jadi urutan tetap)
-      if (sortBy === "size") return 0;
-      if (sortBy === "type") return 0;
-
-      return 0;
-    });
-    return arr;
+    return sortFolders(typedFolders, sortBy, sortDirection);
   }, [typedFolders, sortBy, sortDirection]);
 
   const sortedFiles = useMemo(() => {
-    const arr = [...filteredFiles];
-    arr.sort((a, b) => {
-      const dir = sortDirection === "asc" ? 1 : -1;
-
-      if (sortBy === "name") {
-        const an = (a.original_name ?? "").toLowerCase();
-        const bn = (b.original_name ?? "").toLowerCase();
-        return an.localeCompare(bn) * dir;
-      }
-
-      if (sortBy === "date") {
-        return (getFileDateValue(a) - getFileDateValue(b)) * dir;
-      }
-
-      if (sortBy === "size") {
-        const as = typeof a.size === "number" ? a.size : 0;
-        const bs = typeof b.size === "number" ? b.size : 0;
-        return (as - bs) * dir;
-      }
-
-      if (sortBy === "type") {
-        const at = getFileTypeValue(a);
-        const bt = getFileTypeValue(b);
-        return at.localeCompare(bt) * dir;
-      }
-
-      return 0;
-    });
-    return arr;
+    return sortFiles(filteredFiles, sortBy, sortDirection);
   }, [filteredFiles, sortBy, sortDirection]);
 
   const hasSearch = searchQuery.trim().length > 0;
@@ -2380,10 +1697,6 @@ export function MyFiles({
   const folderListColumnTemplate = compactItemListColumnTemplate;
   const fileListColumnTemplate =
     showFileMetadata ? fullItemListColumnTemplate : compactItemListColumnTemplate;
-  const isInteractiveItemTarget = (target: EventTarget | null) => {
-    if (!(target instanceof HTMLElement)) return false;
-    return target.closest("button,input,a,textarea,select,[role='menu']") !== null;
-  };
 
   const renderFileActionMenu = (file: FileModel) => {
     const isOpen = openFileActionId === file.id && fileActionMenuPosition;
@@ -2394,65 +1707,6 @@ export function MyFiles({
     const shareUrl = shareLink ? getPublicShareUrl(shareLink.token) : "";
     const feedback =
       fileActionFeedback?.fileId === file.id ? fileActionFeedback : null;
-
-    const menuItemStyle = (
-      danger = false,
-      disabled = false,
-    ): React.CSSProperties => ({
-      marginTop: 4,
-      opacity: disabled ? 0.45 : 1,
-      cursor: disabled ? "not-allowed" : "pointer",
-      color: danger ? "#ef4444" : myFilesColors.text,
-      background: "transparent",
-    });
-
-    const renderMenuItem = ({
-      label,
-      icon,
-      onClick,
-      disabled = false,
-      danger = false,
-      title,
-      ariaLabel,
-    }: {
-      label: string;
-      icon: React.ReactNode;
-      onClick: () => void;
-      disabled?: boolean;
-      danger?: boolean;
-      title?: string;
-      ariaLabel?: string;
-    }) => (
-      <button
-        type="button"
-        role="menuitem"
-        aria-label={ariaLabel ?? label}
-        title={title ?? label}
-        className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-        disabled={disabled}
-        style={menuItemStyle(danger, disabled)}
-        onMouseEnter={(event) => {
-          if (disabled) return;
-          event.currentTarget.style.background = danger
-            ? "rgba(239,68,68,0.12)"
-            : `${accentColor}10`;
-        }}
-        onMouseLeave={(event) => {
-          event.currentTarget.style.background = "transparent";
-        }}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (disabled) return;
-          onClick();
-        }}
-      >
-        <div className="flex items-center gap-2">
-          {icon}
-          <span>{label}</span>
-        </div>
-      </button>
-    );
 
     return (
       <div className="relative">
@@ -2522,47 +1776,54 @@ export function MyFiles({
               aria-label={`File actions ${file.original_name}`}
               onMouseDown={(event) => event.stopPropagation()}
             >
-              {renderMenuItem({
-                label:
-                  previewingFileId === file.id ? "Opening..." : "Preview",
-                icon: <Eye size={14} />,
-                disabled: !canPreview || previewingFileId === file.id,
-                ariaLabel: `Preview ${file.original_name}`,
-                onClick: () => {
+              <MenuItemButton
+                label={previewingFileId === file.id ? "Opening..." : "Preview"}
+                icon={<Eye size={14} />}
+                disabled={!canPreview || previewingFileId === file.id}
+                ariaLabel={`Preview ${file.original_name}`}
+                onClick={() => {
                   closeFileActionMenu();
                   void handlePreviewFile(file);
-                },
-              })}
+                }}
+                textColor={myFilesColors.text}
+                accentColor={accentColor}
+              />
 
-              {renderMenuItem({
-                label: "Details",
-                icon: <FileText size={14} />,
-                ariaLabel: `Details ${file.original_name}`,
-                onClick: () => {
+              <MenuItemButton
+                label="Details"
+                icon={<FileText size={14} />}
+                ariaLabel={`Details ${file.original_name}`}
+                onClick={() => {
                   closeFileActionMenu();
                   setDetailsItem({ type: "file", item: file });
-                },
-              })}
+                }}
+                textColor={myFilesColors.text}
+                accentColor={accentColor}
+              />
 
-              {renderMenuItem({
-                label: "Download",
-                icon: <Download size={14} />,
-                ariaLabel: `Download ${file.original_name}`,
-                onClick: () => {
+              <MenuItemButton
+                label="Download"
+                icon={<Download size={14} />}
+                ariaLabel={`Download ${file.original_name}`}
+                onClick={() => {
                   closeFileActionMenu();
                   void fileService.downloadFile(file.id, file.original_name);
-                },
-              })}
+                }}
+                textColor={myFilesColors.text}
+                accentColor={accentColor}
+              />
 
-              {renderMenuItem({
-                label: isSharePanelOpen ? "Share" : "Share",
-                icon: <Share2 size={14} />,
-                disabled: isSharing,
-                ariaLabel: `Share ${file.original_name}`,
-                onClick: () => {
+              <MenuItemButton
+                label={isSharePanelOpen ? "Share" : "Share"}
+                icon={<Share2 size={14} />}
+                disabled={isSharing}
+                ariaLabel={`Share ${file.original_name}`}
+                onClick={() => {
                   void loadFileSharePanel(file);
-                },
-              })}
+                }}
+                textColor={myFilesColors.text}
+                accentColor={accentColor}
+              />
 
               {isSharePanelOpen ? (
                 <div
@@ -2685,41 +1946,47 @@ export function MyFiles({
                 className="mt-2 border-t pt-2"
                 style={{ borderColor: myFilesColors.border }}
               >
-                {renderMenuItem({
-                  label: "Rename",
-                  icon: <Edit3 size={14} />,
-                  ariaLabel: `Rename ${file.original_name}`,
-                  onClick: () => {
+                <MenuItemButton
+                  label="Rename"
+                  icon={<Edit3 size={14} />}
+                  ariaLabel={`Rename ${file.original_name}`}
+                  onClick={() => {
                     closeFileActionMenu();
                     setSelectedFileForAction(file);
                     setFileRenameName(file.original_name);
                     setFileModalError("");
                     setIsFileRenameModalOpen(true);
-                  },
-                })}
+                  }}
+                  textColor={myFilesColors.text}
+                  accentColor={accentColor}
+                />
 
-                {renderMenuItem({
-                  label: "Move to...",
-                  icon: <Folder size={14} />,
-                  ariaLabel: `Move ${file.original_name}`,
-                  onClick: () => {
+                <MenuItemButton
+                  label="Move to..."
+                  icon={<Folder size={14} />}
+                  ariaLabel={`Move ${file.original_name}`}
+                  onClick={() => {
                     closeFileActionMenu();
                     openMoveFileModal(file);
-                  },
-                })}
+                  }}
+                  textColor={myFilesColors.text}
+                  accentColor={accentColor}
+                />
 
-                {renderMenuItem({
-                  label: "Trash",
-                  icon: <Trash2 size={14} />,
-                  danger: true,
-                  ariaLabel: `Trash ${file.original_name}`,
-                  onClick: () => {
+                <MenuItemButton
+                  label="Trash"
+                  icon={<Trash2 size={14} />}
+                  danger
+                  ariaLabel={`Trash ${file.original_name}`}
+                  onClick={() => {
                     closeFileActionMenu();
                     setSelectedFileForDelete(file);
                     setDeleteFileError("");
                     setIsFileDeleteModalOpen(true);
-                  },
-                })}
+                  }}
+                  textColor={myFilesColors.text}
+                  accentColor={accentColor}
+                />
               </div>
 
               {feedback ? (
@@ -2752,70 +2019,36 @@ export function MyFiles({
     >
       {/* Breadcrumb */}
 
-      {breadcrumbs.length > 0 ? (
-        <div className="flex items-center gap-1.5 mb-4" aria-label="Breadcrumb">
-          <button
-            type="button"
-            onClick={handleBackToRoot}
-            className="flex items-center gap-1 text-xs hover:opacity-80"
-            style={{ color: accentColor }}
-            aria-label="Breadcrumb My Files (root)"
-          >
-            <Home size={12} />
-            My Files
-          </button>
-
-          {breadcrumbs.map((b, idx) => {
-            const isActive = idx === breadcrumbs.length - 1;
-            return (
-              <div key={b.id} className="flex items-center gap-1.5">
-                <ChevronRight size={12} style={{ color: myFilesColors.muted2 }} />
-                {isActive ? (
-                  <span className="text-xs" style={{ color: myFilesColors.text }}>
-                    {b.name}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleBreadcrumbClick(b.id)}
-                    className="text-xs"
-                    style={{ color: resolvedTheme === "light" ? myFilesColors.text : myFilesColors.muted }}
-                    aria-label={`Breadcrumb ${b.name}`}
-                  >
-                    {b.name}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
+      <MyFilesBreadcrumbs
+        breadcrumbs={breadcrumbs}
+        accentColor={accentColor}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted2}
+        onBackToRoot={handleBackToRoot}
+        onBreadcrumbClick={handleBreadcrumbClick}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: myFilesColors.title }}>
-            My Files
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: myFilesColors.muted }}>
-            {folders.length + files.length} items
-          </p>
-        </div>
+        <PageHeaderSummary
+          title="My Files"
+          itemCount={folders.length + files.length}
+          titleColor={myFilesColors.title}
+          mutedColor={myFilesColors.muted}
+        />
         <div className="flex items-center gap-2">
           {uploadError && (
-            <div
-              className="text-xs px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/10"
-              style={{
-                borderColor: "rgba(248,113,113,0.35)",
-                background: resolvedTheme === "light"
-                  ? "rgba(248,113,113,0.08)"
-                  : "rgba(248,113,113,0.12)",
-                color: "#f87171",
-              }}
+            <InlineStatusMessage
+              message={uploadError}
+              tone="error"
               role="alert"
-            >
-              {uploadError}
-            </div>
+              ariaLive="polite"
+              textColor="#f87171"
+              backgroundColor={resolvedTheme === "light"
+                ? "rgba(248,113,113,0.08)"
+                : "rgba(248,113,113,0.12)"}
+              borderColor="rgba(248,113,113,0.35)"
+            />
           )}
 
           <button
@@ -2877,20 +2110,17 @@ export function MyFiles({
           </button>
 
           {uploadError && (
-              <div
-                className="text-xs px-3 py-2 rounded-lg border"
-                style={{
-                  borderColor: "rgba(248,113,113,0.35)",
-                  background: resolvedTheme === "light"
-                    ? "rgba(248,113,113,0.08)"
-                    : "rgba(248,113,113,0.12)",
-                  color: "#f87171",
-                }}
-                role="status"
-                aria-live="polite"
-              >
-                {uploadError}
-              </div>
+            <InlineStatusMessage
+              message={uploadError}
+              tone="error"
+              role="status"
+              ariaLive="polite"
+              textColor="#f87171"
+              backgroundColor={resolvedTheme === "light"
+                ? "rgba(248,113,113,0.08)"
+                : "rgba(248,113,113,0.12)"}
+              borderColor="rgba(248,113,113,0.35)"
+            />
           )}
         </div>
       </div>
@@ -2922,187 +2152,37 @@ export function MyFiles({
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-5">
-        <div className={"relative flex-1 max-w-xs " + (isSearchActive ? "max-w-sm" : "")}
+        <div
+          className={"flex flex-1 flex-col max-w-xs " + (isSearchActive ? "max-w-sm" : "")}
           style={{
             transition: "max-width 220ms ease",
           }}
         >
-          {/* Search icon */}
-          <Search
-            size={13}
-            className="absolute left-3 top-1/2 -translate-y-1/2 transition-transform"
-            style={{
-              color: myFilesColors.muted,
-              transform:
-                isSearchLoading && !isSearchActive
-                  ? undefined
-                  : isSearchActive
-                    ? "scale(1.08) rotate(-8deg)"
-                    : undefined,
-              animation:
-                isSearchLoading && trimmedSearchQuery.length > 0
-                  ? "bb-myfiles-search-pulse 1.15s infinite ease-in-out"
-                  : undefined,
-              transformOrigin: "center",
-            }}
-            aria-hidden="true"
+          <SearchToolbarField
+            value={searchQuery}
+            isSearchActive={isSearchActive}
+            isSearchLoading={isSearchLoading}
+            trimmedQuery={trimmedSearchQuery}
+            accentColor={accentColor}
+            textColor={myFilesColors.text}
+            mutedColor={myFilesColors.muted}
+            borderColor={myFilesColors.border}
+            backgroundColor={myFilesColors.inputBg}
+            inputBorderColor={myFilesColors.inputBorder}
+            inputTextColor={myFilesColors.inputText}
+            placeholder="Search files..."
+            onChange={(value) => setSearchQuery(value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            onClear={() => setSearchQuery("")}
           />
 
-          {/* Input wrapper: no layout shift */}
-          <div
-            className="relative"
-            style={{
-              borderRadius: 10,
-            }}
-          >
-            <div
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: 10,
-                pointerEvents: "none",
-                opacity: isSearchActive ? 1 : 0,
-                transition: "opacity 160ms ease",
-                background:
-                  resolvedTheme === "light"
-                    ? `${accentColor}10`
-                    : `${accentColor}22`,
-                filter: "saturate(1.05)",
-              }}
-            />
-
-            {/* Scanner shimmer */}
-            {isSearchActive && (
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  left: "12%",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: "22%",
-                  height: "68%",
-                  pointerEvents: "none",
-                  borderRadius: 999,
-                  background:
-                    resolvedTheme === "light"
-                      ? "linear-gradient(90deg, transparent, rgba(59,130,246,0.35), transparent)"
-                      : "linear-gradient(90deg, transparent, rgba(56,189,248,0.28), transparent)",
-                  animation: "bb-myfiles-search-shimmer 1.35s infinite ease-in-out",
-                  mixBlendMode: resolvedTheme === "light" ? "multiply" : "screen",
-                }}
-              />
-            )}
-
-            <input
-              placeholder="Search files..."
-              className="w-full pl-8 py-1.5 rounded-lg text-xs outline-none transition-[border-color,box-shadow,background]"
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              style={{
-                background: myFilesColors.inputBg,
-                border: `1px solid ${isSearchActive ? `${accentColor}77` : myFilesColors.inputBorder}`,
-                color: myFilesColors.inputText,
-                caretColor: accentColor,
-                paddingRight: isSearchLoading ? 34 : 46,
-                boxShadow:
-                  isSearchActive
-                    ? `0 0 0 3px ${accentColor}18`
-                    : "none",
-                transition:
-                  "box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease",
-                transform: isSearchActive ? "translateY(-0.5px)" : undefined,
-                animation:
-                  isSearchActive && !isSearchLoading
-                    ? "bb-myfiles-search-glow 1.8s infinite ease-in-out"
-                    : undefined,
-              }}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-
-            {/* Loader dots */}
-            {isSearchLoading && trimmedSearchQuery.length > 0 && (
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  display: "flex",
-                  gap: 4,
-                  alignItems: "center",
-                  pointerEvents: "none",
-                }}
-              >
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: 999,
-                      background: accentColor,
-                      opacity: 0.7,
-                      animation: `bb-myfiles-search-dot 0.9s infinite ease-in-out`,
-                      animationDelay: `${i * 120}ms`,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Clear button */}
-            {!isSearchLoading && trimmedSearchQuery.length > 0 && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full"
-                style={{
-                  width: 22,
-                  height: 22,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: myFilesColors.muted,
-                  background: resolvedTheme === "light" ? "#f1f5f9" : "rgba(148,163,184,0.15)",
-                  border: `1px solid ${myFilesColors.border}`,
-                  transition: "transform 160ms ease, background 160ms ease, color 160ms ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "scale(1.05)";
-                  e.currentTarget.style.color = myFilesColors.text;
-                  e.currentTarget.style.background = `${accentColor}10`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.color = myFilesColors.muted;
-                  e.currentTarget.style.background = resolvedTheme === "light" ? "#f1f5f9" : "rgba(148,163,184,0.15)";
-                }}
-              >
-                &times;
-              </button>
-            )}
-          </div>
-
-          {/* Searching helper text */}
-          {trimmedSearchQuery.length > 0 && (
-            <div
-              className="mt-2 text-[11px] leading-tight"
-              style={{
-                color: myFilesColors.muted,
-                fontStyle: "normal",
-              }}
-            >
-              <span style={{ color: myFilesColors.muted2 }}>
-                Searching for:
-              </span>{" "}
-              <span style={{ color: accentColor }}>"{trimmedSearchQuery}"</span>
-            </div>
-          )}
+          <SearchHelperText
+            query={trimmedSearchQuery}
+            accentColor={accentColor}
+            mutedColor={myFilesColors.muted}
+            secondaryMutedColor={myFilesColors.muted2}
+          />
         </div>
 
         <div ref={filterMenuRef} className="relative">
@@ -3504,48 +2584,15 @@ export function MyFiles({
           )}
         </div>
 
-        <div
-          className="flex items-center rounded-lg overflow-hidden ml-auto"
-          style={{
-            border: `1px solid ${myFilesColors.border}`,
-            background: myFilesColors.buttonSoftBg,
-          }}
-        >
-          {(["list", "grid"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className="w-8 h-8 flex items-center justify-center transition-colors"
-              style={{
-                background:
-                  viewMode === mode
-                    ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
-                    : "transparent",
-                color: viewMode === mode ? "#ffffff" : myFilesColors.muted,
-                boxShadow:
-                  viewMode === mode
-                    ? `0 8px 18px ${accentColor}22`
-                    : "none",
-              }}
-              onMouseEnter={(e) => {
-                if (viewMode === mode) return;
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  `${accentColor}10`;
-                (e.currentTarget as HTMLButtonElement).style.color =
-                  myFilesColors.text;
-              }}
-              onMouseLeave={(e) => {
-                if (viewMode === mode) return;
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "transparent";
-                (e.currentTarget as HTMLButtonElement).style.color =
-                  myFilesColors.muted;
-              }}
-            >
-              {mode === "list" ? <List size={14} /> : <Grid size={14} />}
-            </button>
-            ))}
-          </div>
+        <ViewModeToggle
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          accentColor={accentColor}
+          textColor={myFilesColors.text}
+          mutedColor={myFilesColors.muted}
+          borderColor={myFilesColors.border}
+          panelColor={myFilesColors.buttonSoftBg}
+        />
 
             <button
               type="button"
@@ -3583,9 +2630,9 @@ export function MyFiles({
       {/* Folders */}
       <div className="mb-6">
         {showEmptySearchState && (
-          <div className="text-xs" style={{ color: myFilesColors.muted }}>
-            Tidak ada item untuk filter ini.
-          </div>
+          <EmptyFilterMessage
+            textColor={myFilesColors.muted}
+          />
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -3664,9 +2711,14 @@ export function MyFiles({
           {(() => {
             return selectedFolderIds.size > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                  {selectedFolderIds.size} folder dipilih
-                </div>
+                <SelectionCountPill
+                  count={selectedFolderIds.size}
+                  label="folder dipilih"
+                  textColor={myFilesColors.muted}
+                  accentColor="#f87171"
+                  backgroundColor="rgba(248, 113, 113, 0.08)"
+                  borderColor="rgba(248, 113, 113, 0.25)"
+                />
 
                 <button
                   type="button"
@@ -3702,13 +2754,9 @@ export function MyFiles({
         </div>
 
         {loadingFolders && (
-          <div
-            className="flex items-center gap-2 text-xs"
-            style={{ color: myFilesColors.muted }}
-          >
-            <LoadingSpinner size={12} />
-            Loading folders...
-          </div>
+          <LoadingFoldersMessage
+            textColor={myFilesColors.muted}
+          />
         )}
         {folderError && (
           <div className="text-xs" style={{ color: "#f87171" }}>
@@ -3716,9 +2764,9 @@ export function MyFiles({
           </div>
         )}
         {!loadingFolders && !folderError && folderList.length === 0 && (
-          <div className="text-xs" style={{ color: myFilesColors.muted }}>
-            Belum ada folder.
-          </div>
+          <EmptyFolderMessage
+            textColor={myFilesColors.muted}
+          />
         )}
 
         {viewMode === "list" ? (
@@ -4369,71 +3417,17 @@ export function MyFiles({
       )}
 
       {previewModalOpen && previewModalMode === "minimized" ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed bottom-4 right-4 z-[150]"
-          style={{
-            background: myFilesColors.cardBg,
-            border: `1px solid ${myFilesColors.border}`,
-            borderRadius: 12,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
-            width: 320,
-            maxWidth: "calc(100vw - 32px)",
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div
-            className="flex items-center justify-between gap-3 px-3 py-2"
-            style={{ borderBottom: `1px solid ${myFilesColors.border}` }}
-          >
-            <div className="min-w-0">
-              <div
-                className="truncate text-xs font-semibold"
-                style={{ color: myFilesColors.title }}
-                title={previewFileName}
-              >
-                {previewFileName}
-              </div>
-              <div
-                className="mt-0.5 text-[10px]"
-                style={{ color: myFilesColors.muted }}
-              >
-                Preview minimized
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewModalMode("normal")}
-                className="flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold"
-                style={{
-                  background: `${accentColor}14`,
-                  border: `1px solid ${accentColor}33`,
-                  color: accentColor,
-                }}
-                aria-label="Restore preview"
-                title="Restore preview"
-              >
-                Restore
-              </button>
-              <button
-                type="button"
-                onClick={closePreviewModal}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold"
-                style={{
-                  color: myFilesColors.muted2,
-                  background: myFilesColors.panelBg,
-                  border: `1px solid ${myFilesColors.border}`,
-                }}
-                aria-label="Close preview"
-                title="Close preview"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
+        <PreviewMinimizedWidget
+          title={previewFileName}
+          subtitle="Preview minimized"
+          accentColor={accentColor}
+          titleColor={myFilesColors.title}
+          mutedColor={myFilesColors.muted}
+          backgroundColor={myFilesColors.cardBg}
+          borderColor={myFilesColors.border}
+          onRestore={() => setPreviewModalMode("normal")}
+          onClose={closePreviewModal}
+        />
       ) : null}
 
       {previewModalOpen && previewModalMode !== "minimized" && (
@@ -4474,165 +3468,45 @@ export function MyFiles({
                 borderBottom: `1px solid ${myFilesColors.border}`,
               }}
             >
-              <div className="min-w-0">
-                <h2
-                  className="truncate text-sm font-semibold"
-                  style={{ color: myFilesColors.title }}
-                  title={previewFileName}
-                >
-                  {previewFileName}
-                </h2>
-                <p
-                  className="truncate text-xs mt-1"
-                  style={{ color: myFilesColors.muted }}
-                >
-                  Preview
-                </p>
-              </div>
+              <PreviewHeaderTitle
+                title={previewFileName}
+                subtitle="Preview"
+                titleColor={myFilesColors.title}
+                mutedColor={myFilesColors.muted}
+              />
 
-              <div className="flex items-center gap-2">
-                {(() => {
-                  if (!previewFile) return null;
-
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleDownloadFile(previewFile);
-                      }}
-                      className="flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold"
-                      style={{
-                        background: `${accentColor}14`,
-                        border: `1px solid ${accentColor}33`,
-                        color: accentColor,
-                      }}
-                      aria-label="Download preview file"
-                      title="Download"
-                    >
-                      <Download size={14} />
-                    </button>
-                  );
-                })()}
-
-                {previewContentType.startsWith("image/") && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPreviewImageScaleFromAnchor(
-                          previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
-                        )
-                      }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                      style={{
-                        background: myFilesColors.panelBg,
-                        border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted2,
-                      }}
-                      aria-label="Zoom out image"
-                      title="Zoom out"
-                    >
-                      <ZoomOut size={15} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={resetPreviewImageZoom}
-                      className="flex h-8 w-[76px] items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold"
-                      style={{
-                        background: myFilesColors.panelBg,
-                        border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted2,
-                      }}
-                      aria-label="Reset image zoom"
-                      title="Reset zoom"
-                    >
-                      <RotateCcw size={13} />
-                      <span>{Math.round(previewImageScale * 100)}%</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPreviewImageScaleFromAnchor(
-                          previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
-                        )
-                      }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                      style={{
-                        background: myFilesColors.panelBg,
-                        border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted2,
-                      }}
-                      aria-label="Zoom in image"
-                      title="Zoom in"
-                    >
-                      <ZoomIn size={15} />
-                    </button>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setPreviewModalMode("minimized")}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                  style={{
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted2,
-                  }}
-                  aria-label="Minimize preview"
-                  title="Minimize preview"
-                >
-                  <Minus size={15} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewModalMode((mode) =>
-                      mode === "maximized" ? "normal" : "maximized",
-                    )
-                  }
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                  style={{
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted2,
-                  }}
-                  aria-label={
-                    previewModalMode === "maximized"
-                      ? "Restore preview size"
-                      : "Maximize preview"
-                  }
-                  title={
-                    previewModalMode === "maximized"
-                      ? "Restore preview size"
-                      : "Maximize preview"
-                  }
-                >
-                  {previewModalMode === "maximized" ? (
-                    <Minimize2 size={15} />
-                  ) : (
-                    <Maximize2 size={15} />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={closePreviewModal}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold"
-                  style={{
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted2,
-                  }}
-                  aria-label="Close preview"
-                  title="Close preview"
-                >
-                  <X size={15} />
-                </button>
-              </div>
+              <PreviewHeaderActions
+                previewFile={previewFile}
+                previewContentType={previewContentType}
+                previewModalMode={previewModalMode}
+                previewImageScale={previewImageScale}
+                onDownload={() => {
+                  handleDownloadFile(previewFile);
+                }}
+                onZoomOut={() =>
+                  setPreviewImageScaleFromAnchor(
+                    previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
+                  )
+                }
+                onResetZoom={resetPreviewImageZoom}
+                onZoomIn={() =>
+                  setPreviewImageScaleFromAnchor(
+                    previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
+                  )
+                }
+                onMinimize={() => setPreviewModalMode("minimized")}
+                onToggleMaximize={() =>
+                  setPreviewModalMode((mode) =>
+                    mode === "maximized" ? "normal" : "maximized",
+                  )
+                }
+                onClose={closePreviewModal}
+                textColor={myFilesColors.text}
+                mutedColor={myFilesColors.muted2}
+                borderColor={myFilesColors.border}
+                panelColor={myFilesColors.panelBg}
+                accentColor={accentColor}
+              />
             </div>
 
             <div
@@ -4969,37 +3843,10 @@ export function MyFiles({
 
                   if (!link) return;
 
-                  // 1) primary: navigator.clipboard
                   try {
-                    await navigator.clipboard.writeText(link);
+                    await copyTextToClipboard(link);
                     setCopySuccess("Link copied");
                     setTimeout(() => setCopySuccess(""), 1500);
-                    return;
-                  } catch {
-                    // 2) fallback: textarea + execCommand("copy")
-                  }
-
-                  try {
-                    const textarea = document.createElement("textarea");
-                    textarea.value = link;
-                    textarea.setAttribute("readonly", "true");
-                    textarea.style.position = "absolute";
-                    textarea.style.left = "-9999px";
-                    document.body.appendChild(textarea);
-
-                    textarea.select();
-                    textarea.focus();
-                    const ok = document.execCommand("copy");
-
-                    document.body.removeChild(textarea);
-
-                    if (ok) {
-                      setCopySuccess("Link copied");
-                      setTimeout(() => setCopySuccess(""), 1500);
-                    } else {
-                      setCopySuccess("Gagal copy link. Silakan copy manual.");
-                      setTimeout(() => setCopySuccess(""), 2500);
-                    }
                   } catch {
                     setCopySuccess("Gagal copy link. Silakan copy manual.");
                     setTimeout(() => setCopySuccess(""), 2500);
@@ -5951,51 +4798,16 @@ export function MyFiles({
                           return;
                         }
 
-                        const safeSelectInput = () => {
+                        try {
+                          await copyTextToClipboard(r.link);
+                          status.textContent = "Tersalin";
+                        } catch {
                           try {
                             input.focus();
                             input.select();
                           } catch {
                             // ignore
                           }
-                        };
-
-                        // 1) coba clipboard API
-                        let copied = false;
-                        try {
-                          if (navigator?.clipboard?.writeText) {
-                            await navigator.clipboard.writeText(r.link);
-                            copied = true;
-                          }
-                        } catch {
-                          copied = false;
-                        }
-
-                        // 2) fallback: execCommand("copy")
-                        if (!copied) {
-                          try {
-                            const textarea = document.createElement("textarea");
-                            textarea.value = r.link;
-                            textarea.setAttribute("readonly", "true");
-                            textarea.style.position = "absolute";
-                            textarea.style.left = "-9999px";
-                            document.body.appendChild(textarea);
-
-                            textarea.select();
-                            const ok = document.execCommand("copy");
-
-                            document.body.removeChild(textarea);
-                            if (ok) copied = true;
-                          } catch {
-                            copied = false;
-                          }
-                        }
-
-                        if (copied) {
-                          status.textContent = "Tersalin";
-                        } else {
-                          // 3) kedua metode gagal: pilih input supaya user tinggal Ctrl+C
-                          safeSelectInput();
                           status.textContent =
                             "Link sudah dipilih, tekan Ctrl+C untuk menyalin";
                         }
@@ -6225,9 +5037,10 @@ export function MyFiles({
           </div>
 
           {showEmptySearchState && (
-            <div className="text-xs px-4 py-6" style={{ color: myFilesColors.muted }}>
-              Tidak ada hasil untuk "{searchQuery.trim()}"
-            </div>
+            <EmptySearchState
+              searchQuery={searchQuery}
+              color={myFilesColors.muted}
+            />
           )}
           {!showEmptySearchState &&
             typedFiles.map((file, i) => {
@@ -6354,12 +5167,11 @@ export function MyFiles({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {showEmptySearchState && (
-              <div
-                className="col-span-full text-xs px-4 py-6"
-                style={{ color: myFilesColors.muted }}
-              >
-                Tidak ada hasil untuk "{searchQuery.trim()}".
-              </div>
+              <EmptySearchState
+                searchQuery={searchQuery}
+                color={myFilesColors.muted}
+                colSpanFull={true}
+              />
             )}
             {!showEmptySearchState &&
               typedFiles.map((file) => {
