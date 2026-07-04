@@ -15,6 +15,19 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip
 } from "recharts";
 
+import {
+  clampPercent,
+  formatBytes,
+  formatCpuCores,
+  formatDateTime,
+  formatDuration,
+  formatIpList,
+  formatLoad,
+  formatPercent,
+} from "./server-monitor/serverMonitorFormatters";
+import { ServerMonitorStatusPill } from "./server-monitor/components/ServerMonitorStatusPill";
+import { ServerMonitorLoadingBanner } from "./server-monitor/components/ServerMonitorLoadingBanner";
+
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
 
@@ -122,67 +135,6 @@ const ChartUnavailable = ({
 // NOTE: Charts below are intentionally disabled because backend does not provide
 // historical/time-series data yet. Do not reintroduce random/dummy series.
 
-
-
-const formatBytes = (value: number | null | undefined) => {
-  if (typeof value !== "number") return "N/A";
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let size = value;
-  let unitIndex = 0;
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-};
-
-const formatPercent = (value: number | null | undefined) =>
-  typeof value === "number" ? `${value.toFixed(1)}%` : "N/A";
-
-const clampPercent = (value: number | null | undefined) => {
-  if (typeof value !== "number") return 0;
-  return Math.min(Math.max(value, 0), 100);
-};
-
-const formatLoad = (value: number | null | undefined) =>
-  typeof value === "number" ? value.toFixed(2) : "N/A";
-
-const formatDuration = (seconds: number | null | undefined) => {
-  if (typeof seconds !== "number") return "N/A";
-
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-};
-
-const formatDateTime = (value: string | null | undefined) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
-};
-
-const formatCpuCores = (
-  physical: number | null | undefined,
-  logical: number | null | undefined,
-) => {
-  if (typeof physical !== "number" && typeof logical !== "number") return "N/A";
-  if (typeof physical === "number" && typeof logical === "number") {
-    return `${physical} physical / ${logical} logical`;
-  }
-  return typeof logical === "number" ? `${logical} logical` : `${physical} physical`;
-};
-
-const formatIpList = (ips: string[] | undefined) => {
-  if (!ips || ips.length === 0) return "N/A";
-  return ips.slice(0, 3).join(", ");
-};
 
 export function ServerMonitor() {
   const [refreshing, setRefreshing] = useState(false);
@@ -380,22 +332,21 @@ export function ServerMonitor() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-xl font-semibold" style={{ color: colors.title }}>Server Monitor</h1>
-            <span
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
-              style={tone(statusColor, isDark)}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full inline-block"
-                style={{ background: statusColor }}
-              />
-              {loading && !monitorData
+            <ServerMonitorStatusPill
+              label={loading && !monitorData
                 ? "Checking"
                 : error
                   ? "Offline"
                   : monitorData
                     ? "Online"
                     : "Unknown"}
-            </span>
+              icon={<span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusColor }} />}
+              textColor={tone(statusColor, isDark).color}
+              backgroundColor={tone(statusColor, isDark).background}
+              borderColor={tone(statusColor, isDark).border.replace("1px solid ", "")}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+              title="Server status"
+            />
 
           </div>
           <p className="text-xs mt-0.5" style={{ color: colors.muted }}>
@@ -430,16 +381,14 @@ export function ServerMonitor() {
       </div>
 
       {loading && (
-        <div
+        <ServerMonitorLoadingBanner
+          title="Memuat data server monitor..."
+          textColor={colors.text}
+          mutedColor={colors.muted}
+          backgroundColor={colors.panelSoftBg}
+          borderColor={colors.border}
           className="mt-3 rounded-xl border p-3 text-sm"
-          style={{
-            background: colors.panelSoftBg,
-            borderColor: colors.border,
-            color: colors.text,
-          }}
-        >
-          Memuat data server monitor...
-        </div>
+        />
       )}
 
       {error && (
