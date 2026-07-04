@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { PublicShareErrorState } from "./public-share/components/PublicShareErrorState";
+import { PublicShareLoadingState } from "./public-share/components/PublicShareLoadingState";
+import { formatBytes, getFileIcon } from "./public-share/publicShareFormatters";
 
 // Gunakan axios langsung (bukan shared api instance) agar tidak
 // mengirim Authorization header dari localStorage untuk halaman publik.
@@ -21,32 +24,6 @@ type ShareData = {
   download_count?: number;
   expires_at?: string | null;
 };
-
-function formatBytes(bytes?: number | null): string {
-  const v = typeof bytes === "number" ? bytes : 0;
-  if (v === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(
-    Math.floor(Math.log(v) / Math.log(1024)),
-    units.length - 1,
-  );
-  const num = v / Math.pow(1024, i);
-  const fixed = num >= 10 ? 1 : 2;
-  return `${num.toFixed(fixed)} ${units[i]}`;
-}
-
-function getFileIcon(mime?: string | null): string {
-  if (!mime) return "📄";
-  if (mime.startsWith("image/")) return "🖼️";
-  if (mime.startsWith("video/")) return "🎬";
-  if (mime.startsWith("audio/")) return "🎵";
-  if (mime.includes("pdf")) return "📕";
-  if (mime.includes("zip") || mime.includes("compressed") || mime.includes("tar")) return "🗜️";
-  if (mime.includes("word") || mime.includes("document")) return "📝";
-  if (mime.includes("spreadsheet") || mime.includes("excel")) return "📊";
-  if (mime.includes("presentation") || mime.includes("powerpoint")) return "📋";
-  return "📄";
-}
 
 /** Normalize error status from an axios error response */
 function getErrorStatus(e: any): number | null {
@@ -245,55 +222,24 @@ export function PublicSharePage() {
         </div>
 
         {/* ── Loading state (initial page load) ─────────────────────────── */}
-        {loading && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              color: "#94a3b8",
-              fontSize: 13,
-            }}
-          >
-            <div
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                border: "2px solid #1a2540",
-                borderTopColor: "#3b82f6",
-                animation: "spin 0.8s linear infinite",
-              }}
-            />
-            Loading shared file...
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
+        {loading ? <PublicShareLoadingState /> : null}
 
         {/* ── Error state ───────────────────────────────────────────────── */}
-        {!loading && errorMessage && (
-          <div
-            style={{
-              borderRadius: 12,
-              border: "1px solid rgba(248,113,113,0.25)",
-              background: "rgba(248,113,113,0.08)",
-              padding: "16px 18px",
-            }}
-            role="alert"
-          >
-            <div style={{ color: "#f87171", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              ⚠️{" "}
-              {errorMessage === "Share link tidak ditemukan."
-                ? "Link Tidak Ditemukan"
-                : errorMessage === "Share link sudah kedaluwarsa."
-                  ? "Link Kedaluwarsa"
-                  : "Terjadi Kesalahan"}
-            </div>
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>
-              {errorMessage}
-            </div>
-          </div>
-        )}
+        {!loading && errorMessage ? (
+          <PublicShareErrorState
+            title={
+              <>
+                ⚠️{" "}
+                {errorMessage === "Share link tidak ditemukan."
+                  ? "Link Tidak Ditemukan"
+                  : errorMessage === "Share link sudah kedaluwarsa."
+                    ? "Link Kedaluwarsa"
+                    : "Terjadi Kesalahan"}
+              </>
+            }
+            message={errorMessage}
+          />
+        ) : null}
 
         {/* ── Success state — file info card ────────────────────────────── */}
         {!loading && !isInvalid && share?.file && (
