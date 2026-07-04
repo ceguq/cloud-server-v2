@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
+import { SettingRow } from "./settings/components/SettingRow";
+import { withAlpha } from "./settings/settingsColorUtils";
 import {
   User,
   Bell,
@@ -36,10 +39,6 @@ function safeReadAccentColor(): string {
     // ignore
   }
   return "#3b82f6";
-}
-
-function withAlpha(color: string, alphaHex: string): string {
-  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alphaHex}` : color;
 }
 
 const sections = [
@@ -86,42 +85,6 @@ function Toggle({
         }}
       />
     </button>
-  );
-}
-
-
-function SettingRow({
-  label,
-  desc,
-  children,
-  labelColor,
-  descColor,
-  borderColor,
-}: {
-  label: string;
-  desc?: string;
-  children?: React.ReactNode;
-  labelColor?: string;
-  descColor?: string;
-  borderColor?: string;
-}) {
-  return (
-    <div
-      className="flex items-center justify-between py-3.5"
-      style={{ borderBottom: `1px solid ${borderColor ?? "#0d1829"}` }}
-    >
-      <div>
-        <div className="text-sm" style={{ color: labelColor ?? "#cbd5e1" }}>
-          {label}
-        </div>
-        {desc && (
-          <div className="text-xs mt-0.5" style={{ color: descColor ?? "#475569" }}>
-            {desc}
-          </div>
-        )}
-      </div>
-      {children}
-    </div>
   );
 }
 
@@ -307,12 +270,13 @@ export function Settings() {
       <div className="flex-1 overflow-y-auto p-6">
         {activeSection === "profile" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
-              Profile
-            </h2>
-            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
-              Manage your personal information
-            </p>
+            <SettingsSectionHeader
+              title="Profile"
+              description="Manage your personal information"
+              textColor={settingsColors.title}
+              mutedColor={settingsColors.muted}
+              className="mb-5"
+            />
 
             {/* Avatar */}
             <div
@@ -402,12 +366,13 @@ export function Settings() {
 
         {activeSection === "notifications" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
-              Notifications
-            </h2>
-            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
-              Configure when and how you get notified
-            </p>
+            <SettingsSectionHeader
+              title="Notifications"
+              description="Configure when and how you get notified"
+              textColor={settingsColors.title}
+              mutedColor={settingsColors.muted}
+              className="mb-5"
+            />
             <div
               className="rounded-xl px-5"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
@@ -445,12 +410,13 @@ export function Settings() {
 
         {activeSection === "security" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
-              Security
-            </h2>
-            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
-              Manage your account security settings
-            </p>
+            <SettingsSectionHeader
+              title="Security"
+              description="Manage your account security settings"
+              textColor={settingsColors.title}
+              mutedColor={settingsColors.muted}
+              className="mb-5"
+            />
 
             <div
               className="rounded-xl p-5 mb-4"
@@ -561,12 +527,13 @@ export function Settings() {
 
         {activeSection === "storage" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
-              Storage
-            </h2>
-            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
-              Manage storage and cleanup settings
-            </p>
+            <SettingsSectionHeader
+              title="Storage"
+              description="Manage storage and cleanup settings"
+              textColor={settingsColors.title}
+              mutedColor={settingsColors.muted}
+              className="mb-5"
+            />
 
 
             <div
@@ -673,12 +640,13 @@ export function Settings() {
 
         {activeSection === "appearance" && (
           <div>
-            <h2 className="text-lg font-semibold mb-1" style={{ color: settingsColors.title }}>
-              Appearance
-            </h2>
-            <p className="text-xs mb-5" style={{ color: settingsColors.muted }}>
-              Customize how NimbusDrive looks
-            </p>
+            <SettingsSectionHeader
+              title="Appearance"
+              description="Customize how NimbusDrive looks"
+              textColor={settingsColors.title}
+              mutedColor={settingsColors.muted}
+              className="mb-5"
+            />
 
             <div
               className="rounded-xl p-5"
