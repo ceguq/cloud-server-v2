@@ -18,6 +18,10 @@ import {
   type TrashFolder,
 } from "../../services/trashService";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { TrashEmptyState } from "./trash/components/TrashEmptyState";
+import { TrashErrorMessage } from "./trash/components/TrashErrorMessage";
+import { TrashLoadingState } from "./trash/components/TrashLoadingState";
+import { formatDate, formatSize } from "./trash/trashFormatters";
 
 type AppearanceTheme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -52,25 +56,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   } catch {
     return "light";
   }
-}
-
-function formatSize(bytes?: number | null): string {
-  const b = typeof bytes === "number" ? bytes : 0;
-  const units = ["B", "KB", "MB", "GB"];
-  if (b < 1024) return `${b} B`;
-  const i = Math.min(
-    Math.floor(Math.log(b) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = b / Math.pow(1024, i);
-  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[i]}`;
-}
-
-function formatDate(d?: string | null): string {
-  if (!d) return "-";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString();
 }
 
 type TrashBulkAction =
@@ -475,22 +460,22 @@ export function Trash({
       </div>
 
       {loading && (
-        <div className="text-sm" style={{ color: trashColors.text }}>
-          Loading trash...
-        </div>
+        <TrashLoadingState className="text-sm" textColor={trashColors.text} />
       )}
       {!loading && error && (
-        <div className="text-sm" style={{ color: "#ef4444" }}>
-          {error}
-        </div>
+        <TrashErrorMessage
+          className="text-sm"
+          message={error}
+          textColor="#ef4444"
+          role="alert"
+          ariaLive="assertive"
+        />
       )}
       {!loading &&
         !error &&
         filtered.length === 0 &&
         filteredFolders.length === 0 && (
-          <div className="text-sm" style={{ color: trashColors.text }}>
-            Trash kosong.
-          </div>
+          <TrashEmptyState className="text-sm" textColor={trashColors.text} />
         )}
 
       {!loading && !error && (hasItems || filteredFolders.length > 0) && (
