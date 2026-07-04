@@ -45,6 +45,20 @@ import {
 
 import { GDriveIcon } from "../components/GDriveIcon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { FilesEmptyState } from "./gdrive/components/FilesEmptyState";
+import { InlineErrorMessage } from "./gdrive/components/InlineErrorMessage";
+import { LoadingStateMessage } from "./gdrive/components/LoadingStateMessage";
+import { NoAccountsState } from "./gdrive/components/NoAccountsState";
+import { StatusBadge } from "./gdrive/components/StatusBadge";
+import {
+  formatBytes,
+  formatDate,
+  formatRelativeTime,
+  getAccountInitials,
+  getAccountName,
+  getQuotaDisplay,
+  parseByteValue,
+} from "./gdrive/gDriveFormatters";
 import {
   disconnectGDriveAccount,
   downloadGDriveFile,
@@ -158,111 +172,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-function parseByteValue(value: string | number | null | undefined): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const n = typeof value === "string" ? Number(value) : value;
-  return Number.isFinite(n) ? n : null;
-}
-
-function formatBytes(bytes: number | null | undefined, fallback = "-"): string {
-  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) {
-    return fallback;
-  }
-  if (bytes <= 0) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = bytes / Math.pow(1024, index);
-  const fixed = value >= 10 ? 1 : 2;
-  return `${value.toFixed(fixed)} ${units[index]}`;
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "-";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatRelativeTime(iso?: string | null): string {
-  if (!iso) return "not synced yet";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "not synced yet";
-
-  const diffMs = Date.now() - date.getTime();
-  if (diffMs < 60 * 1000) return "just now";
-
-  const minutes = Math.floor(diffMs / (60 * 1000));
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
-
-  return formatDate(iso);
-}
-
-function getAccountName(account: GDriveAccount): string {
-  return account.label || account.email || "Google Drive";
-}
-
-function getAccountInitials(account: GDriveAccount): string {
-  const label = getAccountName(account).trim();
-  const words = label.split(/[\s._-]+/).filter(Boolean);
-
-  if (words.length >= 2) {
-    return `${words[0][0]}${words[1][0]}`.toUpperCase();
-  }
-
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-
-  return "GD";
-}
-
-function getQuotaDisplay(account: GDriveAccount) {
-  const quota = account.storage_quota ?? null;
-  const usage =
-    parseByteValue(quota?.usage_in_drive) ?? parseByteValue(quota?.usage);
-  const limit = parseByteValue(quota?.limit);
-
-  if (usage !== null && limit !== null && limit > 0) {
-    const percent = Math.min(100, Math.max(0, Math.round((usage / limit) * 100)));
-    return {
-      label: `${formatBytes(usage, "0 B")} of ${formatBytes(limit, "0 B")} used`,
-      value: `${percent}%`,
-      percent,
-      hasQuota: true,
-    };
-  }
-
-  if (usage !== null) {
-    return {
-      label: `${formatBytes(usage, "0 B")} used`,
-      value: "",
-      percent: 0,
-      hasQuota: false,
-    };
-  }
-
-  return {
-    label: "Storage unavailable",
-    value: "",
-    percent: 0,
-    hasQuota: false,
-  };
-}
 
 function getAvatarColor(index: number, active: boolean, accentColor: string) {
   if (active) return accentColor;
@@ -3603,33 +3512,23 @@ const renderFileActions = (file: GDriveFileUI) => {
           </div>
 
           {accountsLoading ? (
-            <div
-              className="rounded-xl border px-3 py-4 text-xs"
-              style={{ background: colors.panelBg, borderColor: colors.border, color: colors.muted }}
-            >
-              <div className="flex items-center gap-2">
-                <LoadingSpinner size={12} color={accentColor} />
-                Loading Drive accounts...
-              </div>
-            </div>
+            <LoadingStateMessage
+              message="Loading Drive accounts..."
+              textColor={colors.muted}
+              spinnerColor={accentColor}
+              backgroundColor={colors.panelBg}
+              borderColor={colors.border}
+            />
           ) : accountsError ? (
-            <div
-              className="rounded-xl border px-3 py-4 text-xs"
-              style={{
-                background: "rgba(239,68,68,0.08)",
-                borderColor: "rgba(239,68,68,0.24)",
-                color: "#ef4444",
-              }}
-            >
-              Failed to load Google Drive accounts.
-            </div>
+            <InlineErrorMessage message="Failed to load Google Drive accounts." />
           ) : gdriveAccounts.length === 0 ? (
-            <div
-              className="rounded-xl border px-3 py-5 text-xs"
-              style={{ background: colors.panelBg, borderColor: colors.border, color: colors.muted }}
-            >
-              No connected accounts yet.
-            </div>
+            <NoAccountsState
+              title="No connected accounts yet."
+              textColor={colors.muted}
+              mutedColor={colors.muted2}
+              backgroundColor={colors.panelBg}
+              borderColor={colors.border}
+            />
           ) : (
             <div className="space-y-2">
               {gdriveAccounts.map((account, index) => renderAccountCard(account, index))}
@@ -3971,17 +3870,12 @@ const renderFileActions = (file: GDriveFileUI) => {
                   </div>
 
                   {(uploadError || uploadSuccess) ? (
-                    <div
-                      className="shrink-0 text-[11px] font-semibold"
-                      style={{
-                        color: uploadError ? "#ef4444" : "#22c55e",
-                        flexShrink: 0,
-                        whiteSpace: "nowrap",
-                      }}
+                    <StatusBadge
+                      message={uploadError ? uploadError : uploadSuccess}
+                      tone={uploadError ? "error" : "success"}
                       role="status"
-                    >
-                      {uploadError ? uploadError : uploadSuccess}
-                    </div>
+                      ariaLive="polite"
+                    />
                   ) : null}
 
               </div>
@@ -4098,24 +3992,15 @@ const renderFileActions = (file: GDriveFileUI) => {
                     </div>
                   </div>
                 ) : !anyFiles ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <div
-                      className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                      style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}24` }}
-                    >
-                      <Folder size={21} style={{ color: accentColor }} />
-                    </div>
-                    <div className="mt-3 text-sm font-semibold" style={{ color: colors.title }}>
-                      {search.trim()
-                        ? "No matching Drive files"
-                        : "No Drive files found."}
-                    </div>
-                    <div className="mt-1 text-xs" style={{ color: colors.muted }}>
-                      {search.trim()
-                        ? "Try a different keyword or clear the search."
-                        : "Try another tab or search query."}
-                    </div>
-                  </div>
+                  <FilesEmptyState
+                    title={search.trim() ? "No matching Drive files" : "No Drive files found."}
+                    description={search.trim()
+                      ? "Try a different keyword or clear the search."
+                      : "Try another tab or search query."}
+                    textColor={colors.title}
+                    mutedColor={colors.muted}
+                    accentColor={accentColor}
+                  />
                 ) : (
                   viewMode === "list" ? (
                     <>
