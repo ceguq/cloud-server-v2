@@ -18,6 +18,16 @@ import {
   safeReadAccentColor,
   safeReadAppearanceTheme,
 } from "./my-files/myFilesThemeUtils";
+import type {
+  DetailsItem,
+  DragMoveItem,
+  FileActionFeedback,
+  MenuCoordinate,
+  MoveItemType,
+  PreviewModalMode,
+  ShareMode,
+  ViewMode,
+} from "./my-files/types";
 
 import {
   Folder,
@@ -99,11 +109,8 @@ import {
 export function MyFiles({
   filesRefreshKey,
   onStorageChanged,
-}: {
-  filesRefreshKey?: number;
-  onStorageChanged?: () => void;
-}) {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+}: MyFilesProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
@@ -129,15 +136,9 @@ export function MyFiles({
   );
   const [openFileActionId, setOpenFileActionId] = useState<string | null>(null);
 
-  const [fileActionMenuPosition, setFileActionMenuPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [fileActionMenuPosition, setFileActionMenuPosition] = useState<MenuCoordinate | null>(null);
 
-  const [folderActionMenuPosition, setFolderActionMenuPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [folderActionMenuPosition, setFolderActionMenuPosition] = useState<MenuCoordinate | null>(null);
 
 
   // folder action menu helpers
@@ -210,13 +211,7 @@ export function MyFiles({
   const [sortDirection, setSortDirection] =
     useState<SortDirection>("asc");
   const [moveDragDropEnabled, setMoveDragDropEnabled] = useState(true);
-  const [dragMoveItem, setDragMoveItem] = useState<{
-    type: "file" | "folder";
-    id: string;
-    name: string;
-    fileIds?: string[];
-    folderIds?: string[];
-  } | null>(null);
+  const [dragMoveItem, setDragMoveItem] = useState<DragMoveItem | null>(null);
 
   // Multi-select files (bulk actions)
 
@@ -283,9 +278,7 @@ export function MyFiles({
   const [previewContentType, setPreviewContentType] = useState("");
   const [previewImageScale, setPreviewImageScale] = useState(1);
   const [previewImageOffset, setPreviewImageOffset] = useState({ x: 0, y: 0 });
-  const [previewModalMode, setPreviewModalMode] = useState<
-    "normal" | "maximized" | "minimized"
-  >("normal");
+  const [previewModalMode, setPreviewModalMode] = useState<PreviewModalMode>("normal");
   const previewImageViewportRef = useRef<HTMLDivElement | null>(null);
   const previewImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -304,7 +297,7 @@ export function MyFiles({
   const [activeShareLink, setActiveShareLink] = useState<ShareLink | null>(
     null,
   );
-  const [shareMode, setShareMode] = useState<"private" | "shared">("shared");
+  const [shareMode, setShareMode] = useState<ShareMode>("shared");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState("");
   const [copySuccess, setCopySuccess] = useState("");
@@ -315,16 +308,8 @@ export function MyFiles({
   const [fileSharingActionId, setFileSharingActionId] = useState<string | null>(
     null,
   );
-  const [fileActionFeedback, setFileActionFeedback] = useState<{
-    fileId: string;
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-  const [detailsItem, setDetailsItem] = useState<
-    | { type: "file"; item: FileModel }
-    | { type: "folder"; item: FolderModel }
-    | null
-  >(null);
+  const [fileActionFeedback, setFileActionFeedback] = useState<FileActionFeedback | null>(null);
+  const [detailsItem, setDetailsItem] = useState<DetailsItem | null>(null);
 
   // Move modal state
   const [moveModalOpen, setMoveModalOpen] = useState(false);
