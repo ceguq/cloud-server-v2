@@ -133,6 +133,19 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Verify rendering still works
   - [ ] No visual regressions
 
+### Stage 2 Checkpoint
+
+- [x] Stage 2 micro-components are complete through the toolbar/selection button boundary.
+- [x] Build passed manually after the latest extraction.
+- [x] State, handlers, API calls, upload logic, search/filter/sort logic, and selection behavior remain owned by `MyFiles.tsx`.
+- [x] No UI redesign was intended.
+
+### Stage 3 Pause Note
+
+- [ ] List/grid extraction is higher risk because it includes checkboxes, bulk actions, drag-and-drop, double-click navigation, context menus, and folder/file action menus.
+- [ ] Stage 3 should start with a read-only audit before any code patch.
+- [ ] Do not combine list and grid extraction in one patch.
+
 ### Validation
 
 - [ ] Visual regression tests pass (toolbar, empty states)
