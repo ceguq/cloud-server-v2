@@ -77,6 +77,7 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
@@ -1447,7 +1448,7 @@ export function MyFiles({
   };
 
   const setCompactDragImage = (
-    event: React.DragEvent<HTMLElement>,
+    event: React.DragEvent<Element>,
     label: string,
     type: "file" | "folder",
   ) => {
@@ -4512,23 +4513,42 @@ export function MyFiles({
             />
           )}
           {!showEmptySearchState &&
-            typedFiles.map((file, i) => {
+            typedFiles.map((file) => {
               const typeLabel = getTypeLabel(file.mime_type ?? null);
+              const modifiedLabel = file.created_at
+                ? new Date(file.created_at).toLocaleDateString()
+                : "-";
+              const sizeLabel = formatBytes(file.size);
+              const visibilityLabel = "Private";
 
               return (
-                <div
+                <MyFilesFileListItem
                   key={file.id}
+                  file={file}
+                  isSelected={selectedFileIds.has(file.id)}
+                  checklistVisibilityStyle={checklistVisibilityStyle}
+                  showFileMetadata={showFileMetadata}
+                  fileListColumnTemplate={fileListColumnTemplate}
+                  cardBg={myFilesColors.cardBg}
+                  borderColor={myFilesColors.border}
+                  textColor={myFilesColors.text}
+                  mutedColor={myFilesColors.muted}
+                  muted2Color={myFilesColors.muted2}
+                  panelBg={myFilesColors.panelBg}
+                  accentColor={accentColor}
+                  actionMenuSlot={renderFileActionMenu(file)}
                   draggable={moveDragDropEnabled}
-                  onContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
-                  onDoubleClick={(event) => {
+                  onToggleSelection={() => toggleFileSelection(file.id)}
+                  onRowContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
+                  onRowClick={(event) => {
+                    if (isInteractiveItemTarget(event.target)) return;
+                    if (!isSelectionMode) return;
+                    toggleFileSelection(file.id);
+                  }}
+                  onRowDoubleClick={(event) => {
                     if (isInteractiveItemTarget(event.target)) return;
                     void handlePreviewFile(file);
                   }}
-                      onClick={(event) => {
-                        if (isInteractiveItemTarget(event.target)) return;
-                        if (!isSelectionMode) return;
-                        toggleFileSelection(file.id);
-                      }}
                   onDragStart={(e) => {
                     if (!moveDragDropEnabled) {
                       e.preventDefault();
@@ -4540,96 +4560,11 @@ export function MyFiles({
                     startFileDragMove(file);
                   }}
                   onDragEnd={clearDragMoveItem}
-                  className="grid items-center gap-2 rounded-xl px-3 py-2 cursor-pointer transition-colors group relative"
-                  style={{
-                    gridTemplateColumns: fileListColumnTemplate,
-                    border: `1px solid ${myFilesColors.border}`,
-                    background: selectedFileIds.has(file.id)
-                      ? "rgba(59, 130, 246, 0.08)"
-                      : myFilesColors.cardBg,
-                    borderLeft: selectedFileIds.has(file.id)
-                      ? `3px solid ${accentColor}55`
-                      : "3px solid transparent",
-                  }}
-                >
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      aria-label={`Pilih file ${file.original_name}`}
-                      checked={selectedFileIds.has(file.id)}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setSelectedFileIds((prev) => {
-                          const next = new Set(prev);
-                          if (checked) next.add(file.id);
-                          else next.delete(file.id);
-                          return next;
-                        });
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        width: 14,
-                        height: 14,
-                        accentColor: "#ef4444",
-                        ...checklistVisibilityStyle,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <FileTypeIcon
-                      originalName={file.original_name}
-                      mimeType={file.mime_type}
-                      className="w-7 h-7"
-                      size={14}
-                    />
-                    <span
-                      className="text-sm truncate"
-                      style={{ color: myFilesColors.text }}
-                    >
-                      {file.original_name}
-                    </span>
-                  </div>
-
-                  {showFileMetadata && (
-                    <>
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded font-medium w-fit"
-                        style={{
-                          background: `${myFilesColors.panelBg}`,
-                          color: accentColor,
-                          border: `1px solid ${myFilesColors.border}`,
-                          justifySelf: "start",
-                        }}
-                      >
-                        {typeLabel}
-                      </span>
-
-                      <span className="text-xs" style={{ color: myFilesColors.muted }}>
-                        {file.created_at
-                          ? new Date(file.created_at).toLocaleDateString()
-                          : "-"}
-                      </span>
-
-                      <span className="text-xs" style={{ color: myFilesColors.muted }}>
-                        {formatBytes(file.size)}
-                      </span>
-
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded w-fit"
-                        style={{
-                          background: myFilesColors.panelBg,
-                          color: myFilesColors.muted2,
-                          border: `1px solid ${myFilesColors.border}`,
-                        }}
-                      >
-                        Private
-                      </span>
-                    </>
-                  )}
-
-                  {renderFileActionMenu(file)}
-                </div>
+                  typeLabel={typeLabel}
+                  sizeLabel={sizeLabel}
+                  modifiedLabel={modifiedLabel}
+                  visibilityLabel={visibilityLabel}
+                />
               );
             })}
           </div>
