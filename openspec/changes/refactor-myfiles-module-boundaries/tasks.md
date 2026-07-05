@@ -113,6 +113,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Verify all toolbar controls work
   - [ ] Test keyboard navigation
 
+- [x] **2.1a Create `MyFilesSelectionModeButton.tsx` component**
+  - [x] Move only the Select / Selecting button JSX
+  - [x] Keep selection state and behavior owned by `MyFiles.tsx`
+  - [x] Leave list/grid/action menu/modal/final cleanup tasks unchecked
+  - [ ] Verify button rendering and interactions
+
 - [ ] **2.2 Create empty/loading states**
   - [ ] Extract `MyFilesEmptyFolderState.tsx`
   - [ ] Extract `MyFilesEmptySearchState.tsx`

@@ -82,6 +82,7 @@ import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
+import { MyFilesSelectionModeButton } from "./my-files/components/MyFilesSelectionModeButton";
 import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
 import { SelectionCountPill } from "./my-files/components/SelectionCountPill";
 import { ViewModeToggle } from "./my-files/components/ViewModeToggle";
@@ -2125,35 +2126,14 @@ export function MyFiles({
           panelColor={myFilesColors.buttonSoftBg}
         />
 
-        <button
-          type="button"
-          onClick={() => handleToggleSelectionMode()}
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
-          aria-pressed={isSelectionMode}
-          aria-label={isSelectionMode ? "Exit select mode" : "Enter select mode"}
-          title={isSelectionMode ? "Selection aktif" : "Enter selection mode"}
-          style={{
-            background: isSelectionMode ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : myFilesColors.buttonSoftBg,
-            border: isSelectionMode ? `1px solid ${accentColor}66` : `1px solid ${myFilesColors.border}`,
-            color: isSelectionMode ? "#ffffff" : myFilesColors.text,
-            boxShadow: isSelectionMode ? `0 10px 24px ${accentColor}22` : "none",
-            marginLeft: 8,
-          } as React.CSSProperties}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget as HTMLButtonElement;
-            if (isSelectionMode) return;
-            el.style.background = `${accentColor}10`;
-            el.style.color = myFilesColors.text;
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget as HTMLButtonElement;
-            if (isSelectionMode) return;
-            el.style.background = myFilesColors.buttonSoftBg;
-            el.style.color = myFilesColors.text;
-          }}
-        >
-          {isSelectionMode ? "Selecting" : "Select"}
-        </button>
+        <MyFilesSelectionModeButton
+          isSelectionMode={isSelectionMode}
+          accentColor={accentColor}
+          buttonSoftBg={myFilesColors.buttonSoftBg}
+          borderColor={myFilesColors.border}
+          textColor={myFilesColors.text}
+          onToggleSelectionMode={handleToggleSelectionMode}
+        />
       </div>
 
 
