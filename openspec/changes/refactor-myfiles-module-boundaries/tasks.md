@@ -105,11 +105,11 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [x] Keep sort state and sorting behavior owned by `MyFiles.tsx`
   - [x] Leave search, toolbar, list/grid, action menu, modal, and final cleanup work unchecked
 
-- [ ] **2.1 Create `MyFilesToolbar.tsx` component**
-  - [ ] Extract search field component
-  - [ ] Extract filter dropdown
-  - [ ] Extract sort dropdown
-  - [ ] Extract view mode toggle (or import existing)
+- [x] **2.1 Create `MyFilesToolbar.tsx` component**
+  - [x] Extract toolbar wrapper JSX composition only
+  - [x] Keep search/filter/sort state and behavior owned by `MyFiles.tsx`
+  - [x] Keep filter dropdown, sort dropdown, search field, and view toggle rendering intact
+  - [x] Leave list/grid/action menu/modal/final cleanup tasks unchecked
   - [ ] Verify all toolbar controls work
   - [ ] Test keyboard navigation
 

@@ -24,6 +24,7 @@ import type {
   FileActionFeedback,
   MenuCoordinate,
   MoveItemType,
+  MyFilesProps,
   PreviewModalMode,
   ShareMode,
   ViewMode,
@@ -76,15 +77,12 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
-import { MyFilesFilterMenu } from "./my-files/components/MyFilesFilterMenu";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
-import { MyFilesSortMenu } from "./my-files/components/MyFilesSortMenu";
+import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
 import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
-import { SearchHelperText } from "./my-files/components/SearchHelperText";
-import { SearchToolbarField } from "./my-files/components/SearchToolbarField";
 import { SelectionCountPill } from "./my-files/components/SelectionCountPill";
 import { ViewModeToggle } from "./my-files/components/ViewModeToggle";
 import {
@@ -2078,67 +2076,38 @@ export function MyFiles({
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-5">
-        <div
-          className={"flex flex-1 flex-col max-w-xs " + (isSearchActive ? "max-w-sm" : "")}
-          style={{
-            transition: "max-width 220ms ease",
-          }}
-        >
-          <SearchToolbarField
-            value={searchQuery}
-            isSearchActive={isSearchActive}
-            isSearchLoading={isSearchLoading}
-            trimmedQuery={trimmedSearchQuery}
-            accentColor={accentColor}
-            textColor={myFilesColors.text}
-            mutedColor={myFilesColors.muted}
-            borderColor={myFilesColors.border}
-            backgroundColor={myFilesColors.inputBg}
-            inputBorderColor={myFilesColors.inputBorder}
-            inputTextColor={myFilesColors.inputText}
-            placeholder="Search files..."
-            onChange={(value) => setSearchQuery(value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            onClear={() => setSearchQuery("")}
-          />
-
-          <SearchHelperText
-            query={trimmedSearchQuery}
-            accentColor={accentColor}
-            mutedColor={myFilesColors.muted}
-            secondaryMutedColor={myFilesColors.muted2}
-          />
-        </div>
-
-        <MyFilesFilterMenu
+        <MyFilesToolbar
+          searchQuery={searchQuery}
+          isSearchActive={isSearchActive}
+          isSearchLoading={isSearchLoading}
+          trimmedSearchQuery={trimmedSearchQuery}
           filterMenuOpen={filterMenuOpen}
-          selectedFilter={fileTypeFilter}
-          accentColor={accentColor}
-          cardBg={myFilesColors.cardBg}
-          borderColor={myFilesColors.border}
-          textColor={myFilesColors.text}
-          mutedColor={myFilesColors.muted}
-          buttonSoftBg={myFilesColors.buttonSoftBg}
-          filterMenuRef={filterMenuRef}
-          onToggleOpen={() => setFilterMenuOpen((v) => !v)}
-          onSelectFilter={(value) => {
-            setFileTypeFilter(value);
-            setFilterMenuOpen(false);
-          }}
-        />
-        <MyFilesSortMenu
+          fileTypeFilter={fileTypeFilter}
           sortMenuOpen={sortMenuOpen}
           sortBy={sortBy}
           sortDirection={sortDirection}
           accentColor={accentColor}
-          cardBg={myFilesColors.cardBg}
-          borderColor={myFilesColors.border}
           textColor={myFilesColors.text}
           mutedColor={myFilesColors.muted}
+          muted2Color={myFilesColors.muted2}
+          borderColor={myFilesColors.border}
+          inputBg={myFilesColors.inputBg}
+          inputBorderColor={myFilesColors.inputBorder}
+          inputTextColor={myFilesColors.inputText}
+          cardBg={myFilesColors.cardBg}
           buttonSoftBg={myFilesColors.buttonSoftBg}
+          filterMenuRef={filterMenuRef}
           sortMenuRef={sortMenuRef}
-          onToggleOpen={() => setSortMenuOpen((v) => !v)}
+          onSearchChange={(value) => setSearchQuery(value)}
+          onSearchFocus={() => setSearchFocused(true)}
+          onSearchBlur={() => setSearchFocused(false)}
+          onSearchClear={() => setSearchQuery("")}
+          onToggleFilterMenu={() => setFilterMenuOpen((v) => !v)}
+          onSelectFilter={(value) => {
+            setFileTypeFilter(value);
+            setFilterMenuOpen(false);
+          }}
+          onToggleSortMenu={() => setSortMenuOpen((v) => !v)}
           onSelectSort={(nextSortBy, nextSortDirection) => {
             setSortBy(nextSortBy);
             setSortDirection(nextSortDirection);
@@ -2156,37 +2125,36 @@ export function MyFiles({
           panelColor={myFilesColors.buttonSoftBg}
         />
 
-            <button
-              type="button"
-              onClick={() => handleToggleSelectionMode()}
-              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
-              aria-pressed={isSelectionMode}
-              aria-label={isSelectionMode ? "Exit select mode" : "Enter select mode"}
-              title={isSelectionMode ? "Selection aktif" : "Enter selection mode"}
-              style={{
-                background: isSelectionMode ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : myFilesColors.buttonSoftBg,
-                border: isSelectionMode ? `1px solid ${accentColor}66` : `1px solid ${myFilesColors.border}`,
-                color: isSelectionMode ? "#ffffff" : myFilesColors.text,
-                boxShadow: isSelectionMode ? `0 10px 24px ${accentColor}22` : "none",
-                marginLeft: 8,
-              } as React.CSSProperties}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLButtonElement;
-                if (isSelectionMode) return;
-                el.style.background = `${accentColor}10`;
-                el.style.color = myFilesColors.text;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLButtonElement;
-                if (isSelectionMode) return;
-                el.style.background = myFilesColors.buttonSoftBg;
-                el.style.color = myFilesColors.text;
-              }}
-            >
-              {isSelectionMode ? "Selecting" : "Select"}
-            </button>
-
-</div>
+        <button
+          type="button"
+          onClick={() => handleToggleSelectionMode()}
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
+          aria-pressed={isSelectionMode}
+          aria-label={isSelectionMode ? "Exit select mode" : "Enter select mode"}
+          title={isSelectionMode ? "Selection aktif" : "Enter selection mode"}
+          style={{
+            background: isSelectionMode ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : myFilesColors.buttonSoftBg,
+            border: isSelectionMode ? `1px solid ${accentColor}66` : `1px solid ${myFilesColors.border}`,
+            color: isSelectionMode ? "#ffffff" : myFilesColors.text,
+            boxShadow: isSelectionMode ? `0 10px 24px ${accentColor}22` : "none",
+            marginLeft: 8,
+          } as React.CSSProperties}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLButtonElement;
+            if (isSelectionMode) return;
+            el.style.background = `${accentColor}10`;
+            el.style.color = myFilesColors.text;
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLButtonElement;
+            if (isSelectionMode) return;
+            el.style.background = myFilesColors.buttonSoftBg;
+            el.style.color = myFilesColors.text;
+          }}
+        >
+          {isSelectionMode ? "Selecting" : "Select"}
+        </button>
+      </div>
 
 
       {/* Folders */}
