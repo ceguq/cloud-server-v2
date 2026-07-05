@@ -190,7 +190,13 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Validate grid-card rendering and interactions
   - [ ] Manual build validation remains pending
 
-- [ ] **3.1d Create `MyFilesList.tsx` component**
+- [x] **3.1d Create `MyFilesFolderSection.tsx` component**
+  - [x] Extract only the folder section wrapper/composition JSX from `MyFiles.tsx`
+  - [x] Keep the folder section header/title, select-all visible folders checkbox, selected-folder bulk actions, loading/error/empty states, and list/grid container composition in the new component
+  - [x] Keep folder state, selection behavior, drag/drop behavior, item callbacks, and the global folder action menu owned by `MyFiles.tsx`
+  - [ ] Leave file section, file action menu, modals, and final cleanup tasks unchecked
+
+- [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
   - [ ] Handle folder item rendering
@@ -199,7 +205,7 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Test scrolling and virtualization (if used)
   - [ ] Verify styles apply correctly
 
-- [ ] **3.2 Create `MyFilesGrid.tsx` component**
+- [ ] **3.3 Create `MyFilesGrid.tsx` component**
   - [ ] Extract grid view rendering logic
   - [ ] Handle file item rendering in grid
   - [ ] Handle folder item rendering in grid

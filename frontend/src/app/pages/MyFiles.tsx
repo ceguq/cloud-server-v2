@@ -81,6 +81,7 @@ import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
+import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
@@ -2141,276 +2142,162 @@ export function MyFiles({
       </div>
 
 
-      {/* Folders */}
-      <div className="mb-6">
-        {showEmptySearchState && (
-          <EmptyFilterMessage
-            textColor={myFilesColors.muted}
-          />
+      <MyFilesFolderSection
+        sortedFolders={sortedFolders}
+        selectedFolderIds={selectedFolderIds}
+        checklistVisibilityStyle={checklistVisibilityStyle}
+        showEmptySearchState={showEmptySearchState}
+        loadingFolders={loadingFolders}
+        folderError={folderError}
+        folderListLength={folderList.length}
+        viewMode={viewMode}
+        bulkFolderDeleteLoading={bulkFolderDeleteLoading}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        borderColor={myFilesColors.border}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        renderListItems={() => (
+          sortedFolders.map((folder) => (
+            <MyFilesFolderListItem
+              key={folder.id}
+              folder={folder}
+              isSelected={selectedFolderIds.has(folder.id)}
+              checklistVisibilityStyle={checklistVisibilityStyle}
+              showFolderMetadata={showFolderMetadata}
+              folderListColumnTemplate={folderListColumnTemplate}
+              cardBg={myFilesColors.cardBg}
+              borderColor={myFilesColors.border}
+              textColor={myFilesColors.text}
+              mutedColor={myFilesColors.muted}
+              accentColor={accentColor}
+              openFolderActionId={openFolderActionId}
+              folderActionMenuPosition={folderActionMenuPosition}
+              onToggleSelection={() => toggleFolderSelection(folder.id)}
+              onOpenFolder={() => handleOpenFolder(folder)}
+              onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
+              onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
+              onRowClick={(event) => {
+                if (isInteractiveItemTarget(event.target)) return;
+                if (!isSelectionMode) return;
+                toggleFolderSelection(folder.id);
+              }}
+              onRowDoubleClick={(event) => {
+                if (isInteractiveItemTarget(event.target)) return;
+                handleOpenFolder(folder);
+              }}
+              onDragOver={(e) => {
+                if (!moveDragDropEnabled || !dragMoveItem) return;
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!moveDragDropEnabled || !dragMoveItem) return;
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                  clearDragMoveItem();
+                  return;
+                }
+
+                moveDraggedItemToFolder(folder.id);
+              }}
+              onCloseFolderAction={() => setOpenFolderActionId(null)}
+              onOpenRenameFolderModal={() => {
+                setSelectedFolderForAction(folder);
+                openRenameFolderModal(folder);
+              }}
+              onOpenDeleteFolderModal={() => {
+                setSelectedFolderForDelete(folder);
+                openDeleteFolderModal(folder);
+              }}
+            />
+          ))
         )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <h3
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: myFilesColors.text }}
-              >
-                Folders
-              </h3>
-
-              {(() => {
-                const visibleFolderIds = sortedFolders.map((f) => f.id);
-                const selectedVisibleCount = visibleFolderIds.reduce(
-                  (acc, id) => acc + (selectedFolderIds.has(id) ? 1 : 0),
-                  0,
-                );
-                const allVisibleChecked =
-                  visibleFolderIds.length > 0 &&
-                  selectedVisibleCount === visibleFolderIds.length;
-                const someVisibleChecked =
-                  selectedVisibleCount > 0 &&
-                  selectedVisibleCount < visibleFolderIds.length;
-
-                return visibleFolderIds.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      aria-label="Pilih semua folder yang tampil"
-                      checked={allVisibleChecked}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someVisibleChecked;
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-
-                        const checked = e.target.checked;
-                        if (checked) {
-                          setSelectedFolderIds((prev) => {
-                            const next = new Set(prev);
-                            for (const id of visibleFolderIds) next.add(id);
-                            return next;
-                          });
-                        } else {
-                          setSelectedFolderIds((prev) => {
-                            const next = new Set(prev);
-                            for (const id of visibleFolderIds) next.delete(id);
-                            return next;
-                          });
-                        }
-                      }}
-                      style={{
-                        width: 14,
-                        height: 14,
-                        accentColor: "#ef4444",
-                        ...checklistVisibilityStyle,
-                      }}
-                    />
-                    <div
-                      className="text-xs"
-                      style={{
-                        color: myFilesColors.muted,
-                        ...checklistVisibilityStyle,
-                      }}
-                    >
-                      Pilih semua (tampil)
-                    </div>
-
-                  </div>
-                ) : null;
-              })()}
-            </div>
-          </div>
-
-          {(() => {
-            return selectedFolderIds.size > 0 ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <SelectionCountPill
-                  count={selectedFolderIds.size}
-                  label="folder dipilih"
-                  textColor={myFilesColors.muted}
-                  accentColor="#f87171"
-                  backgroundColor="rgba(248, 113, 113, 0.08)"
-                  borderColor="rgba(248, 113, 113, 0.25)"
-                />
-
-                <button
-                  type="button"
-                  onClick={openBulkFolderDeleteModal}
-                  disabled={bulkFolderDeleteLoading}
-                  className="px-3 py-1 rounded-lg text-[11px] font-semibold"
-                  style={{
-                    background: "#f87171",
-                    border: "1px solid rgba(248,113,113,0.4)",
-                    color: "#080d1a",
-                    opacity: bulkFolderDeleteLoading ? 0.75 : 1,
-                  }}
-                  aria-label="Pindahkan folder ke Trash"
-                >
-                  {bulkFolderDeleteLoading ? "Memproses..." : "Delete"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => clearFolderSelection()}
-                  className="px-2 py-1 rounded-lg text-[11px] font-medium"
-                  style={{
-                    background: myFilesColors.buttonSoftBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.muted,
-                  }}
-                >
-                  Batalkan pilihan
-                </button>
-              </div>
-            ) : null;
-          })()}
-        </div>
-
-        {loadingFolders && (
-          <LoadingFoldersMessage
-            textColor={myFilesColors.muted}
-          />
-        )}
-        {folderError && (
-          <div className="text-xs" style={{ color: "#f87171" }}>
-            {folderError}
-          </div>
-        )}
-        {!loadingFolders && !folderError && folderList.length === 0 && (
-          <EmptyFolderMessage
-            textColor={myFilesColors.muted}
-          />
-        )}
-
-        {viewMode === "list" ? (
-          <div className="flex flex-col gap-2">
-            {sortedFolders.map((folder) => (
-              <MyFilesFolderListItem
-                key={folder.id}
-                folder={folder}
-                isSelected={selectedFolderIds.has(folder.id)}
-                checklistVisibilityStyle={checklistVisibilityStyle}
-                showFolderMetadata={showFolderMetadata}
-                folderListColumnTemplate={folderListColumnTemplate}
-                cardBg={myFilesColors.cardBg}
-                borderColor={myFilesColors.border}
-                textColor={myFilesColors.text}
-                mutedColor={myFilesColors.muted}
-                accentColor={accentColor}
-                openFolderActionId={openFolderActionId}
-                folderActionMenuPosition={folderActionMenuPosition}
-                onToggleSelection={() => toggleFolderSelection(folder.id)}
-                onOpenFolder={() => handleOpenFolder(folder)}
-                onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
-                onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
-                onRowClick={(event) => {
-                  if (isInteractiveItemTarget(event.target)) return;
-                  if (!isSelectionMode) return;
-                  toggleFolderSelection(folder.id);
-                }}
-                onRowDoubleClick={(event) => {
-                  if (isInteractiveItemTarget(event.target)) return;
-                  handleOpenFolder(folder);
-                }}
-                onDragOver={(e) => {
-                  if (!moveDragDropEnabled || !dragMoveItem) return;
-                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) return;
+        renderGridItems={() => (
+          sortedFolders.map((folder) => (
+            <MyFilesFolderGridItem
+              key={folder.id}
+              folder={folder}
+              isSelected={selectedFolderIds.has(folder.id)}
+              checklistVisibilityStyle={checklistVisibilityStyle}
+              showFolderMetadata={showFolderMetadata}
+              moveDragDropEnabled={moveDragDropEnabled}
+              cardBg={myFilesColors.cardBg}
+              panelBg={myFilesColors.panelBg}
+              borderColor={myFilesColors.border}
+              textColor={myFilesColors.text}
+              mutedColor={myFilesColors.muted}
+              muted2Color={myFilesColors.muted2}
+              accentColor={accentColor}
+              onToggleSelection={() => toggleFolderSelection(folder.id)}
+              onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
+              onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
+              onRowClick={(event) => {
+                if (isInteractiveItemTarget(event.target)) return;
+                if (!isSelectionMode) return;
+                toggleFolderSelection(folder.id);
+              }}
+              onRowDoubleClick={(event) => {
+                if (isInteractiveItemTarget(event.target)) return;
+                handleOpenFolder(folder);
+              }}
+              onDragStart={(e) => {
+                if (!moveDragDropEnabled) {
                   e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
+                  return;
+                }
 
-                  if (!moveDragDropEnabled || !dragMoveItem) return;
-                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
-                    clearDragMoveItem();
-                    return;
-                  }
+                e.dataTransfer.effectAllowed = "move";
+                setCompactDragImage(e, folder.name ?? "Untitled folder", "folder");
+                startFolderDragMove(folder);
+              }}
+              onDragEnd={clearDragMoveItem}
+              onDragOver={(e) => {
+                if (!moveDragDropEnabled || !dragMoveItem) return;
 
-                  moveDraggedItemToFolder(folder.id);
-                }}
-                onCloseFolderAction={() => setOpenFolderActionId(null)}
-                onOpenRenameFolderModal={() => {
-                  setSelectedFolderForAction(folder);
-                  openRenameFolderModal(folder);
-                }}
-                onOpenDeleteFolderModal={() => {
-                  setSelectedFolderForDelete(folder);
-                  openDeleteFolderModal(folder);
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {sortedFolders.map((folder) => (
-              <MyFilesFolderGridItem
-                key={folder.id}
-                folder={folder}
-                isSelected={selectedFolderIds.has(folder.id)}
-                checklistVisibilityStyle={checklistVisibilityStyle}
-                showFolderMetadata={showFolderMetadata}
-                moveDragDropEnabled={moveDragDropEnabled}
-                cardBg={myFilesColors.cardBg}
-                panelBg={myFilesColors.panelBg}
-                borderColor={myFilesColors.border}
-                textColor={myFilesColors.text}
-                mutedColor={myFilesColors.muted}
-                muted2Color={myFilesColors.muted2}
-                accentColor={accentColor}
-                onToggleSelection={() => toggleFolderSelection(folder.id)}
-                onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
-                onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
-                onRowClick={(event) => {
-                  if (isInteractiveItemTarget(event.target)) return;
-                  if (!isSelectionMode) return;
-                  toggleFolderSelection(folder.id);
-                }}
-                onRowDoubleClick={(event) => {
-                  if (isInteractiveItemTarget(event.target)) return;
-                  handleOpenFolder(folder);
-                }}
-                onDragStart={(e) => {
-                  if (!moveDragDropEnabled) {
-                    e.preventDefault();
-                    return;
-                  }
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                  return;
+                }
 
-                  e.dataTransfer.effectAllowed = "move";
-                  setCompactDragImage(e, folder.name ?? "Untitled folder", "folder");
-                  startFolderDragMove(folder);
-                }}
-                onDragEnd={clearDragMoveItem}
-                onDragOver={(e) => {
-                  if (!moveDragDropEnabled || !dragMoveItem) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
 
-                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
-                    return;
-                  }
+                if (!moveDragDropEnabled || !dragMoveItem) return;
 
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
+                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                  clearDragMoveItem();
+                  return;
+                }
 
-                  if (!moveDragDropEnabled || !dragMoveItem) return;
-
-                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
-                    clearDragMoveItem();
-                    return;
-                  }
-
-                  moveDraggedItemToFolder(folder.id);
-                }}
-              />
-            ))}
-          </div>
+                moveDraggedItemToFolder(folder.id);
+              }}
+            />
+          ))
         )}
-      </div>
+        onToggleVisibleFolders={(checked, visibleFolderIds) => {
+          if (checked) {
+            setSelectedFolderIds((prev) => {
+              const next = new Set(prev);
+              for (const id of visibleFolderIds) next.add(id);
+              return next;
+            });
+          } else {
+            setSelectedFolderIds((prev) => {
+              const next = new Set(prev);
+              for (const id of visibleFolderIds) next.delete(id);
+              return next;
+            });
+          }
+        }}
+        onOpenBulkFolderDeleteModal={openBulkFolderDeleteModal}
+        onClearFolderSelection={clearFolderSelection}
+      />
 
       {/* Global Folder Action Menu */}
       {activeFolderAction && folderActionMenuPosition ? (
