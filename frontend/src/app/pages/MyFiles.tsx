@@ -35,7 +35,6 @@ import {
   Grid,
   List,
   Search,
-  SortAsc,
   Eye,
   Download,
   Share2,
@@ -79,6 +78,7 @@ import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessa
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { MyFilesFilterMenu } from "./my-files/components/MyFilesFilterMenu";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
+import { MyFilesSortMenu } from "./my-files/components/MyFilesSortMenu";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
@@ -2127,313 +2127,24 @@ export function MyFiles({
             setFilterMenuOpen(false);
           }}
         />
-        <div ref={sortMenuRef} className="relative">
-          <button
-            type="button"
-            aria-label="Sort"
-            onClick={() => setSortMenuOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-            style={{
-              background: myFilesColors.buttonSoftBg,
-              border: `1px solid ${myFilesColors.border}`,
-              color: myFilesColors.text,
-            }}
-          >
-            <SortAsc size={12} /> Sort
-          </button>
-
-          {sortMenuOpen && (
-            <div
-              className="absolute right-0 top-full mt-2 rounded-lg shadow-2xl"
-              style={{
-                zIndex: 50,
-                background: myFilesColors.cardBg,
-                border: `1px solid ${myFilesColors.border}`,
-                minWidth: 220,
-              }}
-              role="menu"
-              aria-label="Sort menu"
-            >
-              {(() => {
-                const isActive = (by: typeof sortBy, dir: typeof sortDirection) =>
-                  sortBy === by && sortDirection === dir;
-
-                const activeBg = `${accentColor}12`;
-                const activeBorder = `1px solid ${accentColor}55`;
-
-                return (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Name A-Z"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("name", "asc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("name", "asc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("name", "asc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("name", "asc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("name", "asc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("name");
-                        setSortDirection("asc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Name A-Z</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Name Z-A"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("name", "desc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("name", "desc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("name", "desc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("name", "desc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("name", "desc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("name");
-                        setSortDirection("desc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Name Z-A</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Newest first"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("date", "desc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("date", "desc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("date", "desc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("date", "desc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("date", "desc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("date");
-                        setSortDirection("desc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Newest first</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Oldest first"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("date", "asc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("date", "asc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("date", "asc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("date", "asc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("date", "asc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("date");
-                        setSortDirection("asc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Oldest first</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Size smallest"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("size", "asc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("size", "asc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("size", "asc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("size", "asc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("size", "asc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("size");
-                        setSortDirection("asc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Size smallest</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Size largest"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("size", "desc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("size", "desc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("size", "desc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("size", "desc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("size", "desc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("size");
-                        setSortDirection("desc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Size largest</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label="Type A-Z"
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                      style={{
-                        color: isActive("type", "asc")
-                          ? accentColor
-                          : myFilesColors.muted,
-                        background: isActive("type", "asc")
-                          ? activeBg
-                          : "transparent",
-                        border: isActive("type", "asc")
-                          ? activeBorder
-                          : "1px solid transparent",
-                        borderRadius: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("type", "asc")
-                          ? activeBg
-                          : `${accentColor}10`;
-                      }}
-                      onMouseLeave={(e) => {
-                        const el = e.currentTarget;
-                        el.style.background = isActive("type", "asc")
-                          ? activeBg
-                          : "transparent";
-                      }}
-                      onClick={() => {
-                        setSortBy("type");
-                        setSortDirection("asc");
-                        setSortMenuOpen(false);
-                      }}
-                    >
-                      <span>Type A-Z</span>
-                    </button>
-                  </>
-                );
-              })()}
-            </div>
-          )}
-        </div>
+        <MyFilesSortMenu
+          sortMenuOpen={sortMenuOpen}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          accentColor={accentColor}
+          cardBg={myFilesColors.cardBg}
+          borderColor={myFilesColors.border}
+          textColor={myFilesColors.text}
+          mutedColor={myFilesColors.muted}
+          buttonSoftBg={myFilesColors.buttonSoftBg}
+          sortMenuRef={sortMenuRef}
+          onToggleOpen={() => setSortMenuOpen((v) => !v)}
+          onSelectSort={(nextSortBy, nextSortDirection) => {
+            setSortBy(nextSortBy);
+            setSortDirection(nextSortDirection);
+            setSortMenuOpen(false);
+          }}
+        />
 
         <ViewModeToggle
           viewMode={viewMode}

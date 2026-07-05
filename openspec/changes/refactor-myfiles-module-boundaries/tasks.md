@@ -93,12 +93,17 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
 - [x] **2.0 Extract `MyFilesHeaderActions.tsx` component**
   - [x] Move only the header action UI: upload error display, New Folder button, hidden file input, and Upload Files button
   - [x] Keep upload logic owned by `MyFiles.tsx` and pass it as callbacks
-  - [x] Leave toolbar/search/sort/list/grid/action menu/modal/final cleanup work unchecked
+  - [x] Leave toolbar/search/list/grid/action menu/modal/final cleanup work unchecked
 
 - [x] **2.0a Extract `MyFilesFilterMenu.tsx` component**
   - [x] Move only the Filter dropdown UI: button, dropdown menu, filter options, active/hover styling, and helper text
   - [x] Keep filter state and filtering behavior owned by `MyFiles.tsx`
-  - [x] Leave search, sort, toolbar, list/grid, action menu, modal, and final cleanup work unchecked
+  - [x] Leave search, toolbar, list/grid, action menu, modal, and final cleanup work unchecked
+
+- [x] **2.0b Extract `MyFilesSortMenu.tsx` component**
+  - [x] Move only the Sort dropdown UI: button, dropdown menu, sort options, active styling, and hover styling
+  - [x] Keep sort state and sorting behavior owned by `MyFiles.tsx`
+  - [x] Leave search, toolbar, list/grid, action menu, modal, and final cleanup work unchecked
 
 - [ ] **2.1 Create `MyFilesToolbar.tsx` component**
   - [ ] Extract search field component
