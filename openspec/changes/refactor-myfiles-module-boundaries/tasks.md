@@ -50,15 +50,17 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   
   > Note: Extracted only type-level definitions into `frontend/src/app/pages/my-files/types.ts`. `MyFiles.tsx` now imports those definitions via a type-only import. No runtime logic, JSX, handlers, state, styling, API calls, or backend behavior was moved.
 
-- [ ] **1.2 Audit existing utility modules**
-  - [ ] Verify `myFilesSorting.ts` is complete
-  - [ ] Verify `myFilesFilters.ts` is complete
-  - [ ] Verify `myFilesFormatters.ts` is complete
-  - [ ] Verify `myFilesPreviewUtils.ts` is complete
-  - [ ] Verify `myFilesThemeUtils.ts` is complete
-  - [ ] Verify `myFilesDomUtils.ts` is complete
-  - [ ] Verify `myFilesShareUtils.ts` is complete
-  - [ ] Verify `myFilesMenuUtils.ts` is complete
+- [x] **1.2 Audit existing utility modules**
+  - [x] Verify `myFilesSorting.ts` is complete
+  - [x] Verify `myFilesFilters.ts` is complete
+  - [x] Verify `myFilesFormatters.ts` is complete
+  - [x] Verify `myFilesPreviewUtils.ts` is complete
+  - [x] Verify `myFilesThemeUtils.ts` is complete
+  - [x] Verify `myFilesDomUtils.ts` is complete
+  - [x] Verify `myFilesShareUtils.ts` is complete
+  - [x] Verify `myFilesMenuUtils.ts` is complete
+
+> Note: `MyFiles.tsx` already uses specific utility modules for formatting, filtering, sorting, preview, theme, DOM, menu, and share helpers. No new generic `utils.ts` should be created at this stage. Future helper extraction should extend the existing specific modules, not create broad generic modules. No runtime code was changed in this documentation patch.
 
 - [ ] **1.3 Create `navigation.ts` utility (if needed)**
   - [ ] Extract folder breadcrumb helpers
@@ -80,13 +82,18 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
 
 ---
 
-## Stage 2: Simple Components (SAFE) ⏳ NOT STARTED
+## Stage 2: Simple Components (SAFE) ⏳ IN PROGRESS
 
 **Goal:** Extract simple, low-dependency components.  
 **Risk Level:** ⚠️ Low  
 **Duration:** 2-3 days  
 
 ### Tasks
+
+- [x] **2.0 Extract `MyFilesHeaderActions.tsx` component**
+  - [x] Move only the header action UI: upload error display, New Folder button, hidden file input, and Upload Files button
+  - [x] Keep upload logic owned by `MyFiles.tsx` and pass it as callbacks
+  - [x] Leave toolbar/filter/sort/list/grid/action menu/modal/final cleanup work unchecked
 
 - [ ] **2.1 Create `MyFilesToolbar.tsx` component**
   - [ ] Extract search field component

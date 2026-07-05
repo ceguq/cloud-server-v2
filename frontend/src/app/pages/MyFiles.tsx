@@ -32,8 +32,6 @@ import type {
 import {
   Folder,
 
-  Upload,
-  FolderPlus,
   Grid,
   List,
   Search,
@@ -79,9 +77,9 @@ import { MenuItemButton } from "./my-files/components/MenuItemButton";
 import { EmptyFilterMessage } from "./my-files/components/EmptyFilterMessage";
 import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
-import { InlineStatusMessage } from "./my-files/components/InlineStatusMessage";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
@@ -1704,6 +1702,28 @@ export function MyFiles({
 
   const [uploadError, setUploadError] = useState("");
 
+  const handleUploadInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+
+    const fileArray = Array.from(list);
+    const folderId = currentFolderId ?? null;
+
+    setUploadError("");
+
+    // Push to global queue (no local upload loop)
+    addFiles(fileArray, folderId);
+
+    // reset input supaya file yang sama bisa di-upload lagi
+    e.currentTarget.value = "";
+  };
+
+  const handleOpenUploadPicker = () => {
+    const el = uploadInputRef as any;
+    const input = el?.current as HTMLInputElement | null;
+    input?.click();
+  };
+
 
   const folderList = loadingFolders ? [] : folders;
 
@@ -2019,93 +2039,17 @@ export function MyFiles({
           titleColor={myFilesColors.title}
           mutedColor={myFilesColors.muted}
         />
-        <div className="flex items-center gap-2">
-          {uploadError && (
-            <InlineStatusMessage
-              message={uploadError}
-              tone="error"
-              role="alert"
-              ariaLive="polite"
-              textColor="#f87171"
-              backgroundColor={resolvedTheme === "light"
-                ? "rgba(248,113,113,0.08)"
-                : "rgba(248,113,113,0.12)"}
-              borderColor="rgba(248,113,113,0.35)"
-            />
-          )}
-
-          <button
-            type="button"
-            onClick={openCreateFolderModal}
-            aria-label="Create new folder"
-            title="Create new folder"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-80"
-            style={{
-              background: "linear-gradient(135deg, " + accentColor + ", #22d3ee)",
-              border: `1px solid ${myFilesColors.border}`,
-              color: "#fff",
-            }}
-          >
-            <FolderPlus size={13} /> New Folder
-          </button>
-
-          <input
-            ref={uploadInputRef as any}
-            type="file"
-            multiple={true}
-            style={{ display: "none" }}
-            aria-label="Upload files"
-            onChange={(e) => {
-              const list = e.target.files;
-              if (!list || list.length === 0) return;
-
-              const fileArray = Array.from(list);
-              const folderId = currentFolderId ?? null;
-
-              setUploadError("");
-
-              // Push to global queue (no local upload loop)
-              addFiles(fileArray, folderId);
-
-              // reset input supaya file yang sama bisa di-upload lagi
-              e.currentTarget.value = "";
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              const el = uploadInputRef as any;
-              const input = el?.current as HTMLInputElement | null;
-              input?.click();
-            }}
-            aria-label="Upload Files"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
-            style={{
-              background: "linear-gradient(135deg, " + accentColor + ", #22d3ee)",
-              color: "#fff",
-              opacity: hasActiveUploads ? 0.9 : 1,
-            }}
-            title="Upload Files"
-          >
-            <Upload size={13} />{" "}
-            {hasActiveUploads ? "Tambah ke Queue" : "Upload Files"}
-          </button>
-
-          {uploadError && (
-            <InlineStatusMessage
-              message={uploadError}
-              tone="error"
-              role="status"
-              ariaLive="polite"
-              textColor="#f87171"
-              backgroundColor={resolvedTheme === "light"
-                ? "rgba(248,113,113,0.08)"
-                : "rgba(248,113,113,0.12)"}
-              borderColor="rgba(248,113,113,0.35)"
-            />
-          )}
-        </div>
+        <MyFilesHeaderActions
+          uploadError={uploadError}
+          resolvedTheme={resolvedTheme}
+          accentColor={accentColor}
+          borderColor={myFilesColors.border}
+          hasActiveUploads={hasActiveUploads}
+          uploadInputRef={uploadInputRef}
+          onCreateFolder={openCreateFolderModal}
+          onUploadInputChange={handleUploadInputChange}
+          onOpenUploadPicker={handleOpenUploadPicker}
+        />
       </div>
 
       <style>{`
