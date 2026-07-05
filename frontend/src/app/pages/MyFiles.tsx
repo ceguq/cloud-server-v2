@@ -77,6 +77,7 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
@@ -2282,17 +2283,32 @@ export function MyFiles({
         {viewMode === "list" ? (
           <div className="flex flex-col gap-2">
             {sortedFolders.map((folder) => (
-              <div
+              <MyFilesFolderListItem
                 key={folder.id}
-                onContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
-                onDoubleClick={(event) => {
-                  if (isInteractiveItemTarget(event.target)) return;
-                  handleOpenFolder(folder);
-                }}
-                onClick={(event) => {
+                folder={folder}
+                isSelected={selectedFolderIds.has(folder.id)}
+                checklistVisibilityStyle={checklistVisibilityStyle}
+                showFolderMetadata={showFolderMetadata}
+                folderListColumnTemplate={folderListColumnTemplate}
+                cardBg={myFilesColors.cardBg}
+                borderColor={myFilesColors.border}
+                textColor={myFilesColors.text}
+                mutedColor={myFilesColors.muted}
+                accentColor={accentColor}
+                openFolderActionId={openFolderActionId}
+                folderActionMenuPosition={folderActionMenuPosition}
+                onToggleSelection={() => toggleFolderSelection(folder.id)}
+                onOpenFolder={() => handleOpenFolder(folder)}
+                onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
+                onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
+                onRowClick={(event) => {
                   if (isInteractiveItemTarget(event.target)) return;
                   if (!isSelectionMode) return;
                   toggleFolderSelection(folder.id);
+                }}
+                onRowDoubleClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  handleOpenFolder(folder);
                 }}
                 onDragOver={(e) => {
                   if (!moveDragDropEnabled || !dragMoveItem) return;
@@ -2312,130 +2328,16 @@ export function MyFiles({
 
                   moveDraggedItemToFolder(folder.id);
                 }}
-                className="grid px-4 py-2.5 items-center cursor-pointer hover:bg-[#0d1829] transition-colors group relative rounded-xl"
-                style={{
-                  gridTemplateColumns: folderListColumnTemplate,
-                  borderBottom: "1px solid #0a1020",
-                  background: myFilesColors.cardBg,
-                  border: `1px solid ${myFilesColors.border}`,
+                onCloseFolderAction={() => setOpenFolderActionId(null)}
+                onOpenRenameFolderModal={() => {
+                  setSelectedFolderForAction(folder);
+                  openRenameFolderModal(folder);
                 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFolderIds.has(folder.id)}
-                  onChange={() => toggleFolderSelection(folder.id)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                  style={{
-                    width: 14,
-                    height: 14,
-                    accentColor: "#3b82f6",
-                    ...checklistVisibilityStyle,
-                  }}
-                  aria-label={`Select folder ${folder.name}`}
-                />
-
-                <div className="flex min-w-0 items-center gap-3">
-                  <Folder size={18} style={{ color: "#60a5fa", flexShrink: 0 }} />
-                  <span
-                    className="min-w-0 truncate"
-                    style={{ color: myFilesColors.text }}
-                  >
-                    {folder.name}
-                  </span>
-                </div>
-
-                {showFolderMetadata && (
-                  <>
-                <span className="text-xs font-medium" style={{ color: "#60a5fa" }}>
-                  FOLDER
-                </span>
-
-                <span className="text-xs" style={{ color: "#64748b" }}>
-                  {folder.updated_at || folder.created_at
-                    ? new Date(folder.updated_at ?? folder.created_at ?? "").toLocaleDateString()
-                    : "—"}
-                </span>
-
-                <span className="text-xs" style={{ color: "#64748b" }}>
-                  —
-                </span>
-
-                <span className="text-xs" style={{ color: "#64748b" }}>
-                  Private
-                </span>
-
-                  </>
-                )}
-
-                <div
-                  className="relative flex items-center justify-center"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={(event) => openFolderMenuAtCursor(event, folder.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#1e2d45] z-50"
-                    style={{
-                      color: "#94a3b8",
-                    }}
-                    aria-label={`Folder actions for ${folder.name}`}
-                    title="Folder actions"
-                  >
-                    <MoreHorizontal size={16} />
-                  </button>
-
-                  {openFolderActionId === folder.id && !folderActionMenuPosition && (
-                    <div
-                      className="absolute right-0 top-8 z-50 min-w-[128px] overflow-hidden rounded-lg"
-                      style={{
-                        background: "#0d1829",
-                        border: "1px solid #1a2540",
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-xs hover:bg-[#1e2d45]"
-                        style={{ color: "#cbd5e1" }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setOpenFolderActionId(null);
-                          setSelectedFolderForAction(folder);
-                          openRenameFolderModal(folder);
-                        }}
-                        aria-label={`Rename ${folder.name}`}
-                      >
-                        Rename
-                      </button>
-
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-xs hover:bg-[#1e2d45]"
-                        style={{ color: "#f87171" }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setOpenFolderActionId(null);
-                          setSelectedFolderForDelete(folder);
-                          openDeleteFolderModal(folder);
-                        }}
-                        aria-label={`Delete ${folder.name}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+                onOpenDeleteFolderModal={() => {
+                  setSelectedFolderForDelete(folder);
+                  openDeleteFolderModal(folder);
+                }}
+              />
             ))}
           </div>
         ) : (
