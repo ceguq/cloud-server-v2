@@ -541,7 +541,6 @@ export function GDrive() {
   };
 
   const handlePreviewImageWheel = (event: WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
     event.stopPropagation();
 
     if (event.deltaY === 0) {

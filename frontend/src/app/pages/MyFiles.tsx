@@ -42,6 +42,7 @@ import {
   Clock,
   MoreHorizontal,
   MoreVertical,
+  X,
 } from "lucide-react";
 import folderService, {
   type Folder as FolderModel,
@@ -72,6 +73,7 @@ import { InlineStatusMessage } from "./my-files/components/InlineStatusMessage";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
+import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
 import { SearchHelperText } from "./my-files/components/SearchHelperText";
 import { SearchToolbarField } from "./my-files/components/SearchToolbarField";

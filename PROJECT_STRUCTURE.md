@@ -1,6 +1,6 @@
 # NimbusDrive V2 - Project Structure & Code Audit
 
-Dokumen ini adalah audit struktur project, status fitur, dan risiko kode berdasarkan kondisi repository pada 2026-07-04.
+Dokumen ini adalah audit struktur project, status fitur, dan risiko kode berdasarkan kondisi repository pada 2026-07-05.
 
 ## 1. Ringkasan Project
 
@@ -23,24 +23,26 @@ Audit dilakukan dengan membaca struktur file, route backend, controller/service/
 | Ekstensi | Jumlah file | Lines |
 | --- | ---: | ---: |
 | `.php` | 63 | 6,422 |
-| `.tsx` | 88 | 26,016 |
-| `.ts` | 29 | 1,606 |
+| `.tsx` | 120 | 26,790 |
+| `.ts` | 37 | 1,839 |
 | `.css` | 6 | 210 |
 | `.js` | 2 | 24 |
 | `.json` | 5 | 216 |
-| `.md` | 95 | 6,636 |
+| `.md` | 95 | 6,653 |
 
 File terbesar dan area paling berisiko maintainability:
 
 | File | Lines | Catatan |
 | --- | ---: | --- |
-| `frontend/src/app/pages/MyFiles.tsx` | 4,828 | File manager utama; sebagian UI/helper sudah diekstrak ke `my-files/` |
-| `frontend/src/app/pages/GDrive.tsx` | 4,200 | UI Google Drive besar: akun, list/grid, preview, upload, trash, actions |
+| `frontend/src/app/pages/MyFiles.tsx` | 4,830 | File manager utama; sebagian UI/helper sudah diekstrak ke `my-files/` |
+| `frontend/src/app/pages/GDrive.tsx` | 4,103 | UI Google Drive besar; beberapa formatter/state component sudah diekstrak ke `gdrive/` |
 | `frontend/src/pages/ActivityLogPage.tsx` | 1,312 | Admin activity log dengan filter, pagination, local hide/delete |
-| `frontend/src/app/pages/Trash.tsx` | 1,309 | Restore dan permanent delete lokal |
-| `frontend/src/app/pages/Dashboard.tsx` | 1,274 | Banyak fetch dashboard real-time |
+| `frontend/src/app/pages/Trash.tsx` | 1,296 | Restore dan permanent delete lokal |
+| `frontend/src/app/pages/Dashboard.tsx` | 1,244 | Banyak fetch dashboard real-time |
 | `backend/app/Http/Controllers/GDriveController.php` | 886 | Controller Google Drive besar |
-| `backend/app/Http/Controllers/ServerMonitorController.php` | 546 | OS-specific system metrics |
+| `frontend/src/app/pages/Activity.tsx` | 860 | User activity feed dari backend logs |
+| `frontend/src/app/pages/Shared.tsx` | 856 | Share link management |
+| `frontend/src/app/pages/ServerMonitor.tsx` | 828 | Current server metrics UI |
 | `backend/app/Services/GoogleDriveService.php` | 462 | Manual Google Drive HTTP integration |
 | `backend/app/Http/Controllers/FileController.php` | 461 | File CRUD/upload/download/preview |
 
@@ -88,9 +90,19 @@ CLOUD_SERVER_V2/
 |   |   |   |   |-- GDrive.tsx
 |   |   |   |   |-- Dashboard.tsx
 |   |   |   |   |-- ...
-|   |   |   |   `-- my-files/
-|   |   |   |       |-- components/
-|   |   |   |       `-- myFiles*.ts utilities
+|   |   |   |   |-- activity/
+|   |   |   |   |-- admin-users/
+|   |   |   |   |-- dashboard/
+|   |   |   |   |-- devices/
+|   |   |   |   |-- gdrive/
+|   |   |   |   |-- login/
+|   |   |   |   |-- my-files/
+|   |   |   |   |-- public-share/
+|   |   |   |   |-- server-monitor/
+|   |   |   |   |-- settings/
+|   |   |   |   |-- shared/
+|   |   |   |   |-- trash/
+|   |   |   |   `-- uploads/
 |   |   |   `-- upload/
 |   |   |-- pages/
 |   |   |-- services/
@@ -180,35 +192,40 @@ Semua API utama berada di `backend/routes/api.php`.
 
 Auth token dan user disimpan di `localStorage` sebagai `nimbus_token` dan `nimbus_user`. Axios interceptor di `services/api.ts` memasang `Authorization: Bearer ...`. `VITE_API_BASE_URL` wajib tersedia untuk service utama; `PublicSharePage` dan share URL builder punya fallback sendiri.
 
-### 5.2 My Files Modularization
+### 5.2 Frontend Modularization
 
-Update terbaru memecah sebagian `MyFiles.tsx` ke folder `frontend/src/app/pages/my-files/`. Folder ini berisi helper formatting/filter/sorting/theme/preview/share/menu/DOM dan komponen kecil seperti breadcrumbs, search toolbar, preview controls, empty states, status message, selection pill, view toggle, menu item, dan audio preview player. Ini menurunkan ukuran `MyFiles.tsx` dari sekitar 5,918 line pada audit sebelumnya menjadi 4,828 line, tetapi file induk masih menjadi pusat state/action/render terbesar di frontend.
+Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. File page induk masih menjadi entry point UI, tetapi formatter, empty/loading/error state, status badge, dan beberapa komponen kecil sudah dipindah ke subfolder per domain. Ini membuat struktur lebih mudah diaudit daripada sebelumnya, walau `MyFiles.tsx` dan `GDrive.tsx` masih menjadi file terbesar.
 
 | Area | File/folder | Fungsi |
 | --- | --- | --- |
-| UI components | `app/pages/my-files/components/*.tsx` | Komponen kecil untuk toolbar, breadcrumb, preview header/action, empty/loading states, menu item, view mode, dan audio preview |
-| Formatting/filter/sort | `myFilesFormatters.ts`, `myFilesFilters.ts`, `myFilesSorting.ts` | Label tipe file, format ukuran, filter tipe, sort file/folder |
-| Preview helpers | `myFilesPreviewUtils.ts`, `myFilesPreviewZoomUtils.ts` | MIME fallback, durasi media, clamp/zoom image preview |
-| UI/system helpers | `myFilesThemeUtils.ts`, `myFilesMenuUtils.ts`, `myFilesDomUtils.ts`, `myFilesShareUtils.ts` | Theme localStorage, menu style, clipboard/interactive target helper, lookup share link |
+| My Files | `app/pages/my-files/` | Komponen toolbar/breadcrumb/preview/empty states serta helper filter, formatter, sort, theme, preview, share, menu, DOM |
+| Google Drive | `app/pages/gdrive/` | Formatter Drive, inline error/status/loading/empty/no-account components |
+| Dashboard | `app/pages/dashboard/` | Formatter dashboard dan stat card component |
+| Activity | `app/pages/activity/` | Formatter tanggal, action UI mapping, empty/loading/error states |
+| Devices | `app/pages/devices/` | Formatter device dan empty/loading/error states |
+| Shared | `app/pages/shared/` | Share formatter dan empty/loading/error states |
+| Trash | `app/pages/trash/` | Trash formatter dan empty/loading/error states |
+| Server Monitor | `app/pages/server-monitor/` | Formatter metrics dan loading/status components |
+| Login/Public Share/Settings/Uploads/Admin Users | Domain subfolders masing-masing | Komponen kecil atau formatter spesifik page |
 
 ### 5.3 Page Status
 
 | Page | File | Status | Catatan |
 | --- | --- | --- | --- |
-| Dashboard | `app/pages/Dashboard.tsx` | Aktif/partial | Ambil storage, recent files, share links count, devices count, activity logs, server monitor, storage breakdown |
+| Dashboard | `app/pages/Dashboard.tsx` + `app/pages/dashboard/` | Aktif/partial | Ambil storage, recent files, share links count, devices count, activity logs, server monitor, storage breakdown |
 | My Files | `app/pages/MyFiles.tsx` + `app/pages/my-files/` | Aktif | File/folder manager lengkap; helper/komponen kecil mulai modular, state/action utama masih di file induk |
-| GDrive | `app/pages/GDrive.tsx` | Aktif | OAuth accounts, file list, folder navigation, upload, download/preview, trash/restore, rename, visibility, create folder |
-| Shared | `app/pages/Shared.tsx` | Aktif | List/copy/open/delete share links |
-| Uploads | `app/pages/Uploads.tsx` | Aktif | Tampilan queue global dari upload manager |
-| Devices | `app/pages/Devices.tsx` | Partial | Menarik `/devices`, tapi data bergantung writer yang belum ada |
-| Activity | `app/pages/Activity.tsx` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only |
+| GDrive | `app/pages/GDrive.tsx` + `app/pages/gdrive/` | Aktif | OAuth accounts, file list, folder navigation, upload, download/preview, trash/restore, rename, visibility, create folder |
+| Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links |
+| Uploads | `app/pages/Uploads.tsx` + `app/pages/uploads/` | Aktif | Tampilan queue global dari upload manager |
+| Devices | `app/pages/Devices.tsx` + `app/pages/devices/` | Partial | Menarik `/devices`, tapi data bergantung writer yang belum ada |
+| Activity | `app/pages/Activity.tsx` + `app/pages/activity/` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only |
 | Activity Log | `pages/ActivityLogPage.tsx` | Admin aktif/partial | Admin log global dengan pagination/filter, bulk hide localStorage only |
-| Trash | `app/pages/Trash.tsx` | Aktif | Local trash files/folders, restore dan force delete |
-| Server Monitor | `app/pages/ServerMonitor.tsx` | Aktif | Metrics real dari backend, chart historical belum ada |
-| Settings | `app/pages/Settings.tsx` | Partial/local-only | Theme/accent disimpan localStorage; profile/security/storage/API settings mostly hardcoded/local UI |
-| Admin Users | `app/pages/AdminUsers.tsx` | Partial | Read-only list user; bug kolom Name menampilkan `u.role` |
-| Login | `app/pages/LoginPage.tsx` | Aktif | Login email/password |
-| Public Share | `app/pages/PublicSharePage.tsx` | Aktif | Fetch public share metadata dan download |
+| Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
+| Server Monitor | `app/pages/ServerMonitor.tsx` + `app/pages/server-monitor/` | Aktif | Metrics real dari backend, chart historical belum ada |
+| Settings | `app/pages/Settings.tsx` + `app/pages/settings/` | Partial/local-only | Theme/accent disimpan localStorage; profile/security/storage/API settings mostly hardcoded/local UI |
+| Admin Users | `app/pages/AdminUsers.tsx` + `app/pages/admin-users/` | Partial | Read-only list user; bug kolom Name menampilkan `u.role` |
+| Login | `app/pages/LoginPage.tsx` + `app/pages/login/` | Aktif | Login email/password |
+| Public Share | `app/pages/PublicSharePage.tsx` + `app/pages/public-share/` | Aktif | Fetch public share metadata dan download |
 
 ### 5.4 Services Frontend
 
@@ -243,7 +260,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | --- | --- | --- |
 | Login/logout/me | Selesai | Sanctum token auth aktif |
 | Role admin/user | Selesai | Backend middleware `admin`; frontend menyesuaikan menu dari localStorage |
-| Local file manager | Selesai dengan risiko maintainability | Fitur lengkap; `MyFiles.tsx` sudah mulai dimodularisasi tetapi masih sangat besar |
+| Local file manager | Selesai dengan risiko maintainability | Fitur lengkap; `MyFiles.tsx` sudah modular sebagian tetapi masih sangat besar |
 | Folder nesting/move/trash | Partial | Logic aktif, tapi folder belum user-scoped |
 | Preview file lokal | Selesai | Image/PDF/video/audio/text/code-like extension |
 | Share link publik | Partial | Token/expiry/download count aktif; password belum aman dan belum enforced |
@@ -278,7 +295,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
    Backend hanya punya example unit/feature tests. Belum ada coverage untuk auth, file ownership, folder recursion, share public access, activity log, GDrive, device, dan server monitor. Frontend belum punya test setup.
 
 5. Komponen/controller terlalu besar.
-   `MyFiles.tsx` sudah berkurang lewat ekstraksi helper/komponen `my-files/`, tetapi masih 4,828 line dan tetap menjadi titik rawan bersama `GDrive.tsx`, `Dashboard.tsx`, `Trash.tsx`, `ActivityLogPage.tsx`, dan `GDriveController.php`.
+   Banyak page sudah punya subfolder modular, tetapi file induk masih besar: `MyFiles.tsx` 4,830 line, `GDrive.tsx` 4,103 line, `ActivityLogPage.tsx` 1,312 line, `Trash.tsx` 1,296 line, dan `GDriveController.php` 886 line.
 
 6. Devices belum punya write path.
    Tabel dan endpoint read-only ada, tetapi login/request middleware belum membuat atau memperbarui device record. Dashboard active device count bisa kosong walau user aktif.
@@ -355,7 +372,7 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 2. Putuskan fitur password share link: hapus field dari API/UI, atau implementasikan hash + validation public endpoint.
 3. Sinkronkan Google Drive scope docs/env dengan fitur mutasi dan tambahkan handling scope insufficient yang eksplisit.
 4. Tambahkan tests backend untuk auth, ownership, folder recursion, share link, trash, storage quota, dan GDrive happy/error path dengan HTTP fake.
-5. Lanjutkan ekstraksi `MyFiles.tsx` ke hook/action modules untuk state dan side effect, lalu terapkan pola modular yang sama ke `GDrive.tsx`.
+5. Lanjutkan ekstraksi `MyFiles.tsx` dan `GDrive.tsx` ke hook/action modules untuk state, side effect, modal state, dan action handler; subfolder komponen/formatter sudah ada dan bisa menjadi pola.
 6. Implement device tracking pada login/request middleware bila fitur Devices ingin dianggap selesai.
 7. Perbaiki `AdminUsers` agar kolom Name memakai `u.name`.
 8. Hapus `authServices.ts` atau jadikan re-export dari `authService.ts`.
@@ -364,4 +381,4 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 
 ## 10. Catatan Workspace
 
-Pada saat audit ini dibuat ulang, `TODO.md` sudah memiliki perubahan lokal di luar update dokumen. File tersebut tidak disentuh dalam update ini.
+Pada saat audit ini dibuat ulang, ada perubahan lokal di `TODO.md`, `frontend/src/app/pages/GDrive.tsx`, dan `frontend/src/app/pages/MyFiles.tsx`. Dokumen ini diperbarui setelah membaca perubahan tersebut. `TODO.md` sekarang berisi checklist behavior checkbox My Files; `GDrive.tsx` mengubah wheel handling preview image; `MyFiles.tsx` menambah import `X` dan `PreviewHeaderTitle`.
