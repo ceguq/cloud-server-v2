@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 
+import { AdminUsersStateMessage } from "./admin-users/components/AdminUsersStateMessage";
 import { getAdminUsers, type AdminUser } from "../../services/adminUserService";
 
 function formatDate(value?: string): string {
@@ -198,21 +199,31 @@ export function AdminUsers() {
       </div>
 
       {loading && (
-        <div className="text-xs" style={{ color: theme.muted }}>
-          Memuat daftar user...
-        </div>
+        <AdminUsersStateMessage
+          tone="loading"
+          title="Memuat daftar user..."
+          className="text-xs"
+          ariaLive="polite"
+        />
       )}
 
       {!loading && error && (
-        <div className="text-xs" style={{ color: "#f87171" }} role="alert">
-          {error}
-        </div>
+        <AdminUsersStateMessage
+          tone="error"
+          title={error}
+          className="text-xs"
+          role="alert"
+          ariaLive="assertive"
+        />
       )}
 
       {!loading && !error && users.length === 0 && (
-        <div className="text-xs" style={{ color: theme.muted }}>
-          Belum ada user.
-        </div>
+        <AdminUsersStateMessage
+          tone="empty"
+          title="Belum ada user."
+          className="text-xs"
+          ariaLive="polite"
+        />
       )}
 
       {!loading && !error && users.length > 0 && (
