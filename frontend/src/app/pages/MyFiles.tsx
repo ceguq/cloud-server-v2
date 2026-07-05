@@ -77,6 +77,7 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
@@ -2343,141 +2344,67 @@ export function MyFiles({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {sortedFolders.map((folder) => (
+              <MyFilesFolderGridItem
+                key={folder.id}
+                folder={folder}
+                isSelected={selectedFolderIds.has(folder.id)}
+                checklistVisibilityStyle={checklistVisibilityStyle}
+                showFolderMetadata={showFolderMetadata}
+                moveDragDropEnabled={moveDragDropEnabled}
+                cardBg={myFilesColors.cardBg}
+                panelBg={myFilesColors.panelBg}
+                borderColor={myFilesColors.border}
+                textColor={myFilesColors.text}
+                mutedColor={myFilesColors.muted}
+                muted2Color={myFilesColors.muted2}
+                accentColor={accentColor}
+                onToggleSelection={() => toggleFolderSelection(folder.id)}
+                onOpenFolderMenuAtCursor={(event) => openFolderMenuAtCursor(event, folder.id)}
+                onRowContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
+                onRowClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  if (!isSelectionMode) return;
+                  toggleFolderSelection(folder.id);
+                }}
+                onRowDoubleClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  handleOpenFolder(folder);
+                }}
+                onDragStart={(e) => {
+                  if (!moveDragDropEnabled) {
+                    e.preventDefault();
+                    return;
+                  }
 
+                  e.dataTransfer.effectAllowed = "move";
+                  setCompactDragImage(e, folder.name ?? "Untitled folder", "folder");
+                  startFolderDragMove(folder);
+                }}
+                onDragEnd={clearDragMoveItem}
+                onDragOver={(e) => {
+                  if (!moveDragDropEnabled || !dragMoveItem) return;
 
-                <div
-                  key={folder.id}
-                  draggable={moveDragDropEnabled}
-                  onContextMenu={(event) => openFolderMenuAtCursor(event, folder.id)}
-                  onDragStart={(e) => {
+                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                    return;
+                  }
 
-                if (!moveDragDropEnabled) {
                   e.preventDefault();
-                  return;
-                }
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
 
-                e.dataTransfer.effectAllowed = "move";
-                setCompactDragImage(e, folder.name ?? "Untitled folder", "folder");
-                startFolderDragMove(folder);
-              }}
-              onDragEnd={clearDragMoveItem}
-              onDragOver={(e) => {
-                if (!moveDragDropEnabled || !dragMoveItem) return;
+                  if (!moveDragDropEnabled || !dragMoveItem) return;
 
-                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
-                  return;
-                }
+                  if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
+                    clearDragMoveItem();
+                    return;
+                  }
 
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!moveDragDropEnabled || !dragMoveItem) return;
-
-                if (dragMoveItem.type === "folder" && dragMoveItem.id === folder.id) {
-                  clearDragMoveItem();
-                  return;
-                }
-
-                moveDraggedItemToFolder(folder.id);
-              }}
-              onDoubleClick={(event) => {
-                if (isInteractiveItemTarget(event.target)) return;
-                handleOpenFolder(folder);
-              }}
-                      onClick={(event) => {
-                        if (isInteractiveItemTarget(event.target)) return;
-                        if (!isSelectionMode) return;
-                        toggleFolderSelection(folder.id);
-                      }}
-              className="rounded-xl p-3 cursor-pointer transition-all group"
-
-
-
-              style={{
-                background: selectedFolderIds.has(folder.id)
-                  ? "rgba(59, 130, 246, 0.08)"
-                  : myFilesColors.cardBg,
-                border: `1px solid ${myFilesColors.border}`,
-                borderLeft: selectedFolderIds.has(folder.id)
-                  ? `3px solid ${accentColor}55`
-                  : "3px solid transparent",
-              }}
-            >
-              <div className="flex items-start justify-between mb-2 relative pl-6">
-                <div className="absolute left-0 top-1 z-10">
-                  <input
-                    type="checkbox"
-                    aria-label={`Pilih folder ${folder.name}`}
-                    checked={selectedFolderIds.has(folder.id)}
-                    onChange={() => toggleFolderSelection(folder.id)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                  style={{
-                    width: 14,
-                    height: 14,
-                    accentColor: "#ef4444",
-                    ...checklistVisibilityStyle,
-                  }}
-                  />
-                </div>
-
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{ background: myFilesColors.panelBg }}
-                >
-                  <Folder size={25} style={{ color: accentColor }} />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={(event) => openFolderMenuAtCursor(event, folder.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-                  style={{
-                    color: myFilesColors.muted,
-                    background: "transparent",
-                    border: "1px solid transparent",
-                  }}
-                  onMouseEnter={(event) => {
-                    const el = event.currentTarget;
-                    el.style.background = `${accentColor}10`;
-                    el.style.borderColor = `${accentColor}55`;
-                    el.style.color = myFilesColors.text;
-                  }}
-                  onMouseLeave={(event) => {
-                    const el = event.currentTarget;
-                    el.style.background = "transparent";
-                    el.style.borderColor = "transparent";
-                    el.style.color = myFilesColors.muted;
-                  }}
-                  aria-label={`Folder actions for ${folder.name}`}
-                  title="Folder actions"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-              </div>
-
-              <div
-                className="text-xs font-medium truncate"
-                style={{ color: myFilesColors.text }}
-              >
-                {folder.name}
-              </div>
-              {showFolderMetadata && (
-                <>
-                  <div className="text-[10px] mt-0.5" style={{ color: myFilesColors.muted }}>
-                    -
-                  </div>
-                  <div className="text-[10px]" style={{ color: myFilesColors.muted2 }}>
-                    -
-                  </div>
-                </>
-              )}
-            </div>
+                  moveDraggedItemToFolder(folder.id);
+                }}
+              />
             ))}
           </div>
         )}

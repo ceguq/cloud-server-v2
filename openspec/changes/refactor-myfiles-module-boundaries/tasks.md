@@ -170,7 +170,13 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [x] Leave folder grid, file list, file grid, action menu, modal, and final cleanup tasks unchecked
   - [ ] Verify folder list row rendering and interactions
 
-- [ ] **3.1a Create `MyFilesList.tsx` component**
+- [x] **3.1a Create `MyFilesFolderGridItem.tsx` component**
+  - [x] Move only the folder grid-view card JSX
+  - [x] Keep folder state, selection behavior, drag/drop behavior, navigation, and action menu logic owned by `MyFiles.tsx`
+  - [x] Leave file list, file grid, global action menu, modal, and final cleanup tasks unchecked
+  - [ ] Verify folder grid card rendering and interactions
+
+- [ ] **3.1b Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
   - [ ] Handle folder item rendering
