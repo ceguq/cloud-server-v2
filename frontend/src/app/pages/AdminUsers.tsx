@@ -275,7 +275,7 @@ export function AdminUsers() {
               }}
             >
               <span className="text-sm font-semibold capitalize" style={{ color: theme.title }}>
-               {u.role}
+               {u.name}
               </span>
               <span className="text-xs" style={{ color: theme.title }}>
                 {u.email}
