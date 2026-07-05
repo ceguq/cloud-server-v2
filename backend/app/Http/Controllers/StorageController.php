@@ -26,8 +26,7 @@ class StorageController extends Controller
 
         $fileCount = (int) File::where('user_id', $user->id)->count();
 
-        // TODO: folders currently do not have user_id, so for now we use global count.
-        $folderCount = (int) Folder::count();
+        $folderCount = (int) Folder::where('user_id', $user->id)->count();
 
         $limitBytes = 100 * 1024 * 1024 * 1024; // 100 GB
         $usagePercent = $limitBytes > 0

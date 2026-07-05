@@ -147,9 +147,10 @@ class TrashController extends Controller
 
     public function folders(Request $request): JsonResponse
     {
-        // TODO: nanti folder perlu user_id untuk multi-user.
+        $user = $request->user();
+
         $folders = Folder::onlyTrashed()
-            ->whereNull('parent_id')
+            ->where('user_id', $user->id)
             ->latest('deleted_at')
             ->get();
 
@@ -160,8 +161,12 @@ class TrashController extends Controller
 
     public function restoreFolder(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
-        $folder = Folder::onlyTrashed()->where('id', $id)->first();
+        $user = $request->user();
 
+        $folder = Folder::onlyTrashed()
+            ->where('user_id', $user->id)
+            ->where('id', $id)
+            ->first();
 
         if (!$folder) {
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);
@@ -200,8 +205,12 @@ class TrashController extends Controller
 
     public function forceDeleteFolder(Request $request, string $id, ActivityLogService $activityLogService): JsonResponse
     {
+        $user = $request->user();
 
-        $folder = Folder::onlyTrashed()->where('id', $id)->first();
+        $folder = Folder::onlyTrashed()
+            ->where('user_id', $user->id)
+            ->where('id', $id)
+            ->first();
 
         if (!$folder) {
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);

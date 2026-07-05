@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+use App\Models\User;
+
 class Folder extends Model
 {
     use HasFactory;
@@ -18,6 +20,7 @@ class Folder extends Model
     protected $fillable = [
         'name',
         'parent_id',
+        'user_id',
     ];
 
     public function children(): HasMany
@@ -40,6 +43,11 @@ class Folder extends Model
     public function files(): HasMany
     {
         return $this->hasMany(\App\Models\File::class, 'folder_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
 }

@@ -223,7 +223,7 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
 | Server Monitor | `app/pages/ServerMonitor.tsx` + `app/pages/server-monitor/` | Aktif | Metrics real dari backend, chart historical belum ada |
 | Settings | `app/pages/Settings.tsx` + `app/pages/settings/` | Partial/local-only | Theme/accent disimpan localStorage; profile/security/storage/API settings mostly hardcoded/local UI |
-| Admin Users | `app/pages/AdminUsers.tsx` + `app/pages/admin-users/` | Partial | Read-only list user; bug kolom Name menampilkan `u.role` |
+| Admin Users | `app/pages/AdminUsers.tsx` + `app/pages/admin-users/` | Aktif | Read-only admin user list aktif; bug kolom Name sudah diperbaiki |
 | Login | `app/pages/LoginPage.tsx` + `app/pages/login/` | Aktif | Login email/password |
 | Public Share | `app/pages/PublicSharePage.tsx` + `app/pages/public-share/` | Aktif | Fetch public share metadata dan download |
 
@@ -273,7 +273,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Google Drive connect/list | Selesai | OAuth, account list, file list, per-account navigation |
 | Google Drive mutations | Selesai secara kode, config-dependent | Upload/trash/restore/rename/share/delete/create folder butuh scope Drive yang sesuai |
 | Settings | Partial | Theme/accent persist; banyak setting lain hardcoded/local UI |
-| Admin users | Partial | Read-only; ada bug render nama |
+| Admin users | Partial | Read-only list aktif; bug render nama sudah diperbaiki |
 | Test coverage | Minimal | Hanya Laravel example tests, belum ada tests fitur utama/frontend |
 
 ## 7. Temuan Audit Prioritas
@@ -303,13 +303,10 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 7. Settings masih local-only/hardcoded.
    Banyak field profile/security/storage/API key hanya UI, bukan data user/backend. Theme/accent adalah bagian yang benar-benar persist di localStorage.
 
-8. `AdminUsers` salah render kolom Name.
-   Backend dan service mengirim `name`, tetapi UI row pertama menampilkan `u.role`.
-
-9. Duplikasi auth service.
+8. Duplikasi auth service.
    `frontend/src/services/authService.ts` dan `authServices.ts` berisi implementasi sama. Ini rawan drift.
 
-10. API base URL frontend bergantung env.
+9. API base URL frontend bergantung env.
     `services/api.ts` tidak punya fallback. Pastikan `frontend/.env` atau `.env.local` berisi `VITE_API_BASE_URL=http://127.0.0.1:8000/api` atau setara.
 
 ### Low
@@ -374,10 +371,9 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 4. Tambahkan tests backend untuk auth, ownership, folder recursion, share link, trash, storage quota, dan GDrive happy/error path dengan HTTP fake.
 5. Lanjutkan ekstraksi `MyFiles.tsx` dan `GDrive.tsx` ke hook/action modules untuk state, side effect, modal state, dan action handler; subfolder komponen/formatter sudah ada dan bisa menjadi pola.
 6. Implement device tracking pada login/request middleware bila fitur Devices ingin dianggap selesai.
-7. Perbaiki `AdminUsers` agar kolom Name memakai `u.name`.
-8. Hapus `authServices.ts` atau jadikan re-export dari `authService.ts`.
-9. Tambahkan fallback atau validasi startup untuk `VITE_API_BASE_URL`.
-10. Buat batas quota upload real sebelum file disimpan.
+7. Hapus `authServices.ts` atau jadikan re-export dari `authService.ts`.
+8. Tambahkan fallback atau validasi startup untuk `VITE_API_BASE_URL`.
+9. Buat batas quota upload real sebelum file disimpan.
 
 ## 10. Catatan Workspace
 

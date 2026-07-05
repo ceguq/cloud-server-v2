@@ -15,6 +15,7 @@ class FolderController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
         $parentId = $request->query('parent_id');
 
         // Jika query kosong/null -> root
@@ -27,7 +28,7 @@ class FolderController extends Controller
 
         $keyword = trim((string) ($search !== null && $search !== '' ? $search : ($q ?? '')));
 
-        $foldersQuery = Folder::query();
+        $foldersQuery = Folder::query()->where('user_id', $user->id);
 
         // If searching: global search by active folders name (exclude soft deleted)
         if ($keyword !== '') {
@@ -56,6 +57,7 @@ class FolderController extends Controller
 
     public function store(Request $request, ActivityLogService $activityLogService): JsonResponse
     {
+        $user = $request->user();
 
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
@@ -72,7 +74,21 @@ class FolderController extends Controller
         $validated = $validator->validated();
         $parentId = $validated['parent_id'] ?? null;
 
+        if ($parentId !== null) {
+            $parentFolder = Folder::query()
+                ->where('id', $parentId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$parentFolder) {
+                return response()->json([
+                    'message' => 'Folder tujuan tidak ditemukan atau bukan milik Anda',
+                ], 422);
+            }
+        }
+
         $existing = Folder::query()
+            ->where('user_id', $user->id)
             ->where('name', $validated['name'])
             ->when($parentId === null, function ($q) {
                 $q->whereNull('parent_id');
@@ -90,6 +106,7 @@ class FolderController extends Controller
         $folder = Folder::create([
             'name' => $validated['name'],
             'parent_id' => $parentId,
+            'user_id' => $user->id,
         ]);
 
         // Activity Log only after Folder::create succeeds
@@ -114,6 +131,12 @@ class FolderController extends Controller
 
     public function update(Request $request, Folder $folder, ActivityLogService $activityLogService): JsonResponse
     {
+        $user = $request->user();
+
+        if ($folder->user_id !== $user->id) {
+            return response()->json(['message' => 'Folder tidak ditemukan'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'parent_id' => ['nullable', 'uuid', 'exists:folders,id'],
@@ -134,8 +157,21 @@ class FolderController extends Controller
 
         $parentId = $validated['parent_id'] ?? null;
 
+        if ($parentId !== null) {
+            $parentFolder = Folder::query()
+                ->where('id', $parentId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$parentFolder) {
+                return response()->json([
+                    'message' => 'Folder tujuan tidak ditemukan atau bukan milik Anda',
+                ], 422);
+            }
+        }
 
         $existing = Folder::query()
+            ->where('user_id', $user->id)
             ->where('name', $validated['name'])
             ->where('id', '!=', $folder->id)
             ->when($parentId === null, function ($q) {
@@ -186,6 +222,10 @@ class FolderController extends Controller
     {
         $user = $request->user();
 
+        if ($folder->user_id !== $user->id) {
+            return response()->json(['message' => 'Folder tidak ditemukan'], 404);
+        }
+
         $oldName = $folder->name;
         $oldParentId = $folder->parent_id;
 
@@ -221,6 +261,10 @@ class FolderController extends Controller
     {
         $user = $request->user();
 
+        if ($folder->user_id !== $user->id) {
+            return response()->json(['message' => 'Folder tidak ditemukan'], 404);
+        }
+
         $validated = $request->validate([
             'parent_id' => ['nullable', 'uuid'],
         ]);
@@ -244,6 +288,7 @@ class FolderController extends Controller
         if ($parentId !== null) {
             $targetParent = Folder::query()
                 ->where('id', $parentId)
+                ->where('user_id', $user->id)
                 ->first();
 
             if (!$targetParent) {

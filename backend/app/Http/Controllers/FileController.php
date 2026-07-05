@@ -137,9 +137,8 @@ class FileController extends Controller
         if ($folderId === null) {
             $query->whereNull('folder_id');
         } else {
-            // If folder is soft-deleted (trashed), do not return its files
-            $folderExistsAndActive = \App\Models\Folder::where('id', $folderId)->exists();
-            if (!$folderExistsAndActive) {
+            $targetFolder = $this->getOwnedFolderForUser($folderId, $user);
+            if (!$targetFolder) {
                 return response()->json(['data' => []]);
             }
 
@@ -181,6 +180,15 @@ class FileController extends Controller
 
         $uploaded = $validated['file'];
         $folderId = $validated['folder_id'] ?? null;
+
+        if ($folderId !== null) {
+            $targetFolder = $this->getOwnedFolderForUser($folderId, $user);
+            if (!$targetFolder) {
+                return response()->json([
+                    'message' => 'Folder tujuan tidak ditemukan atau bukan milik Anda',
+                ], 422);
+            }
+        }
 
         $extension = $uploaded->getClientOriginalExtension();
         $extension = $extension ? strtolower($extension) : 'bin';
@@ -475,9 +483,7 @@ class FileController extends Controller
         $oldFolderId = $file->folder_id;
 
         if ($folderId !== null) {
-            $targetFolder = Folder::query()
-                ->where('id', $folderId)
-                ->first();
+            $targetFolder = $this->getOwnedFolderForUser($folderId, $user);
 
             if (!$targetFolder) {
                 return response()->json([
@@ -554,6 +560,19 @@ class FileController extends Controller
         ]);
     }
 
+
+    private function getOwnedFolderForUser(?string $folderId, $user): ?Folder
+    {
+        if ($folderId === null || $folderId === '') {
+            return null;
+        }
+
+        return Folder::query()
+            ->where('id', $folderId)
+            ->where('user_id', $user->id)
+            ->whereNull('deleted_at')
+            ->first();
+    }
 
     private function formatBytes(int $bytes): string
     {
