@@ -183,7 +183,14 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Validate list-row rendering and interactions
   - [ ] Manual build validation remains pending
 
-- [ ] **3.1c Create `MyFilesList.tsx` component**
+- [x] **3.1c Create `MyFilesFileGridItem.tsx` component**
+  - [x] Move only the file grid-view card JSX
+  - [x] Keep file selection behavior, drag/drop behavior, preview/share/download/move/delete behavior, and action menu logic owned by `MyFiles.tsx`
+  - [x] Leave global action menu, modal, and final cleanup tasks unchecked
+  - [ ] Validate grid-card rendering and interactions
+  - [ ] Manual build validation remains pending
+
+- [ ] **3.1d Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
   - [ ] Handle folder item rendering
