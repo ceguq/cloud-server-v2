@@ -20,6 +20,10 @@ class ShareLink extends Model
         'download_count',
     ];
 
+    protected $hidden = [
+        'password',
+    ];
+
     protected $casts = [
         'expires_at' => 'datetime',
     ];

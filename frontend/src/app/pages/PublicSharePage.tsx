@@ -23,6 +23,7 @@ type ShareData = {
   file?: ShareFileInfo;
   download_count?: number;
   expires_at?: string | null;
+  requires_password?: boolean;
 };
 
 /** Normalize error status from an axios error response */
@@ -50,53 +51,74 @@ export function PublicSharePage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [share, setShare] = useState<ShareData | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   // ── download handler state ───────────────────────────────────────────────
   /** true while we are validating + downloading */
   const [downloadLoading, setDownloadLoading] = useState(false);
 
   // ── initial load ─────────────────────────────────────────────────────────
+  async function loadShare(passwordValue?: string) {
+    setLoading(true);
+    setErrorMessage("");
+    setPasswordError("");
+    setShare(null);
+
+    try {
+      if (!token) {
+        setErrorMessage("Share link tidak ditemukan.");
+        setLoading(false);
+        return;
+      }
+
+      const params = passwordValue ? { password: passwordValue } : undefined;
+
+      const res = await axios.get(`${apiBase}/share/${token}`, {
+        headers: { Accept: "application/json" },
+        params,
+      });
+
+      const payload = res.data;
+      const data: ShareData = payload?.data ?? payload;
+      const requiresPassword = Boolean(data?.requires_password);
+
+      setPasswordRequired(requiresPassword);
+      setPassword( passwordValue ?? "");
+      setShare(data);
+    } catch (e: any) {
+      const status = getErrorStatus(e);
+      const requiresPassword = Boolean(e?.response?.data?.requires_password);
+
+      if (status === 404) {
+        setErrorMessage("Share link tidak ditemukan.");
+        setPasswordRequired(false);
+      } else if (status === 410) {
+        setErrorMessage("Share link sudah kedaluwarsa.");
+        setPasswordRequired(false);
+      } else if (requiresPassword) {
+        setPasswordRequired(true);
+        setPasswordError("Password diperlukan untuk membuka tautan ini.");
+      } else {
+        setPasswordRequired(false);
+        setErrorMessage(getErrorMessage(e, "Gagal memuat share link."));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
-      setErrorMessage("");
-      setShare(null);
-
-      try {
-        if (!token) {
-          setErrorMessage("Share link tidak ditemukan.");
-          setLoading(false);
-          return;
-        }
-
-        // Gunakan axios biasa (bukan shared api) — public endpoint, tidak butuh auth header
-        const res = await axios.get(`${apiBase}/share/${token}`, {
-          headers: { Accept: "application/json" },
-        });
-
-        // Backend kemungkinan: { data: {...} } atau langsung object
-        const payload = res.data;
-        const data: ShareData = payload?.data ?? payload;
-
-        if (!cancelled) {
-          setShare(data);
-        }
-      } catch (e: any) {
-        const status = getErrorStatus(e);
-        if (!cancelled) {
-          if (status === 404) {
-            setErrorMessage("Share link tidak ditemukan.");
-          } else if (status === 410) {
-            setErrorMessage("Share link sudah kedaluwarsa.");
-          } else {
-            setErrorMessage(getErrorMessage(e, "Gagal memuat share link."));
-          }
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      setPasswordRequired(false);
+      setPassword("");
+      setPasswordError("");
+      await loadShare();
+      if (cancelled) return;
     }
 
     load();
@@ -105,6 +127,23 @@ export function PublicSharePage() {
       cancelled = true;
     };
   }, [token]);
+
+  async function handleSubmitPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || passwordLoading) return;
+
+    setPasswordLoading(true);
+    setPasswordError("");
+    setErrorMessage("");
+
+    try {
+      await loadShare(password);
+    } catch {
+      // loadShare already handles state updates
+    } finally {
+      setPasswordLoading(false);
+    }
+  }
 
   // ── handleDownload ────────────────────────────────────────────────────────
   /**
@@ -116,30 +155,49 @@ export function PublicSharePage() {
   async function handleDownload() {
     if (!token || downloadLoading) return;
 
+    if (share?.requires_password && !password.trim()) {
+      setPasswordRequired(true);
+      setPasswordError("Password diperlukan untuk mengunduh file ini.");
+      return;
+    }
+
     setDownloadLoading(true);
     setErrorMessage(""); // clear any previous inline error
 
     try {
+      const params = share?.requires_password ? { password } : undefined;
+      const downloadUrl = new URL(`${apiBase}/share/${token}/download`);
+      if (params) {
+        downloadUrl.searchParams.set("password", password);
+      }
+
       // Step 1: re-check token is still valid
       await axios.get(`${apiBase}/share/${token}`, {
         headers: { Accept: "application/json" },
+        params,
       });
 
       // Step 2: token valid — trigger download
       // Use window.location.href so the browser handles the binary response
       // (avoids loading the whole file into JS memory for large files).
-      window.location.href = `${apiBase}/share/${token}/download`;
+      window.location.href = downloadUrl.toString();
 
     } catch (e: any) {
       const status = getErrorStatus(e);
+      const requiresPassword = Boolean(e?.response?.data?.requires_password);
 
       // Invalidate the displayed share card so the Download button is hidden
       setShare(null);
 
       if (status === 404) {
         setErrorMessage("Share link tidak ditemukan.");
+        setPasswordRequired(false);
       } else if (status === 410) {
         setErrorMessage("Share link sudah kedaluwarsa.");
+        setPasswordRequired(false);
+      } else if (requiresPassword) {
+        setPasswordRequired(true);
+        setPasswordError("Password salah atau diperlukan untuk mengunduh file ini.");
       } else {
         setErrorMessage(getErrorMessage(e, "Gagal memvalidasi share link."));
       }
@@ -150,7 +208,7 @@ export function PublicSharePage() {
 
   // ── render ────────────────────────────────────────────────────────────────
 
-  const isInvalid = !loading && (!!errorMessage || !share?.file);
+  const isInvalid = !loading && !!errorMessage && !passwordRequired && !share?.file;
 
   return (
     <div
@@ -239,6 +297,68 @@ export function PublicSharePage() {
             }
             message={errorMessage}
           />
+        ) : null}
+
+        {!loading && passwordRequired && !share?.file ? (
+          <div
+            style={{
+              borderRadius: 14,
+              border: "1px solid rgba(59,130,246,0.2)",
+              background: "rgba(59,130,246,0.08)",
+              padding: "20px",
+            }}
+          >
+            <div style={{ color: "#e2e8f0", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+              Tautan ini dilindungi password
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.5, marginBottom: 14 }}>
+              Masukkan password untuk melihat file dan mengunduhnya.
+            </div>
+            <form onSubmit={handleSubmitPassword}>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError("");
+                }}
+                placeholder="Password"
+                autoComplete="current-password"
+                style={{
+                  width: "100%",
+                  borderRadius: 10,
+                  border: "1px solid #1a2540",
+                  background: "#0d1829",
+                  color: "#e2e8f0",
+                  padding: "10px 12px",
+                  marginBottom: 10,
+                  fontSize: 13,
+                }}
+              />
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                style={{
+                  width: "100%",
+                  borderRadius: 10,
+                  background: passwordLoading ? "rgba(59,130,246,0.45)" : "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 12px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: passwordLoading ? "not-allowed" : "pointer",
+                }}
+              >
+                {passwordLoading ? "Memeriksa password..." : "Buka tautan"}
+              </button>
+            </form>
+            {passwordError ? (
+              <div style={{ color: "#f87171", fontSize: 12, marginTop: 10 }}>
+                {passwordError}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {/* ── Success state — file info card ────────────────────────────── */}

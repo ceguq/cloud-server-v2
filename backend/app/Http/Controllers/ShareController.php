@@ -10,6 +10,7 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -54,13 +55,19 @@ class ShareController extends Controller
             'password' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $rawPassword = $validated['password'] ?? null;
+        $passwordHash = null;
+        if (is_string($rawPassword) && trim($rawPassword) !== '') {
+            $passwordHash = Hash::make($rawPassword);
+        }
+
         $token = Str::random(40);
 
         $shareLink = ShareLink::create([
             'file_id' => $file->id,
             'token' => $token,
             'expires_at' => $validated['expires_at'] ?? null,
-            'password' => $validated['password'] ?? null,
+            'password' => $passwordHash,
             'download_count' => 0,
         ]);
 
@@ -69,7 +76,7 @@ class ShareController extends Controller
         $fileId = (string) $file->id;
         $originalName = $file->original_name;
         $expiresAt = $shareLink->expires_at ? $shareLink->expires_at->toISOString() : null;
-        $isProtected = !empty($validated['password']);
+        $isProtected = !empty($passwordHash);
 
         $activityLogService->log(
             action: 'share.create',
@@ -88,7 +95,13 @@ class ShareController extends Controller
 
         return response()->json([
             'message' => 'Share link berhasil dibuat',
-            'data' => $shareLink,
+            'data' => [
+                'id' => (string) $shareLink->id,
+                'token' => $shareLink->token,
+                'download_count' => (int) $shareLink->download_count,
+                'expires_at' => $shareLink->expires_at?->toISOString(),
+                'requires_password' => $isProtected,
+            ],
         ], 201);
     }
 
@@ -135,7 +148,7 @@ class ShareController extends Controller
 
     }
 
-    public function show(string $token): JsonResponse
+    public function show(string $token, Request $request): JsonResponse
     {
         $shareLink = ShareLink::with('file')->where('token', $token)->first();
 
@@ -173,6 +186,18 @@ class ShareController extends Controller
             ], 404)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         }
 
+        $providedPassword = is_string($request->input('password')) ? trim($request->input('password')) : '';
+        $requiresPassword = !empty($shareLink->password);
+
+        if ($requiresPassword) {
+            if ($providedPassword === '' || !Hash::check($providedPassword, $shareLink->password)) {
+                return response()->json([
+                    'message' => 'Password diperlukan untuk mengakses tautan ini.',
+                    'requires_password' => true,
+                ], 403)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            }
+        }
+
         return response()->json([
             'data' => [
                 'id' => (string) $shareLink->id,
@@ -186,11 +211,12 @@ class ShareController extends Controller
                 ],
                 'download_count' => (int) $shareLink->download_count,
                 'expires_at' => $shareLink->expires_at?->toISOString(),
+                'requires_password' => $requiresPassword,
             ],
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
-    public function download(string $token): JsonResponse|BinaryFileResponse
+    public function download(string $token, Request $request): JsonResponse|BinaryFileResponse
     {
         // Always query fresh from DB — never trust stale state or cache
         $shareLink = ShareLink::with('file')->where('token', $token)->first();
@@ -224,6 +250,16 @@ class ShareController extends Controller
             return response()->json([
                 'message' => 'File tidak ditemukan.',
             ], 404)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        }
+
+        $providedPassword = is_string($request->input('password')) ? trim($request->input('password')) : '';
+        if (!empty($shareLink->password)) {
+            if ($providedPassword === '' || !Hash::check($providedPassword, $shareLink->password)) {
+                return response()->json([
+                    'message' => 'Password salah atau tidak diberikan.',
+                    'requires_password' => true,
+                ], 403)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            }
         }
 
         $disk = Storage::disk('local');

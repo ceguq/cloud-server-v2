@@ -31,8 +31,14 @@ export async function getShareLinks() {
   return unwrapData<ShareLink[]>(res.data);
 }
 
-export async function createShareLink(fileId: string) {
-  const res = await api.post(`/files/${fileId}/share`, {});
+export type CreateShareLinkPayload = {
+  password?: string | null;
+  expires_at?: string | null;
+};
+
+export async function createShareLink(fileId: string, payload?: CreateShareLinkPayload) {
+  const body = payload ? { ...payload } : {};
+  const res = await api.post(`/files/${fileId}/share`, body);
   return unwrapData<ShareLink>(res.data);
 }
 

@@ -74,6 +74,7 @@ import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessa
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
+import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
 import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
 import { SearchHelperText } from "./my-files/components/SearchHelperText";
 import { SearchToolbarField } from "./my-files/components/SearchToolbarField";
@@ -303,12 +304,11 @@ export function MyFiles({
   const [activeShareLink, setActiveShareLink] = useState<ShareLink | null>(
     null,
   );
+  const [shareMode, setShareMode] = useState<"private" | "shared">("shared");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState("");
   const [copySuccess, setCopySuccess] = useState("");
-  const [openSharePanelFileId, setOpenSharePanelFileId] = useState<string | null>(
-    null,
-  );
+  const [shareModalPassword, setShareModalPassword] = useState("");
   const [fileShareLinksByFileId, setFileShareLinksByFileId] = useState<
     Record<string, ShareLink | null>
   >({});
@@ -991,15 +991,35 @@ export function MyFiles({
     setOpenFileActionId(null);
     setFileActionMenuPosition(null);
     setFileActionFeedback(null);
-    setOpenSharePanelFileId(null);
   };
+
+  const closeShareModal = () => {
+    setIsShareModalOpen(false);
+    setSelectedFileForShare(null);
+    setShareModalPassword("");
+    setShareError("");
+    setCopySuccess("");
+  };
+
+  useEffect(() => {
+    if (!isShareModalOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeShareModal();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isShareModalOpen]);
 
   const closeFolderActionMenu = () => {
     setOpenFolderActionId(null);
     setFolderActionMenuPosition(null);
   };
 
-  const getOrCreateFileShareLink = async (file: FileModel) => {
+  const getOrCreateFileShareLink = async (file: FileModel, password?: string) => {
     const existing = await getExistingFileShareLink(file);
     if (existing) {
       setFileShareLinksByFileId((prev) => ({
@@ -1009,7 +1029,11 @@ export function MyFiles({
       return existing;
     }
 
-    const created = await createShareLink(file.id);
+    const passwordValue = password?.trim();
+    const created = await createShareLink(
+      file.id,
+      passwordValue ? { password: passwordValue } : undefined,
+    );
     setFileShareLinksByFileId((prev) => ({
       ...prev,
       [file.id]: created,
@@ -1018,14 +1042,14 @@ export function MyFiles({
   };
 
   const loadFileSharePanel = async (file: FileModel) => {
-    if (openSharePanelFileId === file.id) {
-      setOpenSharePanelFileId(null);
-      return;
-    }
-
-    setOpenSharePanelFileId(file.id);
+    closeFileActionMenu();
     setFileActionFeedback(null);
-    setFileSharingActionId(file.id);
+    setShareError("");
+    setCopySuccess("");
+    setShareModalPassword("");
+    setSelectedFileForShare(file);
+    setIsShareModalOpen(true);
+    setShareLoading(true);
 
     try {
       const existing = await getExistingFileShareLink(file);
@@ -1033,17 +1057,18 @@ export function MyFiles({
         ...prev,
         [file.id]: existing,
       }));
+      setActiveShareLink(existing);
+      setShareMode(existing ? "shared" : "private");
     } catch (error: any) {
-      setFileActionFeedback({
-        fileId: file.id,
-        type: "error",
-        message:
-          error?.response?.data?.message ||
+      setShareError(
+        error?.response?.data?.message ||
           error?.message ||
           "Gagal memuat status share.",
-      });
+      );
+      setActiveShareLink(null);
+      setShareMode("private");
     } finally {
-      setFileSharingActionId(null);
+      setShareLoading(false);
     }
   };
 
@@ -1083,14 +1108,14 @@ export function MyFiles({
     }
   };
 
-  const handleSetFilePublic = async (file: FileModel) => {
-    if (fileSharingActionId) return;
+  const handleSetFilePublic = async (file: FileModel, password?: string) => {
+    if (fileSharingActionId) return null;
 
     setFileSharingActionId(file.id);
     setFileActionFeedback(null);
 
     try {
-      const shareLink = await getOrCreateFileShareLink(file);
+      const shareLink = await getOrCreateFileShareLink(file, password);
       setFileActionFeedback({
         fileId: file.id,
         type: "success",
@@ -1100,6 +1125,7 @@ export function MyFiles({
         ...prev,
         [file.id]: shareLink,
       }));
+      return shareLink;
     } catch (error: any) {
       setFileActionFeedback({
         fileId: file.id,
@@ -1109,6 +1135,7 @@ export function MyFiles({
           error?.message ||
           "Gagal membuat share link.",
       });
+      return null;
     } finally {
       setFileSharingActionId(null);
     }
@@ -1145,6 +1172,94 @@ export function MyFiles({
       });
     } finally {
       setFileSharingActionId(null);
+    }
+  };
+
+  const handleRevokeActiveShareLink = async (file: FileModel) => {
+    if (!activeShareLink?.id || fileSharingActionId) return false;
+
+    setFileSharingActionId(file.id);
+    setShareError("");
+    setCopySuccess("");
+
+    try {
+      await deleteShareLink(activeShareLink.id);
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [file.id]: null,
+      }));
+      setActiveShareLink(null);
+      setShareModalPassword("");
+      setCopySuccess("Public link revoked. File is now private.");
+      return true;
+    } catch (error: any) {
+      setShareError(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Gagal membatalkan public link.",
+      );
+      return false;
+    } finally {
+      setFileSharingActionId(null);
+    }
+  };
+
+  const handleApplyShareMode = async () => {
+    if (!selectedFileForShare || shareLoading) return null;
+
+    setShareLoading(true);
+    setShareError("");
+    setCopySuccess("");
+
+    const passwordValue = shareModalPassword.trim();
+    const isPrivate = shareMode === "private";
+
+    try {
+      if (isPrivate) {
+        if (!activeShareLink) {
+          setCopySuccess("Already private.");
+          return null;
+        }
+
+        await handleRevokeActiveShareLink(selectedFileForShare);
+        return null;
+      }
+
+      if (activeShareLink) {
+        const knownPublic = typeof activeShareLink.password !== "undefined" &&
+          activeShareLink.password === null;
+        const desiredPublic = passwordValue === "";
+
+        if (knownPublic && desiredPublic) {
+          setCopySuccess("Public link already active.");
+          return activeShareLink;
+        }
+
+        const revoked = await handleRevokeActiveShareLink(selectedFileForShare);
+        if (!revoked) return null;
+      }
+
+      const payload = passwordValue ? { password: passwordValue } : undefined;
+      const created = await createShareLink(selectedFileForShare.id, payload);
+      setFileShareLinksByFileId((prev) => ({
+        ...prev,
+        [selectedFileForShare.id]: created,
+      }));
+      setActiveShareLink(created);
+      setShareModalPassword("");
+      setCopySuccess(
+        passwordValue ? "Protected link created." : "Public link created.",
+      );
+      return created;
+    } catch (error: any) {
+      setShareError(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Gagal membuat share link.",
+      );
+      return null;
+    } finally {
+      setShareLoading(false);
     }
   };
 
@@ -1704,9 +1819,7 @@ export function MyFiles({
     const isOpen = openFileActionId === file.id && fileActionMenuPosition;
     const canPreview = fileService.canPreviewFile(file);
     const isSharing = fileSharingActionId === file.id;
-    const isSharePanelOpen = openSharePanelFileId === file.id;
     const shareLink = fileShareLinksByFileId[file.id] ?? null;
-    const shareUrl = shareLink ? getPublicShareUrl(shareLink.token) : "";
     const feedback =
       fileActionFeedback?.fileId === file.id ? fileActionFeedback : null;
 
@@ -1816,7 +1929,7 @@ export function MyFiles({
               />
 
               <MenuItemButton
-                label={isSharePanelOpen ? "Share" : "Share"}
+                label="Share"
                 icon={<Share2 size={14} />}
                 disabled={isSharing}
                 ariaLabel={`Share ${file.original_name}`}
@@ -1826,123 +1939,6 @@ export function MyFiles({
                 textColor={myFilesColors.text}
                 accentColor={accentColor}
               />
-
-              {isSharePanelOpen ? (
-                <div
-                  className="mt-2 rounded-lg border p-2"
-                  style={{
-                    borderColor: myFilesColors.border,
-                    background:
-                      resolvedTheme === "light"
-                        ? "#ffffff"
-                        : "rgba(15,23,42,0.55)",
-                  }}
-                >
-                  <div
-                    className="mb-1 text-[10px] font-semibold"
-                    style={{ color: myFilesColors.muted2 }}
-                  >
-                    Link
-                  </div>
-
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <div
-                      className="min-w-0 flex-1 truncate rounded-md border px-2 py-1 text-[10px]"
-                      style={{
-                        borderColor: myFilesColors.border,
-                        color: shareUrl ? myFilesColors.text : myFilesColors.muted2,
-                        background: myFilesColors.cardBg,
-                      }}
-                      title={shareUrl || "Pilih Shared untuk membuat link"}
-                    >
-                      {isSharing
-                        ? "Memuat link..."
-                        : shareUrl || "Belum ada link"}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Salin link ${file.original_name}`}
-                      title="Salin link"
-                      disabled={!shareUrl || isSharing}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                      style={{
-                        opacity: !shareUrl || isSharing ? 0.45 : 1,
-                        cursor: !shareUrl || isSharing ? "not-allowed" : "pointer",
-                        border: `1px solid ${myFilesColors.border}`,
-                        color: shareUrl ? accentColor : myFilesColors.muted2,
-                        background: myFilesColors.cardBg,
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (!shareUrl || isSharing) return;
-                        void handleCopyFileLink(file);
-                      }}
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
-
-                  <div
-                    className="mt-2 text-[10px] font-semibold"
-                    style={{ color: myFilesColors.muted2 }}
-                  >
-                    Status
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-1">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label={`Set private ${file.original_name}`}
-                      title="Private"
-                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
-                      disabled={isSharing}
-                      style={{
-                        opacity: isSharing ? 0.45 : 1,
-                        cursor: isSharing ? "not-allowed" : "pointer",
-                        color: !shareLink ? accentColor : myFilesColors.text,
-                        background: !shareLink ? `${accentColor}12` : "transparent",
-                        border: `1px solid ${
-                          !shareLink ? `${accentColor}33` : "transparent"
-                        }`,
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (isSharing) return;
-                        void handleSetFilePrivate(file);
-                      }}
-                    >
-                      Private
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-label={`Set shared ${file.original_name}`}
-                      title="Shared"
-                      className="rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
-                      disabled={isSharing}
-                      style={{
-                        opacity: isSharing ? 0.45 : 1,
-                        cursor: isSharing ? "not-allowed" : "pointer",
-                        color: shareLink ? accentColor : myFilesColors.text,
-                        background: shareLink ? `${accentColor}12` : "transparent",
-                        border: `1px solid ${
-                          shareLink ? `${accentColor}33` : "transparent"
-                        }`,
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (isSharing) return;
-                        void handleSetFilePublic(file);
-                      }}
-                    >
-                      Shared
-                    </button>
-                  </div>
-                </div>
-              ) : null}
 
               <div
                 className="mt-2 border-t pt-2"
@@ -3761,131 +3757,261 @@ export function MyFiles({
       {/* Share Modal */}
       {isShareModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
           role="dialog"
           aria-modal="true"
+          onClick={closeShareModal}
         >
           <div
-            className="w-full max-w-md rounded-2xl border p-6"
+            className="w-full max-w-lg rounded-3xl border p-6"
             style={{
               boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
               background: myFilesColors.cardBg,
               border: `1px solid ${myFilesColors.border}`,
             }}
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: myFilesColors.title }}
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  className="text-base font-semibold"
+                  style={{ color: myFilesColors.title }}
+                >
+                  Share
+                </h2>
+                <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
+                  {selectedFileForShare?.original_name ?? "Untitled file"}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close share dialog"
+                onClick={closeShareModal}
+                className="rounded-xl p-2 text-sm"
+                style={{
+                  color: myFilesColors.muted,
+                  background: myFilesColors.buttonSoftBg,
+                }}
               >
-                Share File
-              </h2>
-              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
-                {selectedFileForShare?.original_name ?? "-"}
-              </p>
+                <X size={16} />
+              </button>
             </div>
 
             {shareError && (
               <div
-                className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 mb-3"
-                style={{ color: "#f87171" }}
+                className="text-xs rounded-2xl border px-3 py-2 mb-4"
+                style={{
+                  borderColor: "rgba(248,113,113,0.35)",
+                  background: "rgba(248,113,113,0.12)",
+                  color: "#f87171",
+                }}
               >
                 {shareError}
               </div>
             )}
 
-            <div className="mb-4">
-              {shareLoading && (
-                <div className="text-xs" style={{ color: myFilesColors.muted2 }}>
-                  Creating share link...
+            <div className="space-y-4">
+              <div className="rounded-2xl border p-4" style={{
+                borderColor: myFilesColors.border,
+                background: myFilesColors.panelBg,
+              }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div
+                      className="text-[11px] font-semibold uppercase"
+                      style={{ color: myFilesColors.muted2 }}
+                    >
+                      Status
+                    </div>
+                    <div className="mt-2 text-sm font-semibold" style={{ color: myFilesColors.text }}>
+                      {activeShareLink ? "Shared" : "Private"}
+                    </div>
+                  </div>
+                  <div
+                    className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                    style={{
+                      background: activeShareLink
+                        ? `${accentColor}14`
+                        : myFilesColors.buttonSoftBg,
+                      color: activeShareLink ? accentColor : myFilesColors.muted,
+                    }}
+                  >
+                    {activeShareLink ? "Shared" : "Private"}
+                  </div>
                 </div>
-              )}
+                <div className="mt-3 text-[11px]" style={{ color: myFilesColors.muted2 }}>
+                  {activeShareLink
+                    ? "A share link is currently active."
+                    : "No public link is active."
+                  }
+                </div>
+              </div>
 
-              {!shareLoading && activeShareLink && (
+              <div className="rounded-2xl border p-4" style={{
+                borderColor: myFilesColors.border,
+                background: myFilesColors.panelBg,
+              }}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: myFilesColors.muted }}>
+                      Mode
+                    </div>
+                    <div className="mt-1 text-[11px]" style={{ color: myFilesColors.muted2 }}>
+                      Choose sharing mode for this file.
+                    </div>
+                  </div>
+                  <div className="flex rounded-2xl border" style={{ borderColor: myFilesColors.border, background: myFilesColors.buttonSoftBg }}>
+                    {(["private", "shared"] as const).map((mode) => {
+                      const active = shareMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setShareMode(mode)}
+                          className="rounded-2xl px-4 py-2 text-sm font-semibold"
+                          style={{
+                            background: active ? accentColor : "transparent",
+                            color: active ? "white" : myFilesColors.text,
+                            borderRadius: active ? "1rem" : "1rem",
+                          }}
+                        >
+                          {mode === "private" ? "Private" : "Shared"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="mt-3 text-[11px]" style={{ color: myFilesColors.muted2 }}>
+                  {shareMode === "private"
+                    ? "Private mode revokes the existing public link so it can no longer be used."
+                    : "Shared mode creates or updates a public link. You can optionally protect it with a password."
+                  }
+                </div>
+              </div>
+
+              {shareMode === "shared" ? (
                 <>
-                  <label className="text-xs" style={{ color: myFilesColors.muted }}>
-                    Public share URL
-                  </label>
-                  <div className="mt-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={getPublicShareUrl(activeShareLink.token)}
-                      className="w-full rounded-xl border px-4 py-2 text-sm outline-none"
-                      aria-label="Public share URL"
-                      style={{
-                        background: myFilesColors.inputBg,
-                        border: `1px solid ${myFilesColors.inputBorder}`,
-                        color: myFilesColors.inputText,
-                        caretColor: accentColor,
-                      }}
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold" style={{ color: myFilesColors.muted }}>
+                        Public link
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={activeShareLink ? getPublicShareUrl(activeShareLink.token) : ""}
+                          placeholder="No public link yet"
+                          aria-label="Public share URL"
+                          className="flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
+                          style={{
+                            background: myFilesColors.inputBg,
+                            border: `1px solid ${myFilesColors.inputBorder}`,
+                            color: activeShareLink ? myFilesColors.inputText : myFilesColors.muted2,
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!activeShareLink) return;
+                            const link = getPublicShareUrl(activeShareLink.token);
+
+                            try {
+                              await copyTextToClipboard(link);
+                              setCopySuccess("Link copied.");
+                              setTimeout(() => setCopySuccess(""), 1500);
+                            } catch {
+                              setCopySuccess("Gagal copy link. Silakan copy manual.");
+                              setTimeout(() => setCopySuccess(""), 2500);
+                            }
+                          }}
+                          disabled={!activeShareLink}
+                          className="rounded-2xl px-4 py-3 text-xs font-semibold text-white"
+                          style={{
+                            background: activeShareLink
+                              ? `linear-gradient(135deg, ${accentColor}, #22d3ee)`
+                              : myFilesColors.buttonSoftBg,
+                            opacity: activeShareLink ? 1 : 0.6,
+                          }}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      {copySuccess && (
+                        <div className="text-[11px]" style={{ color: "#34d399" }}>
+                          {copySuccess}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold" style={{ color: myFilesColors.muted }}>
+                        Password optional
+                      </label>
+                      <input
+                        type="password"
+                        value={shareModalPassword}
+                        onChange={(event) => setShareModalPassword(event.target.value)}
+                        placeholder="Leave empty for a public link"
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                        style={{
+                          background: myFilesColors.inputBg,
+                          border: `1px solid ${myFilesColors.inputBorder}`,
+                          color: myFilesColors.inputText,
+                          caretColor: accentColor,
+                        }}
+                      />
+                      <div className="text-[11px]" style={{ color: myFilesColors.muted2 }}>
+                        Leave empty for a public link. Add a password to require it before viewing/downloading.
+                      </div>
+                    </div>
                   </div>
                 </>
-              )}
+              ) : null}
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {shareMode === "private" ? (
+                  <button
+                    type="button"
+                    onClick={handleApplyShareMode}
+                    disabled={shareLoading || !activeShareLink}
+                    className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white"
+                    style={{
+                      background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                      opacity: shareLoading || !activeShareLink ? 0.6 : 1,
+                    }}
+                  >
+                    {shareLoading ? "Updating..." : "Make file private"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleApplyShareMode}
+                    disabled={shareLoading}
+                    className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white"
+                    style={{
+                      background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                      opacity: shareLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {shareLoading ? "Updating..." : activeShareLink ? "Update share settings" : "Create share link"}
+                  </button>
+                )}
+              </div>
             </div>
 
-            {copySuccess && (
-              <div
-                className="text-[11px] mb-3"
-                style={{ color: "#34d399" }}
-                role="status"
-              >
-                {copySuccess}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
+            <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                onClick={async () => {
-                  const link = activeShareLink
-                    ? getPublicShareUrl(activeShareLink.token)
-                    : "";
-
-                  if (!link) return;
-
-                  try {
-                    await copyTextToClipboard(link);
-                    setCopySuccess("Link copied");
-                    setTimeout(() => setCopySuccess(""), 1500);
-                  } catch {
-                    setCopySuccess("Gagal copy link. Silakan copy manual.");
-                    setTimeout(() => setCopySuccess(""), 2500);
-                  }
-                }}
-                disabled={!activeShareLink}
-                className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                style={{
-                  background: !activeShareLink
-                    ? "#334155"
-                    : `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                  opacity: activeShareLink ? 1 : 0.7,
-                }}
-                aria-label="Copy Link"
-              >
-                Copy Link
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (shareLoading) return;
-                  setIsShareModalOpen(false);
-                  setSelectedFileForShare(null);
-                  setActiveShareLink(null);
-                  setShareError("");
-                  setCopySuccess("");
-                }}
+                onClick={closeShareModal}
                 disabled={shareLoading}
-                className="px-3 py-2 rounded-xl text-xs font-medium"
+                className="rounded-2xl px-4 py-3 text-sm font-medium"
                 style={{
                   background: myFilesColors.buttonSoftBg,
                   border: `1px solid ${myFilesColors.border}`,
                   color: myFilesColors.text,
                   opacity: shareLoading ? 0.6 : 1,
                 }}
-                aria-label="Close Share Modal"
               >
                 Close
               </button>
