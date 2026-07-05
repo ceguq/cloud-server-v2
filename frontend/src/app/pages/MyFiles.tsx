@@ -35,7 +35,6 @@ import {
   Grid,
   List,
   Search,
-  Filter,
   SortAsc,
   Eye,
   Download,
@@ -60,7 +59,6 @@ import { useUploadManager } from "../upload/UploadManagerContext";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import {
-  fileTypeFilterLabel,
   formatBytes,
   getTypeLabel,
   type FileTypeFilterValue,
@@ -79,6 +77,7 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesFilterMenu } from "./my-files/components/MyFilesFilterMenu";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
@@ -2112,97 +2111,22 @@ export function MyFiles({
           />
         </div>
 
-        <div ref={filterMenuRef} className="relative">
-          <button
-            type="button"
-            aria-label="Filter"
-            onClick={() => setFilterMenuOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-            style={{
-              background: myFilesColors.buttonSoftBg,
-              border: `1px solid ${myFilesColors.border}`,
-              color: myFilesColors.text,
-            }}
-          >
-            <Filter size={12} /> Filter: {fileTypeFilterLabel(fileTypeFilter)}
-          </button>
-
-          {filterMenuOpen && (
-            <div
-              className="absolute right-0 top-full mt-2 rounded-lg shadow-2xl"
-              style={{
-                zIndex: 50,
-                background: myFilesColors.cardBg,
-                border: `1px solid ${myFilesColors.border}`,
-                minWidth: 240,
-              }}
-              role="menu"
-              aria-label="Filter menu"
-            >
-              {(
-                [
-                  ["all", "All"],
-                  ["folders", "Folders"],
-                  ["images", "Images"],
-                  ["pdf", "PDF"],
-                  ["documents", "Documents"],
-                  ["videos", "Videos"],
-                  ["audio", "Audio"],
-                  ["archives", "Archives"],
-                  ["others", "Others"],
-                ] as const
-              ).map(([value, label]) => {
-                const isActive = fileTypeFilter === value;
-                const activeBg = `${accentColor}12`;
-                const activeBorder = `1px solid ${accentColor}55`;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    role="menuitem"
-                    aria-label={`Filter ${label}`}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs transition-colors"
-                    style={{
-                      color: isActive ? accentColor : myFilesColors.muted,
-                      background: isActive ? activeBg : "transparent",
-                      border: isActive ? activeBorder : "1px solid transparent",
-                      borderRadius: 8,
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget;
-                      el.style.background = isActive
-                        ? activeBg
-                        : `${accentColor}10`;
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget;
-                      el.style.background = isActive ? activeBg : "transparent";
-                    }}
-                    onClick={() => {
-                      setFileTypeFilter(value);
-                      setFilterMenuOpen(false);
-                    }}
-                  >
-                    <span style={{ color: isActive ? accentColor : myFilesColors.text }}>
-                      {label}
-                    </span>
-                    {isActive ? (
-                      <span style={{ color: accentColor, fontWeight: 600 }}>{"\u2713"}</span>
-                    ) : (
-                      <span style={{ color: myFilesColors.muted }}> </span>
-                    )}
-                  </button>
-                );
-              })}
-
-              <div style={{ padding: "0 12px 10px" }}>
-                <div className="text-[10px]" style={{ color: myFilesColors.muted }}>
-                  Filter diterapkan setelah Search & sebelum Sort.
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <MyFilesFilterMenu
+          filterMenuOpen={filterMenuOpen}
+          selectedFilter={fileTypeFilter}
+          accentColor={accentColor}
+          cardBg={myFilesColors.cardBg}
+          borderColor={myFilesColors.border}
+          textColor={myFilesColors.text}
+          mutedColor={myFilesColors.muted}
+          buttonSoftBg={myFilesColors.buttonSoftBg}
+          filterMenuRef={filterMenuRef}
+          onToggleOpen={() => setFilterMenuOpen((v) => !v)}
+          onSelectFilter={(value) => {
+            setFileTypeFilter(value);
+            setFilterMenuOpen(false);
+          }}
+        />
         <div ref={sortMenuRef} className="relative">
           <button
             type="button"
