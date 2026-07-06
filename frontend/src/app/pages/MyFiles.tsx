@@ -81,6 +81,7 @@ import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions
 import { PreviewPdfFrame } from "./my-files/components/PreviewPdfFrame";
 import { PreviewFallbackFrame } from "./my-files/components/PreviewFallbackFrame";
 import { PreviewAudioPlayerFrame } from "./my-files/components/PreviewAudioPlayerFrame";
+import { PreviewVideoFrame } from "./my-files/components/PreviewVideoFrame";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
@@ -2376,34 +2377,12 @@ export function MyFiles({
             previewFileName={previewFileName}
           />
         ) : previewContentType.startsWith("video/") ? (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              background: "#000",
-              borderRadius: "0.75rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
+          <PreviewVideoFrame
+            previewUrl={previewUrl}
+            onError={() => {
+              setFileError("Gagal memuat preview video.");
             }}
-          >
-            <video
-              controls
-              src={previewUrl ?? undefined}
-              style={{
-                width: "100%",
-                height: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                background: "#000",
-              }}
-              preload="metadata"
-              onError={() => {
-                setFileError("Gagal memuat preview video.");
-              }}
-            />
-          </div>
+          />
         ) : previewContentType.startsWith("audio/") ? (
           <PreviewAudioPlayerFrame
             previewUrl={previewUrl}
