@@ -84,6 +84,7 @@ import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
+import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
@@ -3256,96 +3257,24 @@ export function MyFiles({
         </div>
       )}
 
-      {/* Delete Folder Modal */}
-      {isDeleteModalOpen && selectedFolderForDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-6"
-            style={{
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-            }}
-          >
-            <div className="mb-3">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: myFilesColors.title }}
-              >
-                Delete Folder?
-              </h2>
-              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
-                Apakah kamu yakin ingin menghapus "
-                <span
-                  style={{
-                    color: myFilesColors.text,
-                    background: myFilesColors.panelBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                    display: "inline-block",
-                    margin: "0 4px", /* small name box */
-                  }}
-                >
-                  {selectedFolderForDelete.name}
-                </span>
-                "?
-              </p>
-            </div>
-
-            {deleteError && (
-              <div
-                className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 mb-3"
-                style={{ color: "#f87171" }}
-              >
-                {deleteError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setSelectedFolderForDelete(null);
-                  setDeleteError("");
-                  setOpenFolderActionId(null);
-                }}
-                disabled={deleteLoading}
-                className="px-3 py-2 rounded-xl text-xs font-medium"
-                style={{
-                  background: myFilesColors.buttonSoftBg,
-                  color: myFilesColors.text,
-                  border: `1px solid ${myFilesColors.border}`,
-                  opacity: deleteLoading ? 0.6 : 1,
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleConfirmDeleteFolder}
-                disabled={deleteLoading}
-                className="px-3 py-2 rounded-xl text-xs font-semibold"
-                style={{
-                  background: "#f87171",
-                  border: `1px solid rgba(248,113,113,0.4)`,
-                  color: "#fff",
-                  opacity: deleteLoading ? 0.75 : 1,
-                }}
-                aria-label="Delete"
-              >
-                {deleteLoading ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MyFilesFolderDeleteModal
+        folder={selectedFolderForDelete}
+        deleteLoading={deleteLoading}
+        deleteError={deleteError}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedFolderForDelete(null);
+          setDeleteError("");
+          setOpenFolderActionId(null);
+        }}
+        onConfirm={handleConfirmDeleteFolder}
+      />
 
       <MyFilesFileDeleteModal
         file={selectedFileForDelete}
