@@ -85,6 +85,7 @@ import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
 import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
+import { MyFilesFileRenameModal } from "./my-files/components/MyFilesFileRenameModal";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
@@ -2617,102 +2618,31 @@ export function MyFiles({
       )}
 
       {/* Rename File Modal */}
-      {isFileRenameModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-6"
-            style={{
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-            }}
-          >
-            <div className="mb-4">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: myFilesColors.title }}
-              >
-                Rename File
-              </h2>
-              <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
-                Ganti nama file.
-              </p>
-            </div>
-
-            {fileModalError && (
-              <div
-                className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 mb-3"
-                style={{ color: "#f87171" }}
-              >
-                {fileModalError}
-              </div>
-            )}
-
-            <form
-              onSubmit={(e) => handleSubmitFileRename(e)}
-              className="space-y-3"
-            >
-              <div>
-                <label className="text-xs" style={{ color: myFilesColors.muted }}>
-                  New name
-                </label>
-                <input
-                  autoFocus
-                  type="text"
-                  className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
-                  value={fileRenameName}
-                  onChange={(e) => {
-                    setFileRenameName(e.target.value);
-                    if (fileModalError) setFileModalError("");
-                  }}
-                  aria-label="Rename file input"
-                  style={{
-                    background: myFilesColors.inputBg,
-                    border: `1px solid ${myFilesColors.inputBorder}`,
-                    color: myFilesColors.inputText,
-                    caretColor: accentColor,
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFileRenameModalOpen(false);
-                    setFileModalError("");
-                  }}
-                  disabled={fileActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-medium"
-                  style={{
-                    background: myFilesColors.buttonSoftBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.text,
-                    opacity: fileActionLoading ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={fileActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                  style={{
-                    background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                    opacity: fileActionLoading ? 0.7 : 1,
-                  }}
-                >
-                  {fileActionLoading ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <MyFilesFileRenameModal
+        isOpen={isFileRenameModalOpen}
+        fileRenameName={fileRenameName}
+        fileModalError={fileModalError}
+        fileActionLoading={fileActionLoading}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        inputBg={myFilesColors.inputBg}
+        inputBorder={myFilesColors.inputBorder}
+        inputText={myFilesColors.inputText}
+        accentColor={accentColor}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        onClose={() => {
+          setIsFileRenameModalOpen(false);
+          setFileModalError("");
+        }}
+        onNameChange={(value) => {
+          setFileRenameName(value);
+          if (fileModalError) setFileModalError("");
+        }}
+        onSubmit={(e) => handleSubmitFileRename(e)}
+      />
 
       {/* Share Modal */}
       {isShareModalOpen && (

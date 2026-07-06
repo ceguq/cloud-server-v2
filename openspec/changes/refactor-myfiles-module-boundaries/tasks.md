@@ -232,6 +232,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Keep file delete modal, bulk delete modals, rename modals, preview/share/move modals, and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1k Create `MyFilesFileRenameModal.tsx` component**
+  - [x] Extract only the File Rename modal JSX from `MyFiles.tsx`
+  - [x] Note: Only the presentational JSX was moved. `isFileRenameModalOpen`, `fileRenameName`, `fileModalError`, `fileActionLoading`, and `handleSubmitFileRename` remain owned by `MyFiles.tsx`.
+  - [ ] Keep folder create/rename modal, bulk delete modals, preview/share/move modals, and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
