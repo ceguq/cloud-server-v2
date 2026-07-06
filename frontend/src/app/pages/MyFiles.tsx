@@ -39,7 +39,7 @@ import {
   isInteractiveItemTarget,
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
-import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
+import { useMyFilesActionMenus } from "./my-files/hooks/useMyFilesActionMenus";
 import { useMyFilesSelection } from "./my-files/hooks/useMyFilesSelection";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
@@ -137,50 +137,18 @@ export function MyFiles({
   // filesRefreshKey changes should only refresh currentFolderId list
   // without changing active folder or causing request loops.
 
-  const [openFolderActionId, setOpenFolderActionId] = useState<string | null>(
-    null,
-  );
-  const [openFileActionId, setOpenFileActionId] = useState<string | null>(null);
-
-  const [fileActionMenuPosition, setFileActionMenuPosition] = useState<MenuCoordinate | null>(null);
-
-  const [folderActionMenuPosition, setFolderActionMenuPosition] = useState<MenuCoordinate | null>(null);
-
-
-  // folder action menu helpers
-  function openFolderMenuAtCursor(
-    event: React.MouseEvent,
-    folderId: string,
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setOpenFileActionId(null);
-    setFileActionMenuPosition(null);
-    setFileActionFeedback(null);
-
-    const menuWidth = 180;
-    const menuHeight = 180;
-
-    setOpenFolderActionId(folderId);
-    setFolderActionMenuPosition(
-      calculateActionMenuPosition({
-        clientX: event.clientX,
-        clientY: event.clientY,
-        menuWidth,
-        menuHeight,
-      }),
-    );
-  }
-
-
-
-
-  // click-outside untuk menu aksi file
-  const fileMenuWrapRef = useRef<HTMLDivElement | null>(null);
-
-  // click-outside untuk menu aksi folder (global)
-  const folderMenuWrapRef = useRef<HTMLDivElement | null>(null);
+  const {
+    openFolderActionId,
+    openFileActionId,
+    fileActionMenuPosition,
+    folderActionMenuPosition,
+    fileMenuWrapRef,
+    folderMenuWrapRef,
+    openFileMenuAtCursor,
+    openFolderMenuAtCursor,
+    closeFileActionMenu,
+    closeFolderActionMenu,
+  } = useMyFilesActionMenus();
 
 
 
@@ -440,7 +408,7 @@ export function MyFiles({
       await loadFiles(currentFolderId ?? null);
       setIsDeleteModalOpen(false);
       setSelectedFolderForDelete(null);
-      setOpenFolderActionId(null);
+      closeFolderActionMenu();
     } catch (err: any) {
       setDeleteError(
         err?.response?.data?.message ||
@@ -925,9 +893,8 @@ export function MyFiles({
     setBulkDownloadLoading(false);
   };
 
-  const closeFileActionMenu = () => {
-    setOpenFileActionId(null);
-    setFileActionMenuPosition(null);
+  const handleCloseFileActionMenu = () => {
+    closeFileActionMenu();
     setFileActionFeedback(null);
   };
 
@@ -952,9 +919,8 @@ export function MyFiles({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isShareModalOpen]);
 
-  const closeFolderActionMenu = () => {
-    setOpenFolderActionId(null);
-    setFolderActionMenuPosition(null);
+  const handleCloseFolderActionMenu = () => {
+    closeFolderActionMenu();
   };
 
   const getOrCreateFileShareLink = async (file: FileModel, password?: string) => {
@@ -1201,35 +1167,10 @@ export function MyFiles({
     }
   };
 
-  // file action menu helpers
-  function openFileMenuAtCursor(
-    event: React.MouseEvent,
-    fileId: string,
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    setOpenFolderActionId(null);
-    setFolderActionMenuPosition(null);
+  const handleOpenFileMenuAtCursor = (event: React.MouseEvent, fileId: string) => {
     setFileActionFeedback(null);
-
-    if (openFileActionId === fileId) {
-      closeFileActionMenu();
-      return;
-    }
-
-    const menuWidth = 260;
-    const menuHeight = 430;
-
-    setOpenFileActionId(fileId);
-    setFileActionMenuPosition(
-      calculateActionMenuPosition({
-        clientX: event.clientX,
-        clientY: event.clientY,
-        menuWidth,
-        menuHeight,
-      }),
-    );
-  }
+    openFileMenuAtCursor(event, fileId);
+  };
 
   // Move modal helpers
   const closeMoveModal = () => {
@@ -1245,7 +1186,7 @@ export function MyFiles({
   };
 
   const openMoveFileModal = (file: FileModel) => {
-    setOpenFileActionId(null);
+    closeFileActionMenu();
 
     const isBulkEligible =
       selectedFileIds.size > 1 && selectedFileIds.has(file.id);
@@ -1264,7 +1205,7 @@ export function MyFiles({
   };
 
   const openMoveFolderModal = (folder: FolderModel) => {
-    setOpenFolderActionId(null);
+    closeFolderActionMenu();
     setMoveItemType("folder");
     setMoveItemId(folder.id);
     setMoveItemName(folder.name ?? "Untitled folder");
@@ -1548,42 +1489,6 @@ export function MyFiles({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
-  // Click-outside handler untuk menu aksi file & folder
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-
-      // File menu
-      if (openFileActionId !== null) {
-        const wrap = fileMenuWrapRef.current;
-        if (!wrap) {
-          setOpenFileActionId(null);
-          setFileActionMenuPosition(null);
-        } else if (!wrap.contains(target)) {
-          setOpenFileActionId(null);
-          setFileActionMenuPosition(null);
-        }
-      }
-
-      // Folder menu
-      if (openFolderActionId !== null) {
-        const wrap = folderMenuWrapRef.current;
-        if (!wrap) {
-          setOpenFolderActionId(null);
-          setFolderActionMenuPosition(null);
-        } else if (!wrap.contains(target)) {
-          setOpenFolderActionId(null);
-          setFolderActionMenuPosition(null);
-        }
-      }
-    };
-
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [openFileActionId, openFolderActionId]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -1767,37 +1672,7 @@ export function MyFiles({
             aria-label={`More actions for ${file.original_name}`}
             title="More actions"
             onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-
-              setOpenFolderActionId(null);
-              setFolderActionMenuPosition(null);
-              setFileActionFeedback(null);
-
-              if (openFileActionId === file.id) {
-                closeFileActionMenu();
-                return;
-              }
-
-              const rect = event.currentTarget.getBoundingClientRect();
-              const menuWidth = 260;
-              const left =
-                typeof window !== "undefined"
-                  ? Math.min(
-                      window.innerWidth - menuWidth - 12,
-                      Math.max(12, rect.right - menuWidth),
-                    )
-                  : rect.right - menuWidth;
-              const top =
-                typeof window !== "undefined"
-                  ? Math.min(window.innerHeight - 430, rect.bottom + 6)
-                  : rect.bottom + 6;
-
-              setOpenFileActionId(file.id);
-              setFileActionMenuPosition({
-                x: Math.max(8, left),
-                y: Math.max(8, top),
-              });
+              handleOpenFileMenuAtCursor(event, file.id);
             }}
             className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
             style={{
@@ -1823,33 +1698,33 @@ export function MyFiles({
             sharing={isSharing}
             feedback={feedback}
             onPreview={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               void handlePreviewFile(file);
             }}
             onDetails={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               setDetailsItem({ type: "file", item: file });
             }}
             onDownload={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               void fileService.downloadFile(file.id, file.original_name);
             }}
             onShare={() => {
               void loadFileSharePanel(file);
             }}
             onRename={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               setSelectedFileForAction(file);
               setFileRenameName(file.original_name);
               setFileModalError("");
               setIsFileRenameModalOpen(true);
             }}
             onMove={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               openMoveFileModal(file);
             }}
             onDelete={() => {
-              closeFileActionMenu();
+              handleCloseFileActionMenu();
               setSelectedFileForDelete(file);
               setDeleteFileError("");
               setIsFileDeleteModalOpen(true);
@@ -2045,7 +1920,7 @@ export function MyFiles({
 
                 moveDraggedItemToFolder(folder.id);
               }}
-              onCloseFolderAction={() => setOpenFolderActionId(null)}
+              onCloseFolderAction={handleCloseFolderActionMenu}
               onOpenRenameFolderModal={() => {
                 setSelectedFolderForAction(folder);
                 openRenameFolderModal(folder);
@@ -2140,23 +2015,23 @@ export function MyFiles({
         accentColor={accentColor}
         onShowDetails={() => {
           if (!activeFolderAction) return;
-          closeFolderActionMenu();
+          handleCloseFolderActionMenu();
           setDetailsItem({ type: "folder", item: activeFolderAction });
         }}
         onRename={() => {
           if (!activeFolderAction) return;
-          closeFolderActionMenu();
+          handleCloseFolderActionMenu();
           setSelectedFolderForAction(activeFolderAction);
           openRenameFolderModal(activeFolderAction);
         }}
         onMove={() => {
           if (!activeFolderAction) return;
-          closeFolderActionMenu();
+          handleCloseFolderActionMenu();
           openMoveFolderModal(activeFolderAction);
         }}
         onDelete={() => {
           if (!activeFolderAction) return;
-          closeFolderActionMenu();
+          handleCloseFolderActionMenu();
           openDeleteFolderModal(activeFolderAction);
         }}
       />
@@ -2473,7 +2348,7 @@ export function MyFiles({
           setIsDeleteModalOpen(false);
           setSelectedFolderForDelete(null);
           setDeleteError("");
-          setOpenFolderActionId(null);
+          closeFolderActionMenu();
         }}
         onConfirm={handleConfirmDeleteFolder}
       />

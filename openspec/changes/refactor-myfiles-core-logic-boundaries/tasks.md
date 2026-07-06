@@ -31,6 +31,9 @@
 - [x] Extract focused useMyFilesSelection hook.
 - [x] Move only selection/checklist state and local selection helpers into the new hook.
 - [x] Keep bulk async actions, API calls, navigation/data loading, modal state, preview state, and action menu state owned by MyFiles.tsx.
+- [x] Extract focused useMyFilesActionMenus hook.
+- [x] Move only file/folder action menu state, menu refs, menu position state, open/close handlers, and click-outside behavior into the new hook.
+- [x] Keep file/folder action callbacks, API calls, modal state, preview state, data loading/navigation, and selection state outside this hook.
 - [ ] Candidate hooks may include useMyFilesSelection, useMyFilesMenus, useMyFilesMoveState, useMyFilesShareState, or similar names, but final names will be based on the actual code audit.
 - [ ] Keep API behavior unchanged.
 
