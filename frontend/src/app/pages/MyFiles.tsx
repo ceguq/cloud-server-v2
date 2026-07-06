@@ -71,6 +71,7 @@ import {
   type SortDirection,
 } from "./my-files/myFilesSorting";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
+import { MyFilesFileActionMenu } from "./my-files/components/MyFilesFileActionMenu";
 import { MenuItemButton } from "./my-files/components/MenuItemButton";
 import { EmptyFilterMessage } from "./my-files/components/EmptyFilterMessage";
 import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
@@ -1884,138 +1885,52 @@ export function MyFiles({
             <MoreVertical size={16} />
           </button>
 
-          {isOpen ? (
-            <div
-              style={{
-                position: "fixed",
-                top: fileActionMenuPosition.y,
-                left: fileActionMenuPosition.x,
-                width: 260,
-                zIndex: 9999,
-                background: myFilesColors.panelBg,
-                border: `1px solid ${myFilesColors.border}`,
-                borderRadius: 10,
-                padding: 6,
-                boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-              }}
-              role="menu"
-              aria-label={`File actions ${file.original_name}`}
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <MenuItemButton
-                label={previewingFileId === file.id ? "Opening..." : "Preview"}
-                icon={<Eye size={14} />}
-                disabled={!canPreview || previewingFileId === file.id}
-                ariaLabel={`Preview ${file.original_name}`}
-                onClick={() => {
-                  closeFileActionMenu();
-                  void handlePreviewFile(file);
-                }}
-                textColor={myFilesColors.text}
-                accentColor={accentColor}
-              />
-
-              <MenuItemButton
-                label="Details"
-                icon={<FileText size={14} />}
-                ariaLabel={`Details ${file.original_name}`}
-                onClick={() => {
-                  closeFileActionMenu();
-                  setDetailsItem({ type: "file", item: file });
-                }}
-                textColor={myFilesColors.text}
-                accentColor={accentColor}
-              />
-
-              <MenuItemButton
-                label="Download"
-                icon={<Download size={14} />}
-                ariaLabel={`Download ${file.original_name}`}
-                onClick={() => {
-                  closeFileActionMenu();
-                  void fileService.downloadFile(file.id, file.original_name);
-                }}
-                textColor={myFilesColors.text}
-                accentColor={accentColor}
-              />
-
-              <MenuItemButton
-                label="Share"
-                icon={<Share2 size={14} />}
-                disabled={isSharing}
-                ariaLabel={`Share ${file.original_name}`}
-                onClick={() => {
-                  void loadFileSharePanel(file);
-                }}
-                textColor={myFilesColors.text}
-                accentColor={accentColor}
-              />
-
-              <div
-                className="mt-2 border-t pt-2"
-                style={{ borderColor: myFilesColors.border }}
-              >
-                <MenuItemButton
-                  label="Rename"
-                  icon={<Edit3 size={14} />}
-                  ariaLabel={`Rename ${file.original_name}`}
-                  onClick={() => {
-                    closeFileActionMenu();
-                    setSelectedFileForAction(file);
-                    setFileRenameName(file.original_name);
-                    setFileModalError("");
-                    setIsFileRenameModalOpen(true);
-                  }}
-                  textColor={myFilesColors.text}
-                  accentColor={accentColor}
-                />
-
-                <MenuItemButton
-                  label="Move to..."
-                  icon={<Folder size={14} />}
-                  ariaLabel={`Move ${file.original_name}`}
-                  onClick={() => {
-                    closeFileActionMenu();
-                    openMoveFileModal(file);
-                  }}
-                  textColor={myFilesColors.text}
-                  accentColor={accentColor}
-                />
-
-                <MenuItemButton
-                  label="Trash"
-                  icon={<Trash2 size={14} />}
-                  danger
-                  ariaLabel={`Trash ${file.original_name}`}
-                  onClick={() => {
-                    closeFileActionMenu();
-                    setSelectedFileForDelete(file);
-                    setDeleteFileError("");
-                    setIsFileDeleteModalOpen(true);
-                  }}
-                  textColor={myFilesColors.text}
-                  accentColor={accentColor}
-                />
-              </div>
-
-              {feedback ? (
-                <div
-                  className="mt-2 w-full rounded-lg px-2 py-1 text-[10px] font-semibold"
-                  style={{
-                    background:
-                      feedback.type === "error"
-                        ? "rgba(239,68,68,0.10)"
-                        : `${accentColor}14`,
-                    color:
-                      feedback.type === "error" ? "#ef4444" : accentColor,
-                  }}
-                  role="alert"
-                >
-                  {feedback.message}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          <MyFilesFileActionMenu
+            file={file}
+            isOpen={Boolean(openFileActionId === file.id && fileActionMenuPosition)}
+            position={fileActionMenuPosition}
+            menuRef={openFileActionId === file.id ? fileMenuWrapRef : null}
+            panelBg={myFilesColors.panelBg}
+            borderColor={myFilesColors.border}
+            textColor={myFilesColors.text}
+            mutedColor={myFilesColors.muted}
+            accentColor={accentColor}
+            previewing={previewingFileId === file.id}
+            sharing={isSharing}
+            feedback={feedback}
+            onPreview={() => {
+              closeFileActionMenu();
+              void handlePreviewFile(file);
+            }}
+            onDetails={() => {
+              closeFileActionMenu();
+              setDetailsItem({ type: "file", item: file });
+            }}
+            onDownload={() => {
+              closeFileActionMenu();
+              void fileService.downloadFile(file.id, file.original_name);
+            }}
+            onShare={() => {
+              void loadFileSharePanel(file);
+            }}
+            onRename={() => {
+              closeFileActionMenu();
+              setSelectedFileForAction(file);
+              setFileRenameName(file.original_name);
+              setFileModalError("");
+              setIsFileRenameModalOpen(true);
+            }}
+            onMove={() => {
+              closeFileActionMenu();
+              openMoveFileModal(file);
+            }}
+            onDelete={() => {
+              closeFileActionMenu();
+              setSelectedFileForDelete(file);
+              setDeleteFileError("");
+              setIsFileDeleteModalOpen(true);
+            }}
+          />
         </div>
       </div>
     );

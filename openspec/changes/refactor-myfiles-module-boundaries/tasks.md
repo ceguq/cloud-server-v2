@@ -214,6 +214,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Leave file action menu, rename modals, preview/share/move/delete modals, and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1h Create `MyFilesFileActionMenu.tsx` component**
+  - [x] Extract only the floating File Action Menu panel JSX from `MyFiles.tsx`
+  - [x] Keep file menu state, positioning, trigger button, callbacks, API behavior, and modal triggers owned by `MyFiles.tsx`
+  - [ ] Leave rename modals, preview/share/move/delete modals, and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
