@@ -77,6 +77,7 @@ import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
 import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
+import { MyFilesDetailsModal } from "./my-files/components/MyFilesDetailsModal";
 import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
@@ -2334,122 +2335,16 @@ export function MyFiles({
       />
 
 
-      {/* Details Modal */}
-      {detailsItem ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4"
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={() => setDetailsItem(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-5"
-            style={{
-              background: myFilesColors.cardBg,
-              borderColor: myFilesColors.border,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-            }}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            {(() => {
-              const item = detailsItem.item;
-              const isFile = detailsItem.type === "file";
-              const title = isFile
-                ? (item as FileModel).original_name
-                : (item as FolderModel).name;
-              const typeLabel = isFile
-                ? getTypeLabel((item as FileModel).mime_type ?? null)
-                : "Folder";
-              const modifiedAt =
-                item.updated_at || item.created_at
-                  ? new Date(item.updated_at ?? item.created_at ?? "").toLocaleString()
-                  : "-";
-              const createdAt = item.created_at
-                ? new Date(item.created_at).toLocaleString()
-                : "-";
-
-              return (
-                <>
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div
-                        className="text-sm font-semibold"
-                        style={{ color: myFilesColors.title }}
-                      >
-                        Details
-                      </div>
-                      <div
-                        className="mt-1 truncate text-xs"
-                        style={{ color: myFilesColors.muted }}
-                        title={title}
-                      >
-                        {title}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDetailsItem(null)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{
-                        background: myFilesColors.panelBg,
-                        border: `1px solid ${myFilesColors.border}`,
-                        color: myFilesColors.muted,
-                      }}
-                      aria-label="Close details"
-                      title="Close"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
-                        Type
-                      </div>
-                      <div className="mt-1" style={{ color: myFilesColors.text }}>
-                        {typeLabel}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
-                        Status
-                      </div>
-                      <div className="mt-1" style={{ color: myFilesColors.text }}>
-                        {isFile ? "Private" : "Folder"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
-                        Modified
-                      </div>
-                      <div className="mt-1" style={{ color: myFilesColors.text }}>
-                        {modifiedAt}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
-                        Size
-                      </div>
-                      <div className="mt-1" style={{ color: myFilesColors.text }}>
-                        {isFile ? formatBytes((item as FileModel).size) : "-"}
-                      </div>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="font-semibold" style={{ color: myFilesColors.muted }}>
-                        Created
-                      </div>
-                      <div className="mt-1" style={{ color: myFilesColors.text }}>
-                        {createdAt}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      ) : null}
+      <MyFilesDetailsModal
+        detailsItem={detailsItem}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        panelBg={myFilesColors.panelBg}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        onClose={() => setDetailsItem(null)}
+      />
 
 
       {/* Folder/Create/Rename Modal */}
