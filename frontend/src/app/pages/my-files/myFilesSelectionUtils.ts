@@ -29,3 +29,13 @@ export function applyVisibleSelection<T>(
 
   return next;
 }
+
+export function removeSetValues<T>(current: Set<T>, valuesToRemove: Iterable<T>): Set<T> {
+  const next = new Set(current);
+
+  for (const value of valuesToRemove) {
+    next.delete(value);
+  }
+
+  return next;
+}

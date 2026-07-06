@@ -40,7 +40,7 @@ import {
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
 import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
-import { applyVisibleSelection, toggleSetValue } from "./my-files/myFilesSelectionUtils";
+import { applyVisibleSelection, removeSetValues, toggleSetValue } from "./my-files/myFilesSelectionUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -1329,11 +1329,7 @@ export function MyFiles({
           const singleId = moveFileIds.length === 1 ? moveFileIds[0] : moveItemId;
           if (singleId) {
             await fileService.moveFile(singleId, moveTargetFolderId);
-            setSelectedFileIds((prev) => {
-              const next = new Set(prev);
-              next.delete(singleId);
-              return next;
-            });
+            setSelectedFileIds((prev) => removeSetValues(prev, [singleId]));
           }
 
           await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
@@ -1343,11 +1339,7 @@ export function MyFiles({
       if (moveItemType === "folder") {
         if (!moveItemId) return;
         await folderService.moveFolder(moveItemId, moveTargetFolderId);
-        setSelectedFolderIds((prev) => {
-          const next = new Set(prev);
-          next.delete(moveItemId);
-          return next;
-        });
+        setSelectedFolderIds((prev) => removeSetValues(prev, [moveItemId]));
 
         await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
       }
@@ -1483,17 +1475,9 @@ export function MyFiles({
         ),
       ]);
 
-      setSelectedFileIds((prev) => {
-        const next = new Set(prev);
-        fileIds.forEach((fileId) => next.delete(fileId));
-        return next;
-      });
+      setSelectedFileIds((prev) => removeSetValues(prev, fileIds));
 
-      setSelectedFolderIds((prev) => {
-        const next = new Set(prev);
-        safeFolderIds.forEach((folderId) => next.delete(folderId));
-        return next;
-      });
+      setSelectedFolderIds((prev) => removeSetValues(prev, safeFolderIds));
 
       await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
     } catch (error) {
