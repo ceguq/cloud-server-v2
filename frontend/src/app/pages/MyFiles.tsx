@@ -83,7 +83,6 @@ import { PreviewFallbackFrame } from "./my-files/components/PreviewFallbackFrame
 import { PreviewAudioPlayerFrame } from "./my-files/components/PreviewAudioPlayerFrame";
 import { PreviewVideoFrame } from "./my-files/components/PreviewVideoFrame";
 import { PreviewTextFrame } from "./my-files/components/PreviewTextFrame";
-import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
 import { MyFilesShareModal } from "./my-files/components/MyFilesShareModal";
