@@ -238,6 +238,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Keep folder create/rename modal, bulk delete modals, preview/share/move modals, and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1o Create `MyFilesShareModal.tsx` component**
+  - [x] Extract only the Share modal JSX from `MyFiles.tsx`
+  - [x] Note: Only the presentational JSX was moved. `isShareModalOpen`, `selectedFileForShare`, `activeShareLink`, `shareMode`, `shareModalPassword`, `shareLoading`, `shareError`, `copySuccess`, share handlers, clipboard logic, URL calculation, and API behavior remain owned by `MyFiles.tsx`.
+  - [ ] Keep preview modal and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [x] **3.1l Create `MyFilesFolderModal.tsx` component**
   - [x] Extract only the Folder Create/Rename modal JSX from `MyFiles.tsx`
   - [x] Note: Only the modal open state, modal mode, folder name state, close/reset behavior, submit handling, loading/error state, validation, and API behavior remain owned by `MyFiles.tsx`.
