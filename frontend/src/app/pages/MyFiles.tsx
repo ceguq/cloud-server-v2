@@ -40,6 +40,7 @@ import {
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
 import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
+import { toggleSetValue } from "./my-files/myFilesSelectionUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -224,21 +225,11 @@ export function MyFiles({
 
 
   const toggleFolderSelection = (folderId: string) => {
-    setSelectedFolderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
+    setSelectedFolderIds((prev) => toggleSetValue(prev, folderId));
   };
 
   const toggleFileSelection = (fileId: string) => {
-    setSelectedFileIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(fileId)) next.delete(fileId);
-      else next.add(fileId);
-      return next;
-    });
+    setSelectedFileIds((prev) => toggleSetValue(prev, fileId));
   };
 
   // Files state
