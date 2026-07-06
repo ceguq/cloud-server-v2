@@ -438,8 +438,8 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Extract `getExistingShareLink` handler
   - [ ] Move share modal state from MyFiles.tsx
 
-- [ ] **6.3 Create `MoveModal.tsx`**
-  - [ ] Extract move modal UI
+- [x] **6.3 Create `MoveModal.tsx`**
+  - [x] Extract move modal UI
   - [ ] Extract folder selection dropdown
   - [ ] Extract bulk move logic
   - [ ] Support move files (single and bulk)

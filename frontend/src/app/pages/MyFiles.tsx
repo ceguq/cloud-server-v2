@@ -29,34 +29,18 @@ import type {
   ShareMode,
   ViewMode,
 } from "./my-files/types";
-
-import {
-  Folder,
-
-  Grid,
-  List,
-  Search,
-  Eye,
-  Download,
-  Share2,
-  Copy,
-  FileText,
-  Edit3,
-  Trash2,
-  ChevronRight,
-  Home,
-  Star,
-  Clock,
-  MoreHorizontal,
-  MoreVertical,
-  X,
-} from "lucide-react";
 import folderService, {
   type Folder as FolderModel,
 } from "../../services/folderService";
 import fileService, { type FileModel } from "../../services/fileService";
 import { useUploadManager } from "../upload/UploadManagerContext";
-import { LoadingSpinner } from "../components/LoadingSpinner";
+import {
+  copyTextToClipboard,
+  isInteractiveItemTarget,
+} from "./my-files/myFilesDomUtils";
+import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
+import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
+import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import {
   formatBytes,
@@ -70,46 +54,34 @@ import {
   type SortBy,
   type SortDirection,
 } from "./my-files/myFilesSorting";
-import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
-import { MyFilesFileActionMenu } from "./my-files/components/MyFilesFileActionMenu";
-import { MenuItemButton } from "./my-files/components/MenuItemButton";
-import { EmptyFilterMessage } from "./my-files/components/EmptyFilterMessage";
-import { EmptyFolderMessage } from "./my-files/components/EmptyFolderMessage";
-import { EmptySearchState } from "./my-files/components/EmptySearchState";
-import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
+import { MoreVertical, X } from "lucide-react";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
-import { MyFilesDetailsModal } from "./my-files/components/MyFilesDetailsModal";
-import { MyFilesFileDeleteModal } from "./my-files/components/MyFilesFileDeleteModal";
-import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
-import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
-import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
-import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
-import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
-import { MyFilesBulkFolderDeleteModal } from "./my-files/components/MyFilesBulkFolderDeleteModal";
-import { MyFilesBulkFileDeleteModal } from "./my-files/components/MyFilesBulkFileDeleteModal";
-import { MyFilesBulkDownloadResultModal } from "./my-files/components/MyFilesBulkDownloadResultModal";
-import { MyFilesFolderModal } from "./my-files/components/MyFilesFolderModal";
-import { MyFilesFileRenameModal } from "./my-files/components/MyFilesFileRenameModal";
-import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
-import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
-import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
 import { MyFilesHeaderActions } from "./my-files/components/MyFilesHeaderActions";
 import { MyFilesToolbar } from "./my-files/components/MyFilesToolbar";
-import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
-import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
-import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
 import { MyFilesSelectionModeButton } from "./my-files/components/MyFilesSelectionModeButton";
-import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
-import { SelectionCountPill } from "./my-files/components/SelectionCountPill";
 import { ViewModeToggle } from "./my-files/components/ViewModeToggle";
-import {
-  copyTextToClipboard,
-  isInteractiveItemTarget,
-} from "./my-files/myFilesDomUtils";
-import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
-import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
-import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
-
+import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
+import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
+import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
+import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
+import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
+import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
+import { MyFilesDetailsModal } from "./my-files/components/MyFilesDetailsModal";
+import { MyFilesFolderModal } from "./my-files/components/MyFilesFolderModal";
+import { MyFilesFileRenameModal } from "./my-files/components/MyFilesFileRenameModal";
+import { MyFilesBulkFolderDeleteModal } from "./my-files/components/MyFilesBulkFolderDeleteModal";
+import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
+import { MyFilesFileDeleteModal } from "./my-files/components/MyFilesFileDeleteModal";
+import { MyFilesBulkFileDeleteModal } from "./my-files/components/MyFilesBulkFileDeleteModal";
+import { MyFilesBulkDownloadResultModal } from "./my-files/components/MyFilesBulkDownloadResultModal";
+import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
+import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
+import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
+import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
+import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
+import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
+import { MyFilesFileActionMenu } from "./my-files/components/MyFilesFileActionMenu";
+import { PageHeaderSummary } from "./my-files/components/PageHeaderSummary";
 import {
   getPublicShareUrl,
   createShareLink,
@@ -2831,140 +2803,31 @@ export function MyFiles({
         </div>
       )}
 
-      {/* Move Modal */}
-      {moveModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={closeMoveModal}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-5 shadow-2xl"
-            style={{
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold" style={{ color: myFilesColors.title }}>
-                  {moveItemType === "folder" ? "Move Folder" : "Move File"}
-                </h2>
-                <p className="mt-1 text-sm" style={{ color: myFilesColors.muted }}>
-                  Pilih folder tujuan untuk memindahkan item ini.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="rounded-lg px-2 py-1 text-sm transition-colors"
-                style={{
-                  color: myFilesColors.muted,
-                  background: "transparent",
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = `${accentColor}10`;
-                  el.style.color = myFilesColors.text;
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = "transparent";
-                  el.style.color = myFilesColors.muted;
-                }}
-                onClick={closeMoveModal}
-                disabled={moveLoading}
-                aria-label="Close move modal"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div
-              className="mb-4 rounded-xl border p-3"
-              style={{
-                background: myFilesColors.panelBg,
-                border: `1px solid ${myFilesColors.border}`,
-              }}
-            >
-              <p className="text-xs uppercase tracking-wide" style={{ color: myFilesColors.muted }}>
-                Item
-              </p>
-              <p className="mt-1 truncate text-sm font-medium" style={{ color: myFilesColors.text }}>
-                {moveItemType === "file" && moveFileIds.length > 1
-                  ? `${moveFileIds.length} files selected`
-                  : moveItemName}
-              </p>
-            </div>
-
-            <label className="mb-2 block text-sm font-medium" style={{ color: myFilesColors.text }}>
-              Folder tujuan
-            </label>
-
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-              value={moveTargetFolderId ?? "__root__"}
-              onChange={(e) =>
-                setMoveTargetFolderId(
-                  e.target.value === "__root__" ? null : e.target.value,
-                )
-              }
-              disabled={moveLoading}
-              style={{
-                background: myFilesColors.inputBg,
-                border: `1px solid ${myFilesColors.inputBorder}`,
-                color: myFilesColors.inputText,
-                caretColor: accentColor,
-              }}
-            >
-              <option value="__root__">Root / My Files</option>
-              {folders
-                .filter((folder) =>
-                  moveItemType === "folder" ? folder.id !== moveItemId : true,
-                )
-                .map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-            </select>
-
-            {moveError && (
-              <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {moveError}
-              </p>
-            )}
-
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                className="rounded-xl px-4 py-2 text-sm font-medium transition-colors"
-                onClick={closeMoveModal}
-                disabled={moveLoading}
-                style={{
-                  background: myFilesColors.buttonSoftBg,
-                  border: `1px solid ${myFilesColors.border}`,
-                  color: myFilesColors.text,
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="rounded-xl px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={submitMove}
-                disabled={moveLoading || !moveItemId || !moveItemType}
-                style={{
-                  background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                }}
-              >
-                {moveLoading ? "Moving..." : "Move"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MyFilesMoveModal
+        isOpen={moveModalOpen}
+        itemType={moveItemType}
+        itemName={moveItemName}
+        itemId={moveItemId}
+        fileIds={moveFileIds}
+        targetFolderId={moveTargetFolderId}
+        error={moveError}
+        loading={moveLoading}
+        folders={folders}
+        titleColor={myFilesColors.title}
+        mutedColor={myFilesColors.muted}
+        textColor={myFilesColors.text}
+        inputBg={myFilesColors.inputBg}
+        inputBorder={myFilesColors.inputBorder}
+        inputText={myFilesColors.inputText}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        accentColor={accentColor}
+        onClose={closeMoveModal}
+        onTargetFolderChange={(folderId) => setMoveTargetFolderId(folderId)}
+        onSubmit={submitMove}
+        panelBg={myFilesColors.panelBg}
+      />
 
       {/* Bulk Delete Folder Modal */}
       <MyFilesBulkFolderDeleteModal
@@ -2973,6 +2836,7 @@ export function MyFiles({
         result={bulkFolderDeleteResult}
         loading={bulkFolderDeleteLoading}
         titleColor="#e2e8f0"
+        textColor="#e2e8f0"
         mutedColor="#94a3b8"
         cardBg="#0f1729"
         borderColor="#1a2540"
