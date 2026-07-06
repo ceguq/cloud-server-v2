@@ -268,9 +268,9 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Keep image/text/video preview branch extraction and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
-- [ ] **3.1t Create `PreviewVideoFrame.tsx` component**
-  - [ ] Extract only the video preview branch JSX from `MyFiles.tsx`
-  - [ ] Note: Only the presentational video player markup was moved. Preview URL state, content type branching, preview modal state, error behavior, and preview behavior remain owned by `MyFiles.tsx`.
+- [x] **3.1t Create `PreviewVideoFrame.tsx` component**
+  - [x] Extract only the video preview branch JSX from `MyFiles.tsx`
+  - [x] Note: Only the presentational video player markup was moved. Preview URL state, content type branching, preview modal state, error behavior, and preview behavior remain owned by `MyFiles.tsx`.
   - [ ] Keep image/text preview branch extraction and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
