@@ -51,6 +51,10 @@ import {
   getCreateFolderModalState,
   getRenameFolderModalState,
 } from "./my-files/myFilesFolderModalUtils";
+import {
+  getClosedDetailsModalState,
+  getOpenDetailsModalState,
+} from "./my-files/myFilesDetailsModalUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -915,6 +919,16 @@ export function MyFiles({
     setFileActionFeedback(null);
   };
 
+  const openDetailsModal = (item: DetailsItem) => {
+    const nextState = getOpenDetailsModalState(item);
+    setDetailsItem(nextState.detailsItem);
+  };
+
+  const closeDetailsModal = () => {
+    const nextState = getClosedDetailsModalState();
+    setDetailsItem(nextState.detailsItem);
+  };
+
   const closeShareModal = () => {
     setIsShareModalOpen(false);
     setSelectedFileForShare(null);
@@ -1717,7 +1731,7 @@ export function MyFiles({
             }}
             onDetails={() => {
               handleCloseFileActionMenu();
-              setDetailsItem({ type: "file", item: file });
+              openDetailsModal({ type: "file", item: file });
             }}
             onDownload={() => {
               handleCloseFileActionMenu();
@@ -2059,7 +2073,7 @@ export function MyFiles({
         panelBg={myFilesColors.panelBg}
         cardBg={myFilesColors.cardBg}
         borderColor={myFilesColors.border}
-        onClose={() => setDetailsItem(null)}
+        onClose={closeDetailsModal}
       />
 
 

@@ -24,7 +24,9 @@
 - [x] Move only pure move modal open/close/reset state value construction into the new helper module.
 - [x] Extract folder modal state-value helpers.
 - [x] Move only pure folder modal open/close/reset state value construction into the new helper module.
-- [x] Keep useState ownership, setState application, selectedFolderForAction, submitFolderModal, API calls, refresh logic, modal rendering, and async behavior owned by MyFiles.tsx.
+- [x] Extract details modal state-value helpers.
+- [x] Move only pure details modal open/close state value construction into the new helper module.
+- [x] Keep useState ownership, setState application, selectedFolderForAction, submitFolderModal, API calls, refresh logic, modal rendering, click handlers, and async behavior owned by MyFiles.tsx.
 - [ ] Do not move state unless it has been audited.
 - [ ] Preserve existing behavior and validation flow.
 - [ ] Extract one hook at a time only after audit.
