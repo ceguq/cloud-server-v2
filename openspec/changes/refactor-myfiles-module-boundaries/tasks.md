@@ -220,6 +220,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Leave rename modals, preview/share/move/delete modals, and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1i Create `MyFilesFileDeleteModal.tsx` component**
+  - [x] Extract only the single-file delete confirmation modal JSX from `MyFiles.tsx`
+  - [x] Note: Only the presentational JSX was moved. `isFileDeleteModalOpen`, `selectedFileForDelete`, `deleteFileLoading`, `deleteFileError`, and `handleConfirmDeleteFile` remain owned by `MyFiles.tsx`.
+  - [ ] Keep folder delete modal, bulk delete modals, rename modals, preview/share/move modals, and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering

@@ -79,6 +79,7 @@ import { EmptySearchState } from "./my-files/components/EmptySearchState";
 import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessage";
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { MyFilesDetailsModal } from "./my-files/components/MyFilesDetailsModal";
+import { MyFilesFileDeleteModal } from "./my-files/components/MyFilesFileDeleteModal";
 import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
@@ -3346,89 +3347,25 @@ export function MyFiles({
         </div>
       )}
 
-      {/* Delete File Modal */}
-      {isFileDeleteModalOpen && selectedFileForDelete && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
-          onMouseDown={() => {
-            if (!deleteFileLoading) {
-              setIsFileDeleteModalOpen(false);
-              setSelectedFileForDelete(null);
-              setDeleteFileError("");
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-6"
-            style={{
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-            }}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="mb-3">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: myFilesColors.title }}
-              >
-                Delete File?
-              </h2>
-              <p className="text-xs mt-2" style={{ color: myFilesColors.muted }}>
-                Apakah kamu yakin ingin menghapus "
-                {selectedFileForDelete.original_name}"?
-                <br />
-                File akan dipindahkan ke Trash.
-              </p>
-            </div>
-
-            {deleteFileError && (
-              <div
-                className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 mb-3"
-                style={{ color: "#f87171" }}
-              >
-                {deleteFileError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                disabled={deleteFileLoading}
-                onClick={() => {
-                  setIsFileDeleteModalOpen(false);
-                  setSelectedFileForDelete(null);
-                  setDeleteFileError("");
-                }}
-                className="px-3 py-2 rounded-xl text-xs font-medium"
-                style={{
-                  background: myFilesColors.buttonSoftBg,
-                  color: myFilesColors.text,
-                  border: `1px solid ${myFilesColors.border}`,
-                  opacity: deleteFileLoading ? 0.6 : 1,
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                disabled={deleteFileLoading}
-                onClick={() => void handleConfirmDeleteFile()}
-                className="px-3 py-2 rounded-xl text-xs font-semibold"
-                style={{
-                  background: "#f87171",
-                  border: `1px solid rgba(248,113,113,0.4)`,
-                  color: "#fff",
-                  opacity: deleteFileLoading ? 0.75 : 1,
-                }}
-              >
-                {deleteFileLoading ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MyFilesFileDeleteModal
+        file={selectedFileForDelete}
+        deleteLoading={deleteFileLoading}
+        deleteError={deleteFileError}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        onClose={() => {
+          if (!deleteFileLoading) {
+            setIsFileDeleteModalOpen(false);
+            setSelectedFileForDelete(null);
+            setDeleteFileError("");
+          }
+        }}
+        onConfirm={() => void handleConfirmDeleteFile()}
+      />
 
       {/* Bulk Delete Files Modal */}
       {isBulkDeleteModalOpen && (
