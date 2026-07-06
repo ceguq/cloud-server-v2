@@ -11,9 +11,13 @@
 
 ## Stage 2 — Safe helper extraction
 
-- [ ] Extract only pure helper functions if a safe boundary is found.
+- [x] Extract shared menu positioning helper.
+- [x] Move only pure coordinate calculation into the new helper module.
+- [x] Keep menu state, refs, click-outside behavior, action callbacks, and UI behavior owned by MyFiles.tsx.
 - [ ] Do not move state unless it has been audited.
 - [ ] Preserve existing behavior and validation flow.
+- [ ] Extract one hook at a time only after audit.
+- [ ] Perform manual npm run build after the patch.
 
 ## Stage 3 — Hook extraction candidates
 

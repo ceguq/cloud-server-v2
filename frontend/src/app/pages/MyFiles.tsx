@@ -39,6 +39,7 @@ import {
   isInteractiveItemTarget,
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
+import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -144,26 +145,17 @@ export function MyFiles({
     setFileActionFeedback(null);
 
     const menuWidth = 180;
-
     const menuHeight = 180;
-    const rawX = event.clientX;
-    const rawY = event.clientY;
-
-    const x =
-      typeof window !== "undefined"
-        ? Math.min(rawX, window.innerWidth - menuWidth)
-        : rawX;
-
-    const y =
-      typeof window !== "undefined"
-        ? Math.min(rawY, window.innerHeight - menuHeight)
-        : rawY;
 
     setOpenFolderActionId(folderId);
-    setFolderActionMenuPosition({
-      x: Math.max(8, x),
-      y: Math.max(8, y),
-    });
+    setFolderActionMenuPosition(
+      calculateActionMenuPosition({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        menuWidth,
+        menuHeight,
+      }),
+    );
   }
 
 
@@ -1256,24 +1248,16 @@ export function MyFiles({
 
     const menuWidth = 260;
     const menuHeight = 430;
-    const rawX = event.clientX;
-    const rawY = event.clientY;
-
-    const x =
-      typeof window !== "undefined"
-        ? Math.min(rawX, window.innerWidth - menuWidth)
-        : rawX;
-
-    const y =
-      typeof window !== "undefined"
-        ? Math.min(rawY, window.innerHeight - menuHeight)
-        : rawY;
 
     setOpenFileActionId(fileId);
-    setFileActionMenuPosition({
-      x: Math.max(8, x),
-      y: Math.max(8, y),
-    });
+    setFileActionMenuPosition(
+      calculateActionMenuPosition({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        menuWidth,
+        menuHeight,
+      }),
+    );
   }
 
   // Move modal helpers
