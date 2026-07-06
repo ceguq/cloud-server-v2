@@ -40,7 +40,7 @@ import {
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
 import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
-import { applyVisibleSelection, removeSetValues, toggleSetValue } from "./my-files/myFilesSelectionUtils";
+import { useMyFilesSelection } from "./my-files/hooks/useMyFilesSelection";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -104,12 +104,26 @@ export function MyFiles({
 }: MyFilesProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const {
+    selectedFileIds,
+    selectedFolderIds,
+    isSelectionMode,
+    checklistVisibilityStyle,
+    toggleFileSelection,
+    toggleFolderSelection,
+    applyVisibleFileSelection,
+    applyVisibleFolderSelection,
+    removeSelectedFiles,
+    removeSelectedFolders,
+    clearFileSelection,
+    clearFolderSelection,
+    clearSelection,
+    toggleSelectionMode,
+  } = useMyFilesSelection();
 
-  const checklistVisibilityStyle = {
-    visibility: isSelectionMode ? "visible" : "hidden",
-    pointerEvents: isSelectionMode ? "auto" : "none",
-  } as const;
+  const handleToggleSelectionMode = () => {
+    toggleSelectionMode();
+  };
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
 
@@ -197,40 +211,6 @@ export function MyFiles({
   const [dragMoveItem, setDragMoveItem] = useState<DragMoveItem | null>(null);
 
   // Multi-select files (bulk actions)
-
-  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(
-    new Set(),
-  );
-
-
-  const clearSelection = () => setSelectedFileIds(new Set());
-
-  // Multi-select folders (UI-only for now)
-  const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(
-    new Set(),
-  );
-
-  const clearFolderSelection = () => setSelectedFolderIds(new Set());
-
-  const handleToggleSelectionMode = () => {
-    setIsSelectionMode((current) => {
-      if (current) {
-        clearSelection();
-        clearFolderSelection();
-      }
-
-      return !current;
-    });
-  };
-
-
-  const toggleFolderSelection = (folderId: string) => {
-    setSelectedFolderIds((prev) => toggleSetValue(prev, folderId));
-  };
-
-  const toggleFileSelection = (fileId: string) => {
-    setSelectedFileIds((prev) => toggleSetValue(prev, fileId));
-  };
 
   // Files state
 
@@ -1329,7 +1309,7 @@ export function MyFiles({
           const singleId = moveFileIds.length === 1 ? moveFileIds[0] : moveItemId;
           if (singleId) {
             await fileService.moveFile(singleId, moveTargetFolderId);
-            setSelectedFileIds((prev) => removeSetValues(prev, [singleId]));
+            removeSelectedFiles([singleId]);
           }
 
           await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
@@ -1339,7 +1319,7 @@ export function MyFiles({
       if (moveItemType === "folder") {
         if (!moveItemId) return;
         await folderService.moveFolder(moveItemId, moveTargetFolderId);
-        setSelectedFolderIds((prev) => removeSetValues(prev, [moveItemId]));
+        removeSelectedFolders([moveItemId]);
 
         await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
       }
@@ -1475,9 +1455,9 @@ export function MyFiles({
         ),
       ]);
 
-      setSelectedFileIds((prev) => removeSetValues(prev, fileIds));
+      removeSelectedFiles(fileIds);
 
-      setSelectedFolderIds((prev) => removeSetValues(prev, safeFolderIds));
+      removeSelectedFolders(safeFolderIds);
 
       await Promise.all([loadFolders(currentFolderId), loadFiles(currentFolderId)]);
     } catch (error) {
@@ -2143,9 +2123,7 @@ export function MyFiles({
           ))
         )}
         onToggleVisibleFolders={(checked, visibleFolderIds) => {
-          setSelectedFolderIds((prev) =>
-            applyVisibleSelection(prev, visibleFolderIds, checked),
-          );
+          applyVisibleFolderSelection(visibleFolderIds, checked);
         }}
         onOpenBulkFolderDeleteModal={openBulkFolderDeleteModal}
         onClearFolderSelection={clearFolderSelection}
@@ -2678,9 +2656,7 @@ export function MyFiles({
           })
         )}
         onToggleVisibleFiles={(checked, visibleFileIds) => {
-          setSelectedFileIds((prev) =>
-            applyVisibleSelection(prev, visibleFileIds, checked),
-          );
+          applyVisibleFileSelection(visibleFileIds, checked);
         }}
         onBulkDownload={() => {
           void handleBulkDownload();

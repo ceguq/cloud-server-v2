@@ -28,7 +28,9 @@
 
 ## Stage 3 — Hook extraction candidates
 
-- [ ] Extract one hook at a time only after audit.
+- [x] Extract focused useMyFilesSelection hook.
+- [x] Move only selection/checklist state and local selection helpers into the new hook.
+- [x] Keep bulk async actions, API calls, navigation/data loading, modal state, preview state, and action menu state owned by MyFiles.tsx.
 - [ ] Candidate hooks may include useMyFilesSelection, useMyFilesMenus, useMyFilesMoveState, useMyFilesShareState, or similar names, but final names will be based on the actual code audit.
 - [ ] Keep API behavior unchanged.
 
