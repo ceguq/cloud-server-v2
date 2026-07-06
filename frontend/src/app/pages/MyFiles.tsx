@@ -41,6 +41,11 @@ import {
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
 import { useMyFilesActionMenus } from "./my-files/hooks/useMyFilesActionMenus";
 import { useMyFilesSelection } from "./my-files/hooks/useMyFilesSelection";
+import {
+  getClosedMoveModalState,
+  getFileMoveModalState,
+  getFolderMoveModalState,
+} from "./my-files/myFilesMoveModalUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -1174,45 +1179,42 @@ export function MyFiles({
 
   // Move modal helpers
   const closeMoveModal = () => {
-
     if (moveLoading) return;
-    setMoveModalOpen(false);
-    setMoveItemType(null);
-    setMoveItemId(null);
-    setMoveItemName("");
-    setMoveFileIds([]);
-    setMoveTargetFolderId(null);
-    setMoveError("");
+
+    const nextState = getClosedMoveModalState();
+    setMoveModalOpen(nextState.moveModalOpen);
+    setMoveItemType(nextState.moveItemType);
+    setMoveItemId(nextState.moveItemId);
+    setMoveItemName(nextState.moveItemName);
+    setMoveFileIds(nextState.moveFileIds);
+    setMoveTargetFolderId(nextState.moveTargetFolderId);
+    setMoveError(nextState.moveError);
   };
 
   const openMoveFileModal = (file: FileModel) => {
     closeFileActionMenu();
 
-    const isBulkEligible =
-      selectedFileIds.size > 1 && selectedFileIds.has(file.id);
-
-    setMoveItemType("file");
-    setMoveItemId(file.id);
-    setMoveFileIds(isBulkEligible ? Array.from(selectedFileIds) : [file.id]);
-    setMoveItemName(
-      isBulkEligible
-        ? `${selectedFileIds.size} files selected`
-        : file.original_name ?? "Untitled file",
-    );
-    setMoveTargetFolderId(null);
-    setMoveError("");
-    setMoveModalOpen(true);
+    const nextState = getFileMoveModalState(file, selectedFileIds);
+    setMoveModalOpen(nextState.moveModalOpen);
+    setMoveItemType(nextState.moveItemType);
+    setMoveItemId(nextState.moveItemId);
+    setMoveItemName(nextState.moveItemName);
+    setMoveFileIds(nextState.moveFileIds);
+    setMoveTargetFolderId(nextState.moveTargetFolderId);
+    setMoveError(nextState.moveError);
   };
 
   const openMoveFolderModal = (folder: FolderModel) => {
     closeFolderActionMenu();
-    setMoveItemType("folder");
-    setMoveItemId(folder.id);
-    setMoveItemName(folder.name ?? "Untitled folder");
-    setMoveFileIds([]);
-    setMoveTargetFolderId(null);
-    setMoveError("");
-    setMoveModalOpen(true);
+
+    const nextState = getFolderMoveModalState(folder);
+    setMoveModalOpen(nextState.moveModalOpen);
+    setMoveItemType(nextState.moveItemType);
+    setMoveItemId(nextState.moveItemId);
+    setMoveItemName(nextState.moveItemName);
+    setMoveFileIds(nextState.moveFileIds);
+    setMoveTargetFolderId(nextState.moveTargetFolderId);
+    setMoveError(nextState.moveError);
   };
 
   const submitMove = async () => {

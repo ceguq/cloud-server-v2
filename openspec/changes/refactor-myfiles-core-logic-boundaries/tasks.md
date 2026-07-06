@@ -20,7 +20,9 @@
 - [x] Move only pure add/delete visible ID Set logic into the new helper module.
 - [x] Extract shared selection Set removal helper.
 - [x] Move only pure Set removal logic into the new helper module.
-- [x] Keep selection state, checklist mode state, visible ID calculation, navigation reset behavior, bulk action behavior, drag/drop behavior, and API behavior owned by MyFiles.tsx.
+- [x] Extract move modal state-value helpers.
+- [x] Move only pure move modal open/close/reset state value construction into the new helper module.
+- [x] Keep useState ownership, setState application, submitMove, API calls, refresh logic, modal rendering, and async behavior owned by MyFiles.tsx.
 - [ ] Do not move state unless it has been audited.
 - [ ] Preserve existing behavior and validation flow.
 - [ ] Extract one hook at a time only after audit.
