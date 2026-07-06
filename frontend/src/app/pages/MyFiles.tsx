@@ -80,6 +80,7 @@ import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewPdfFrame } from "./my-files/components/PreviewPdfFrame";
 import { PreviewFallbackFrame } from "./my-files/components/PreviewFallbackFrame";
+import { PreviewAudioPlayerFrame } from "./my-files/components/PreviewAudioPlayerFrame";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
@@ -2404,8 +2405,8 @@ export function MyFiles({
             />
           </div>
         ) : previewContentType.startsWith("audio/") ? (
-          <AudioPreviewPlayer
-            src={previewUrl ?? undefined}
+          <PreviewAudioPlayerFrame
+            previewUrl={previewUrl}
             onError={() => {
               setFileError("Gagal memuat preview audio.");
             }}
