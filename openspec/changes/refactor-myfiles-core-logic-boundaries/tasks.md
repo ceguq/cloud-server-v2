@@ -16,7 +16,9 @@
 - [x] Keep menu state, refs, click-outside behavior, action callbacks, and UI behavior owned by MyFiles.tsx.
 - [x] Extract shared selection Set toggle helper.
 - [x] Move only pure Set toggle logic into the new helper module.
-- [x] Keep selection state, checklist mode state, navigation reset behavior, select-all behavior, bulk action behavior, and API behavior owned by MyFiles.tsx.
+- [x] Extract shared visible-selection apply helper.
+- [x] Move only pure add/delete visible ID Set logic into the new helper module.
+- [x] Keep selection state, checklist mode state, visible ID calculation, navigation reset behavior, bulk action behavior, and API behavior owned by MyFiles.tsx.
 - [ ] Do not move state unless it has been audited.
 - [ ] Preserve existing behavior and validation flow.
 - [ ] Extract one hook at a time only after audit.

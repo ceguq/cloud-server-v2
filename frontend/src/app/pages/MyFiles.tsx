@@ -40,7 +40,7 @@ import {
 } from "./my-files/myFilesDomUtils";
 import { getMenuItemStyle } from "./my-files/myFilesMenuUtils";
 import { calculateActionMenuPosition } from "./my-files/myFilesMenuPositioning";
-import { toggleSetValue } from "./my-files/myFilesSelectionUtils";
+import { applyVisibleSelection, toggleSetValue } from "./my-files/myFilesSelectionUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -2159,19 +2159,9 @@ export function MyFiles({
           ))
         )}
         onToggleVisibleFolders={(checked, visibleFolderIds) => {
-          if (checked) {
-            setSelectedFolderIds((prev) => {
-              const next = new Set(prev);
-              for (const id of visibleFolderIds) next.add(id);
-              return next;
-            });
-          } else {
-            setSelectedFolderIds((prev) => {
-              const next = new Set(prev);
-              for (const id of visibleFolderIds) next.delete(id);
-              return next;
-            });
-          }
+          setSelectedFolderIds((prev) =>
+            applyVisibleSelection(prev, visibleFolderIds, checked),
+          );
         }}
         onOpenBulkFolderDeleteModal={openBulkFolderDeleteModal}
         onClearFolderSelection={clearFolderSelection}
@@ -2704,19 +2694,9 @@ export function MyFiles({
           })
         )}
         onToggleVisibleFiles={(checked, visibleFileIds) => {
-          if (checked) {
-            setSelectedFileIds((prev) => {
-              const next = new Set(prev);
-              for (const id of visibleFileIds) next.add(id);
-              return next;
-            });
-          } else {
-            setSelectedFileIds((prev) => {
-              const next = new Set(prev);
-              for (const id of visibleFileIds) next.delete(id);
-              return next;
-            });
-          }
+          setSelectedFileIds((prev) =>
+            applyVisibleSelection(prev, visibleFileIds, checked),
+          );
         }}
         onBulkDownload={() => {
           void handleBulkDownload();
