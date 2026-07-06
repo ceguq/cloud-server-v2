@@ -79,6 +79,7 @@ import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWi
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
+import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
 import { MyFilesShareModal } from "./my-files/components/MyFilesShareModal";
 import { MyFilesFileActionMenu } from "./my-files/components/MyFilesFileActionMenu";
@@ -2283,233 +2284,200 @@ export function MyFiles({
         />
       ) : null}
 
-      {previewModalOpen && previewModalMode !== "minimized" && (
-        <div
-          className="fixed inset-0 z-[150] flex items-end justify-center md:items-center"
-          style={{
-            background:
-              resolvedTheme === "light"
-                ? "rgba(15,23,42,0.35)"
-                : "rgba(0,0,0,0.55)",
-          }}
-          onMouseDown={closePreviewModal}
-        >
+      <MyFilesPreviewModal
+        isOpen={previewModalOpen}
+        mode={previewModalMode}
+        resolvedTheme={resolvedTheme}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        panelBg={myFilesColors.panelBg}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        accentColor={accentColor}
+        onClose={closePreviewModal}
+        header={
+          <>
+            <PreviewHeaderTitle
+              title={previewFileName}
+              subtitle="Preview"
+              titleColor={myFilesColors.title}
+              mutedColor={myFilesColors.muted}
+            />
+
+            <PreviewHeaderActions
+              previewFile={previewFile}
+              previewContentType={previewContentType}
+              previewModalMode={previewModalMode}
+              previewImageScale={previewImageScale}
+              onDownload={() => {
+                handleDownloadFile(previewFile);
+              }}
+              onZoomOut={() =>
+                setPreviewImageScaleFromAnchor(
+                  previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
+                )
+              }
+              onResetZoom={resetPreviewImageZoom}
+              onZoomIn={() =>
+                setPreviewImageScaleFromAnchor(
+                  previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
+                )
+              }
+              onMinimize={() => setPreviewModalMode("minimized")}
+              onToggleMaximize={() =>
+                setPreviewModalMode((mode) =>
+                  mode === "maximized" ? "normal" : "maximized",
+                )
+              }
+              onClose={closePreviewModal}
+              textColor={myFilesColors.text}
+              mutedColor={myFilesColors.muted2}
+              borderColor={myFilesColors.border}
+              panelColor={myFilesColors.panelBg}
+              accentColor={accentColor}
+            />
+          </>
+        }
+      >
+        {previewContentType.startsWith("image/") ? (
           <div
-            className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border"
+            ref={previewImageViewportRef}
+            onWheel={handlePreviewImageWheel}
+            className="flex h-full w-full items-center justify-center overflow-hidden"
             style={{
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.65)",
-              width:
-                previewModalMode === "maximized"
-                  ? "calc(100vw - 8px)"
-                  : previewModalMode === "normal"
-                    ? "min(1120px, calc(100vw - 48px))"
-                    : undefined,
-              height:
-                previewModalMode === "maximized"
-                  ? "calc(100vh - 8px)"
-                  : "min(82vh, 760px)",
-              maxWidth: "none",
-              maxHeight: "none",
+              touchAction: "none",
+              cursor:
+                previewImageScale > 1 ? "zoom-out" : "zoom-in",
             }}
-            onMouseDown={(e) => e.stopPropagation()}
           >
-            <div
-              className="flex items-center justify-between gap-4 px-3 py-2"
+            <img
+              ref={previewImageRef}
+              src={previewUrl}
+              alt={previewFileName}
               style={{
-                borderBottom: `1px solid ${myFilesColors.border}`,
+                transform: `translate3d(${previewImageOffset.x}px, ${previewImageOffset.y}px, 0) scale(${previewImageScale})`,
+                transformOrigin: "center center",
+                maxHeight: "100%",
+                maxWidth: "100%",
+                objectFit: "contain",
+                transition: "transform 80ms ease-out",
+                userSelect: "none",
               }}
-            >
-              <PreviewHeaderTitle
-                title={previewFileName}
-                subtitle="Preview"
-                titleColor={myFilesColors.title}
-                mutedColor={myFilesColors.muted}
-              />
-
-              <PreviewHeaderActions
-                previewFile={previewFile}
-                previewContentType={previewContentType}
-                previewModalMode={previewModalMode}
-                previewImageScale={previewImageScale}
-                onDownload={() => {
-                  handleDownloadFile(previewFile);
-                }}
-                onZoomOut={() =>
-                  setPreviewImageScaleFromAnchor(
-                    previewImageScale - PREVIEW_IMAGE_ZOOM_STEP,
-                  )
-                }
-                onResetZoom={resetPreviewImageZoom}
-                onZoomIn={() =>
-                  setPreviewImageScaleFromAnchor(
-                    previewImageScale + PREVIEW_IMAGE_ZOOM_STEP,
-                  )
-                }
-                onMinimize={() => setPreviewModalMode("minimized")}
-                onToggleMaximize={() =>
-                  setPreviewModalMode((mode) =>
-                    mode === "maximized" ? "normal" : "maximized",
-                  )
-                }
-                onClose={closePreviewModal}
-                textColor={myFilesColors.text}
-                mutedColor={myFilesColors.muted2}
-                borderColor={myFilesColors.border}
-                panelColor={myFilesColors.panelBg}
-                accentColor={accentColor}
-              />
-            </div>
-
-            <div
-              className="mx-3 mb-3 mt-3 flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border"
-              style={{
-                background: myFilesColors.panelBg,
-                border: `1px solid ${myFilesColors.border}`,
-              }}
-            >
-              {previewContentType.startsWith("image/") ? (
-                <div
-                  ref={previewImageViewportRef}
-                  onWheel={handlePreviewImageWheel}
-                  className="flex h-full w-full items-center justify-center overflow-hidden"
-                  style={{
-                    touchAction: "none",
-                    cursor:
-                      previewImageScale > 1 ? "zoom-out" : "zoom-in",
-                  }}
-                >
-                  <img
-                    ref={previewImageRef}
-                    src={previewUrl}
-                    alt={previewFileName}
-                    style={{
-                      transform: `translate3d(${previewImageOffset.x}px, ${previewImageOffset.y}px, 0) scale(${previewImageScale})`,
-                      transformOrigin: "center center",
-                      maxHeight: "100%",
-                      maxWidth: "100%",
-                      objectFit: "contain",
-                      transition: "transform 80ms ease-out",
-                      userSelect: "none",
-                    }}
-                    draggable={false}
-                  />
-                </div>
-              ) : previewContentType === "application/pdf" ? (
-                <iframe
-                  src={
-                    previewUrl
-                      ? `${previewUrl}#toolbar=1&navpanes=0&scrollbar=1`
-                      : undefined
-                  }
-                  title={previewFileName}
-                  className="h-full w-full rounded-xl"
-                />
-              ) : previewContentType.startsWith("video/") ? (
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    background: "#000",
-                    borderRadius: "0.75rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                  }}
-                >
-                  <video
-                    controls
-                    src={previewUrl ?? undefined}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      maxHeight: "100%",
-                      objectFit: "contain",
-                      background: "#000",
-                    }}
-                    preload="metadata"
-                    onError={() => {
-                      setFileError("Gagal memuat preview video.");
-                    }}
-                  />
-                </div>
-              ) : previewContentType.startsWith("audio/") ? (
-                <AudioPreviewPlayer
-                  src={previewUrl ?? undefined}
-                  onError={() => {
-                    setFileError("Gagal memuat preview audio.");
-                  }}
-                />
-              ) : previewContentType.startsWith("text/") ||
-                previewContentType === "application/json" ||
-                previewContentType === "application/xml" ||
-                previewContentType === "text/xml" ||
-                previewContentType === "application/javascript" ||
-                previewContentType === "application/x-javascript" ||
-                previewContentType === "application/typescript" ||
-                previewContentType === "text/css" ||
-                previewContentType === "text/html" ||
-                previewContentType === "text/markdown" ||
-                previewContentType === "text/csv" ? (
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                  }}
-                >
-                  {previewTextError ? (
-                    <div className="text-xs" style={{ color: "#f87171" }}>
-                      {previewTextError}
-                    </div>
-                  ) : previewIsTextTooLarge ? (
-                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                      Preview text terlalu besar. Silakan download file untuk
-                      melihat isinya.
-                    </div>
-                  ) : previewTextLoading ? (
-                    <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                      Loading preview text...
-                    </div>
-                  ) : (
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: 16,
-                        color: myFilesColors.text,
-                        background: "transparent",
-                        fontFamily:
-                          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        whiteSpace: "pre",
-                        overflow: "auto",
-                        tabSize: 2,
-                      }}
-                    >
-                      {previewText}
-                    </pre>
-                  )}
-                </div>
-              ) : previewUrl ? (
-                <iframe
-                  src={previewUrl}
-                  title={previewFileName}
-                  className="h-full w-full rounded-xl"
-                />
-              ) : (
-                <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                  Preview tipe file ini belum tersedia di modal.
-                </div>
-              )}
-            </div>
+              draggable={false}
+            />
           </div>
-        </div>
-      )}
+        ) : previewContentType === "application/pdf" ? (
+          <iframe
+            src={
+              previewUrl
+                ? `${previewUrl}#toolbar=1&navpanes=0&scrollbar=1`
+                : undefined
+            }
+            title={previewFileName}
+            className="h-full w-full rounded-xl"
+          />
+        ) : previewContentType.startsWith("video/") ? (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#000",
+              borderRadius: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            <video
+              controls
+              src={previewUrl ?? undefined}
+              style={{
+                width: "100%",
+                height: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                background: "#000",
+              }}
+              preload="metadata"
+              onError={() => {
+                setFileError("Gagal memuat preview video.");
+              }}
+            />
+          </div>
+        ) : previewContentType.startsWith("audio/") ? (
+          <AudioPreviewPlayer
+            src={previewUrl ?? undefined}
+            onError={() => {
+              setFileError("Gagal memuat preview audio.");
+            }}
+          />
+        ) : previewContentType.startsWith("text/") ||
+          previewContentType === "application/json" ||
+          previewContentType === "application/xml" ||
+          previewContentType === "text/xml" ||
+          previewContentType === "application/javascript" ||
+          previewContentType === "application/x-javascript" ||
+          previewContentType === "application/typescript" ||
+          previewContentType === "text/css" ||
+          previewContentType === "text/html" ||
+          previewContentType === "text/markdown" ||
+          previewContentType === "text/csv" ? (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {previewTextError ? (
+              <div className="text-xs" style={{ color: "#f87171" }}>
+                {previewTextError}
+              </div>
+            ) : previewIsTextTooLarge ? (
+              <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                Preview text terlalu besar. Silakan download file untuk
+                melihat isinya.
+              </div>
+            ) : previewTextLoading ? (
+              <div className="text-xs" style={{ color: myFilesColors.muted }}>
+                Loading preview text...
+              </div>
+            ) : (
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 16,
+                  color: myFilesColors.text,
+                  background: "transparent",
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre",
+                  overflow: "auto",
+                  tabSize: 2,
+                }}
+              >
+                {previewText}
+              </pre>
+            )}
+          </div>
+        ) : previewUrl ? (
+          <iframe
+            src={previewUrl}
+            title={previewFileName}
+            className="h-full w-full rounded-xl"
+          />
+        ) : (
+          <div className="text-xs" style={{ color: myFilesColors.muted }}>
+            Preview tipe file ini belum tersedia di modal.
+          </div>
+        )}
+      </MyFilesPreviewModal>
 
       {/* Rename File Modal */}
       <MyFilesFileRenameModal

@@ -244,6 +244,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Keep preview modal and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1p Create `MyFilesPreviewModal.tsx` component**
+  - [x] Extract only the Preview modal overlay/container shell from `MyFiles.tsx`
+  - [x] Note: Only the presentational overlay and container shell were moved. Preview state, refs, content branch rendering, zoom/pan handlers, close/minimize/maximize/download handlers, preview URL/blob/text logic, and API behavior remain owned by `MyFiles.tsx`.
+  - [ ] Keep preview body renderer and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [x] **3.1l Create `MyFilesFolderModal.tsx` component**
   - [x] Extract only the Folder Create/Rename modal JSX from `MyFiles.tsx`
   - [x] Note: Only the modal open state, modal mode, folder name state, close/reset behavior, submit handling, loading/error state, validation, and API behavior remain owned by `MyFiles.tsx`.
