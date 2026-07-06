@@ -46,6 +46,11 @@ import {
   getFileMoveModalState,
   getFolderMoveModalState,
 } from "./my-files/myFilesMoveModalUtils";
+import {
+  getClosedFolderModalState,
+  getCreateFolderModalState,
+  getRenameFolderModalState,
+} from "./my-files/myFilesFolderModalUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -426,17 +431,19 @@ export function MyFiles({
   };
 
   const openCreateFolderModal = () => {
-    setFolderModalMode("create");
-    setFolderModalName("");
-    setFolderModalError("");
-    setIsFolderModalOpen(true);
+    const nextState = getCreateFolderModalState();
+    setFolderModalMode(nextState.folderModalMode);
+    setFolderModalName(nextState.folderModalName);
+    setFolderModalError(nextState.folderModalError);
+    setIsFolderModalOpen(nextState.isFolderModalOpen);
   };
 
   const openRenameFolderModal = (folder: FolderModel) => {
-    setFolderModalMode("rename");
-    setFolderModalName(folder.name);
-    setFolderModalError("");
-    setIsFolderModalOpen(true);
+    const nextState = getRenameFolderModalState(folder);
+    setFolderModalMode(nextState.folderModalMode);
+    setFolderModalName(nextState.folderModalName);
+    setFolderModalError(nextState.folderModalError);
+    setIsFolderModalOpen(nextState.isFolderModalOpen);
   };
 
   const openDeleteFolderModal = (folder: FolderModel) => {
@@ -447,7 +454,12 @@ export function MyFiles({
 
   const closeFolderModal = () => {
     if (folderActionLoading) return;
-    setIsFolderModalOpen(false);
+
+    const nextState = getClosedFolderModalState();
+    setIsFolderModalOpen(nextState.isFolderModalOpen);
+    setFolderModalMode(nextState.folderModalMode);
+    setFolderModalName(nextState.folderModalName);
+    setFolderModalError(nextState.folderModalError);
   };
 
   const closeDeleteModal = () => {
