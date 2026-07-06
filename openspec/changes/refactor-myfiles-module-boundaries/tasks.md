@@ -196,6 +196,12 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [x] Keep folder state, selection behavior, drag/drop behavior, item callbacks, and the global folder action menu owned by `MyFiles.tsx`
   - [ ] Leave file section, file action menu, modals, and final cleanup tasks unchecked
 
+- [x] **3.1e Create `MyFilesFileSection.tsx` component**
+  - [x] Extract only the file section wrapper/composition JSX from `MyFiles.tsx`
+  - [x] Keep the file section header/title, select-all visible files checkbox, selected-file bulk actions, loading/error/empty states, and list/grid container composition in the new component
+  - [x] Keep file state, selection behavior, drag/drop behavior, item callbacks, action menu logic, and preview/share/download/move/delete behavior owned by `MyFiles.tsx`
+  - [ ] Leave action menu, modal, and final cleanup tasks unchecked
+
 - [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering

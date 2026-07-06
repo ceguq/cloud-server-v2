@@ -79,6 +79,7 @@ import { LoadingFoldersMessage } from "./my-files/components/LoadingFoldersMessa
 import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
+import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
@@ -3935,597 +3936,158 @@ export function MyFiles({
         </div>
       )}
 
-      {/* Files */}
+      <MyFilesFileSection
+        typedFiles={typedFiles}
+        selectedFileIds={selectedFileIds}
+        checklistVisibilityStyle={checklistVisibilityStyle}
+        showEmptySearchState={showEmptySearchState}
+        loadingFiles={loadingFiles}
+        fileError={fileError}
+        viewMode={viewMode}
+        bulkDownloadLoading={bulkDownloadLoading}
+        bulkDeleteLoading={bulkDeleteLoading}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        muted2Color={myFilesColors.muted2}
+        borderColor={myFilesColors.border}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        accentColor={accentColor}
+        renderListItems={() => (
+          typedFiles.map((file) => {
+            const typeLabel = getTypeLabel(file.mime_type ?? null);
+            const modifiedLabel = file.created_at
+              ? new Date(file.created_at).toLocaleDateString()
+              : "-";
+            const sizeLabel = formatBytes(file.size);
+            const visibilityLabel = "Private";
 
-      <div>
-        {/* Bulk action bar */}
-        {selectedFileIds.size > 0 && (
-          <div
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 px-4 py-3 rounded-xl"
-            style={{
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-              boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-            }}
-          >
-            <div className="text-xs" style={{ color: myFilesColors.muted }}>
-              <span style={{ color: myFilesColors.text, fontWeight: 700 }}>
-                {selectedFileIds.size}
-              </span>{" "}
-              file dipilih
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg text-xs font-semibold"
-                style={{
-                  background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                  color: "#fff",
-                  border: `1px solid ${accentColor}55`,
+            return (
+              <MyFilesFileListItem
+                key={file.id}
+                file={file}
+                isSelected={selectedFileIds.has(file.id)}
+                checklistVisibilityStyle={checklistVisibilityStyle}
+                showFileMetadata={showFileMetadata}
+                fileListColumnTemplate={fileListColumnTemplate}
+                cardBg={myFilesColors.cardBg}
+                borderColor={myFilesColors.border}
+                textColor={myFilesColors.text}
+                mutedColor={myFilesColors.muted}
+                muted2Color={myFilesColors.muted2}
+                panelBg={myFilesColors.panelBg}
+                accentColor={accentColor}
+                actionMenuSlot={renderFileActionMenu(file)}
+                draggable={moveDragDropEnabled}
+                onToggleSelection={() => toggleFileSelection(file.id)}
+                onRowContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
+                onRowClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  if (!isSelectionMode) return;
+                  toggleFileSelection(file.id);
                 }}
-                aria-label="Bulk Download"
-                disabled={bulkDownloadLoading}
-                onClick={() => void handleBulkDownload()}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.filter = "brightness(1.02)";
+                onRowDoubleClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  void handlePreviewFile(file);
                 }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.filter = "none";
+                onDragStart={(e) => {
+                  if (!moveDragDropEnabled) {
+                    e.preventDefault();
+                    return;
+                  }
+
+                  e.dataTransfer.effectAllowed = "move";
+                  setCompactDragImage(e, file.original_name ?? "Untitled file", "file");
+                  startFileDragMove(file);
                 }}
-              >
-                {bulkDownloadLoading ? (
-                  <>
-                    <LoadingSpinner size={12} /> Memproses...
-                  </>
-                ) : (
-                  "Download"
-                )}
-              </button>
-
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg text-xs font-semibold"
-                style={{
-                  background: myFilesColors.buttonSoftBg,
-                  border: `1px solid ${myFilesColors.border}`,
-                  color: myFilesColors.text,
-                }}
-                aria-label="Bulk Share"
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = `${accentColor}10`;
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = myFilesColors.buttonSoftBg;
-                }}
-                onClick={() => {
-                  void (async () => {
-                    const ids = Array.from(selectedFileIds);
-                    if (ids.length === 0) return;
-
-                    // Modal hasil Bulk Share (NimbusDrive dark)
-                    // - dibuat inline (tanpa mengubah tombol share individual)
-                    // - tidak menggunakan native alert
-                    const shareResults: Array<{
-                      fileName: string;
-                      link: string;
-                      failed: boolean;
-                      error?: string;
-                    }> = [];
-
-                    const origin = window.location.origin;
-
-                    let okCount = 0;
-                    let failCount = 0;
-
-                    // proses satu per satu, lanjut jika satu gagal
-                    for (const id of ids) {
-                      const file = files.find((f) => f.id === id);
-                      const fileName = file?.original_name ?? id;
-
-                      try {
-                        // createShareLink existing
-                        const created = await createShareLink(id);
-                        okCount++;
-
-                        // bentuk URL publik: origin + /share/{token}
-                        const token = created?.token;
-                        const link = token ? `${origin}/share/${token}` : "";
-
-                        shareResults.push({
-                          fileName,
-                          link,
-                          failed: false,
-                        });
-                      } catch (e: any) {
-                        failCount++;
-                        shareResults.push({
-                          fileName,
-                          link: "",
-                          failed: true,
-                          error:
-                            e?.response?.data?.message ||
-                            e?.message ||
-                            "Gagal membuat share link",
-                        });
-                      }
-                    }
-
-                    const modalId = `bulk-share-modal-${Date.now()}`;
-                    const overlay = document.createElement("div");
-                    overlay.id = modalId;
-                    overlay.className =
-                      "fixed inset-0 z-[120] flex items-center justify-center bg-black/60";
-
-                    // container dialog
-                    const dialog = document.createElement("div");
-                    // NOTE: dialog content is generated inline (DOM) for Bulk Share modal
-
-                    dialog.className =
-                      "w-full max-w-2xl rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6";
-                    // avoid extra ARIA role/constraints; existing UI uses role/dialog similarly
-                    dialog.setAttribute("aria-modal", "true");
-
-                    const title = document.createElement("h2");
-                    title.className = "text-sm font-semibold";
-                    title.style.color = "#e2e8f0";
-                    title.textContent = "Share Links";
-
-                    const summary = document.createElement("div");
-                    summary.className = "text-xs mt-2";
-                    summary.style.color = "#94a3b8";
-                    summary.textContent = `${okCount} berhasil, ${failCount} gagal`;
-
-                    const listWrap = document.createElement("div");
-                    listWrap.className =
-                      "mt-4 rounded-xl overflow-hidden border border-[#1a2540]";
-                    listWrap.style.background = "#111c2f";
-
-                    shareResults.forEach((r, idx) => {
-                      const row = document.createElement("div");
-                      row.className =
-                        "grid grid-cols-1 sm:grid-cols-[200px_1fr_90px] gap-3 px-4 py-3";
-                      row.style.borderBottom =
-                        idx === shareResults.length - 1
-                          ? "none"
-                          : "1px solid rgba(26,37,64,1)";
-
-                      const nameEl = document.createElement("div");
-                      nameEl.className = "text-xs";
-                      nameEl.style.color = "#cbd5e1";
-                      nameEl.textContent = r.fileName;
-
-                      const linkEl = document.createElement("div");
-                      linkEl.className = "flex flex-col gap-2";
-
-                      const input = document.createElement("input");
-                      input.type = "text";
-                      input.readOnly = true;
-                      input.value = r.failed ? "Gagal membuat link" : r.link;
-                      input.className =
-                        "w-full rounded-xl border border-[#1a2540] bg-[#0d1829] px-3 py-2 text-xs outline-none text-[#cbd5e1]";
-                      input.setAttribute(
-                        "aria-label",
-                        `Public share URL ${r.fileName}`,
-                      );
-
-                      linkEl.appendChild(input);
-
-                      const copyBtn = document.createElement("button");
-                      copyBtn.type = "button";
-                      copyBtn.className =
-                        "px-3 py-2 rounded-lg text-xs font-semibold";
-                      copyBtn.textContent = "Copy";
-                      copyBtn.setAttribute(
-                        "aria-label",
-                        `Copy share link ${r.fileName}`,
-                      );
-                      copyBtn.style.background =
-                        r.failed || !r.link
-                          ? "#334155"
-                          : "linear-gradient(135deg, #3b82f6, #22d3ee)";
-                      copyBtn.style.color = "#fff";
-                      copyBtn.style.opacity = r.failed || !r.link ? "0.7" : "1";
-                      copyBtn.disabled = r.failed || !r.link;
-
-                      const status = document.createElement("div");
-                      status.className = "text-[11px]";
-                      status.style.color = "#34d399";
-                      status.style.minHeight = "16px";
-                      status.textContent = "";
-                      status.setAttribute("role", "status");
-
-                      copyBtn.onclick = async () => {
-                        if (!r.link) {
-                          // user masih bisa menekan Ctrl+C manual dari input
-                          try {
-                            input.focus();
-                            input.select();
-                          } catch {
-                            // ignore
-                          }
-                          status.textContent =
-                            "Link sudah dipilih, tekan Ctrl+C untuk menyalin.";
-                          setTimeout(() => {
-                            status.textContent = "";
-                          }, 4000);
-                          return;
-                        }
-
-                        try {
-                          await copyTextToClipboard(r.link);
-                          status.textContent = "Tersalin";
-                        } catch {
-                          try {
-                            input.focus();
-                            input.select();
-                          } catch {
-                            // ignore
-                          }
-                          status.textContent =
-                            "Link sudah dipilih, tekan Ctrl+C untuk menyalin";
-                        }
-
-                        setTimeout(() => {
-                          status.textContent = "";
-                        }, 2000);
-                      };
-
-                      row.appendChild(nameEl);
-                      row.appendChild(linkEl);
-                      const rightWrap = document.createElement("div");
-                      rightWrap.className = "flex flex-col gap-2";
-                      rightWrap.appendChild(copyBtn);
-                      rightWrap.appendChild(status);
-                      row.appendChild(rightWrap);
-
-                      listWrap.appendChild(row);
-                    });
-
-                    const closeBtn = document.createElement("button");
-                    closeBtn.type = "button";
-                    closeBtn.className =
-                      "px-3 py-2 rounded-xl text-xs font-medium";
-                    closeBtn.textContent = "Tutup";
-                    closeBtn.style.background = "#0d1829";
-                    closeBtn.style.border = "1px solid #1a2540";
-                    closeBtn.style.color = "#94a3b8";
-
-                    closeBtn.onclick = () => {
-                      overlay.remove();
-                    };
-
-                    dialog.appendChild(title);
-                    dialog.appendChild(summary);
-                    dialog.appendChild(listWrap);
-
-                    const footer = document.createElement("div");
-                    footer.className = "flex justify-end mt-5";
-                    footer.appendChild(closeBtn);
-                    dialog.appendChild(footer);
-
-                    overlay.style.background = "rgba(0,0,0,0.55)";
-                    overlay.style.padding = "24px";
-                    overlay.appendChild(dialog);
-
-                    document.body.appendChild(overlay);
-                  })();
-                }}
-              >
-                Share
-              </button>
-
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg text-xs font-semibold"
-                style={{
-                  background: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.4)",
-                  color: "#080d1a",
-                }}
-                aria-label="Bulk Delete"
-                onClick={openBulkDeleteModal}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = "rgba(239,68,68,0.9)";
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = "#f87171";
-                }}
-              >
-                Delete
-              </button>
-
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg text-xs font-medium"
-                style={{
-                  background: myFilesColors.buttonSoftBg,
-                  border: `1px solid ${myFilesColors.border}`,
-                  color: myFilesColors.text,
-                }}
-                aria-label="Batalkan pilihan"
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = `${accentColor}10`;
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget;
-                  el.style.background = myFilesColors.buttonSoftBg;
-                }}
-                onClick={() => {
-                  clearSelection();
-                }}
-              >
-                Batalkan pilihan
-              </button>
-            </div>
-          </div>
-        )}
-
-        <h3
-          className="text-xs font-semibold mb-3 uppercase tracking-wider"
-          style={{ color: "#334155" }}
-        >
-          Recent Files
-        </h3>
-        {loadingFiles && (
-          <div
-            className="flex items-center gap-2 text-xs mb-4"
-            style={{ color: myFilesColors.muted }}
-          >
-            <LoadingSpinner size={12} />
-            Memuat file...
-          </div>
-        )}
-        {fileError && (
-          <div className="text-xs mb-4" style={{ color: "#f87171" }}>
-            {fileError}
-          </div>
-        )}
-        {viewMode === "list" ? (
-          <div className="flex flex-col gap-2">
-            <div
-              className="grid items-center gap-2 rounded-xl px-3 py-2"
-              style={{
-                gridTemplateColumns: fileListColumnTemplate,
-                background: myFilesColors.panelBg,
-                border: `1px solid ${myFilesColors.border}`,
-              }}
-            >
-            {/* Select all */}
-            {(() => {
-              const visibleIds = typedFiles.map((f) => f.id);
-              const selectedVisibleCount = visibleIds.reduce(
-                (acc, id) => acc + (selectedFileIds.has(id) ? 1 : 0),
-                0,
-              );
-              const allChecked =
-                visibleIds.length > 0 &&
-                selectedVisibleCount === visibleIds.length;
-              const indeterminate =
-                selectedVisibleCount > 0 && !allChecked;
-
-              return (
-                <input
-                  type="checkbox"
-                  aria-label="Pilih semua file yang tampil"
-                  checked={allChecked}
-                  ref={(el) => {
-                    if (el) el.indeterminate = indeterminate;
-                  }}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    if (checked) {
-                      setSelectedFileIds((prev) => {
-                        const next = new Set(prev);
-                        for (const id of visibleIds) next.add(id);
-                        return next;
-                      });
-                    } else {
-                      setSelectedFileIds((prev) => {
-                        const next = new Set(prev);
-                        for (const id of visibleIds) next.delete(id);
-                        return next;
-                      });
-                    }
-                  }}
-                  style={{
-                    width: 14,
-                    height: 14,
-                    accentColor: "#ef4444",
-                    ...checklistVisibilityStyle,
-                  }}
-                />
-              );
-            })()}
-
-            <span
-              className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: myFilesColors.muted, paddingLeft: 38 }}
-            >
-              Name
-            </span>
-            {showFileMetadata && (
-              <>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{
-                    color: myFilesColors.muted,
-                    justifySelf: "start",
-                    paddingLeft: 4,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    marginLeft: -4,
-                  }}
-                >
-                  Type
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: myFilesColors.muted }}
-                >
-                  Modified
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: myFilesColors.muted }}
-                >
-                  Size
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: myFilesColors.muted }}
-                >
-                  Status
-                </span>
-              </>
-            )}
-            {/* empty final header cell for action column */}
-            <span
-              className="text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: myFilesColors.muted }}
-            ></span>
-          </div>
-
-          {showEmptySearchState && (
-            <EmptySearchState
-              searchQuery={searchQuery}
-              color={myFilesColors.muted}
-            />
-          )}
-          {!showEmptySearchState &&
-            typedFiles.map((file) => {
-              const typeLabel = getTypeLabel(file.mime_type ?? null);
-              const modifiedLabel = file.created_at
-                ? new Date(file.created_at).toLocaleDateString()
-                : "-";
-              const sizeLabel = formatBytes(file.size);
-              const visibilityLabel = "Private";
-
-              return (
-                <MyFilesFileListItem
-                  key={file.id}
-                  file={file}
-                  isSelected={selectedFileIds.has(file.id)}
-                  checklistVisibilityStyle={checklistVisibilityStyle}
-                  showFileMetadata={showFileMetadata}
-                  fileListColumnTemplate={fileListColumnTemplate}
-                  cardBg={myFilesColors.cardBg}
-                  borderColor={myFilesColors.border}
-                  textColor={myFilesColors.text}
-                  mutedColor={myFilesColors.muted}
-                  muted2Color={myFilesColors.muted2}
-                  panelBg={myFilesColors.panelBg}
-                  accentColor={accentColor}
-                  actionMenuSlot={renderFileActionMenu(file)}
-                  draggable={moveDragDropEnabled}
-                  onToggleSelection={() => toggleFileSelection(file.id)}
-                  onRowContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
-                  onRowClick={(event) => {
-                    if (isInteractiveItemTarget(event.target)) return;
-                    if (!isSelectionMode) return;
-                    toggleFileSelection(file.id);
-                  }}
-                  onRowDoubleClick={(event) => {
-                    if (isInteractiveItemTarget(event.target)) return;
-                    void handlePreviewFile(file);
-                  }}
-                  onDragStart={(e) => {
-                    if (!moveDragDropEnabled) {
-                      e.preventDefault();
-                      return;
-                    }
-
-                    e.dataTransfer.effectAllowed = "move";
-                    setCompactDragImage(e, file.original_name ?? "Untitled file", "file");
-                    startFileDragMove(file);
-                  }}
-                  onDragEnd={clearDragMoveItem}
-                  typeLabel={typeLabel}
-                  sizeLabel={sizeLabel}
-                  modifiedLabel={modifiedLabel}
-                  visibilityLabel={visibilityLabel}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {showEmptySearchState && (
-              <EmptySearchState
-                searchQuery={searchQuery}
-                color={myFilesColors.muted}
-                colSpanFull={true}
+                onDragEnd={clearDragMoveItem}
+                typeLabel={typeLabel}
+                sizeLabel={sizeLabel}
+                modifiedLabel={modifiedLabel}
+                visibilityLabel={visibilityLabel}
               />
-            )}
-            {!showEmptySearchState &&
-              typedFiles.map((file) => {
-                const typeLabel = getTypeLabel(file.mime_type ?? null);
-                const modifiedLabel = file.created_at
-                  ? new Date(file.created_at).toLocaleDateString()
-                  : "-";
-                const sizeLabel = formatBytes(file.size);
-                const visibilityLabel = "Private";
-
-                return (
-                  <MyFilesFileGridItem
-                    key={file.id}
-                    file={file}
-                    isSelected={selectedFileIds.has(file.id)}
-                    checklistVisibilityStyle={checklistVisibilityStyle}
-                    showFileMetadata={showFileMetadata}
-                    moveDragDropEnabled={moveDragDropEnabled}
-                    cardBg={myFilesColors.cardBg}
-                    panelBg={myFilesColors.panelBg}
-                    borderColor={myFilesColors.border}
-                    textColor={myFilesColors.text}
-                    mutedColor={myFilesColors.muted}
-                    muted2Color={myFilesColors.muted2}
-                    accentColor={accentColor}
-                    actionMenuSlot={renderFileActionMenu(file)}
-                    onToggleSelection={() => toggleFileSelection(file.id)}
-                    onRowContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
-                    onRowClick={(event) => {
-                      if (isInteractiveItemTarget(event.target)) return;
-                      if (!isSelectionMode) return;
-                      toggleFileSelection(file.id);
-                    }}
-                    onRowDoubleClick={(event) => {
-                      if (isInteractiveItemTarget(event.target)) return;
-                      void handlePreviewFile(file);
-                    }}
-                    onDragStart={(e) => {
-                      if (!moveDragDropEnabled) {
-                        e.preventDefault();
-                        return;
-                      }
-
-                      e.dataTransfer.effectAllowed = "move";
-                      setCompactDragImage(
-                        e,
-                        file.original_name ?? "Untitled file",
-                        "file",
-                      );
-                      startFileDragMove(file);
-                    }}
-                    onDragEnd={clearDragMoveItem}
-                    typeLabel={typeLabel}
-                    sizeLabel={sizeLabel}
-                    modifiedLabel={modifiedLabel}
-                    visibilityLabel={visibilityLabel}
-                  />
-                );
-              })}
-          </div>
+            );
+          })
         )}
-      </div>
+        renderGridItems={() => (
+          typedFiles.map((file) => {
+            const typeLabel = getTypeLabel(file.mime_type ?? null);
+            const modifiedLabel = file.created_at
+              ? new Date(file.created_at).toLocaleDateString()
+              : "-";
+            const sizeLabel = formatBytes(file.size);
+            const visibilityLabel = "Private";
+
+            return (
+              <MyFilesFileGridItem
+                key={file.id}
+                file={file}
+                isSelected={selectedFileIds.has(file.id)}
+                checklistVisibilityStyle={checklistVisibilityStyle}
+                showFileMetadata={showFileMetadata}
+                moveDragDropEnabled={moveDragDropEnabled}
+                cardBg={myFilesColors.cardBg}
+                panelBg={myFilesColors.panelBg}
+                borderColor={myFilesColors.border}
+                textColor={myFilesColors.text}
+                mutedColor={myFilesColors.muted}
+                muted2Color={myFilesColors.muted2}
+                accentColor={accentColor}
+                actionMenuSlot={renderFileActionMenu(file)}
+                onToggleSelection={() => toggleFileSelection(file.id)}
+                onRowContextMenu={(e) => openFileMenuAtCursor(e, file.id)}
+                onRowClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  if (!isSelectionMode) return;
+                  toggleFileSelection(file.id);
+                }}
+                onRowDoubleClick={(event) => {
+                  if (isInteractiveItemTarget(event.target)) return;
+                  void handlePreviewFile(file);
+                }}
+                onDragStart={(e) => {
+                  if (!moveDragDropEnabled) {
+                    e.preventDefault();
+                    return;
+                  }
+
+                  e.dataTransfer.effectAllowed = "move";
+                  setCompactDragImage(
+                    e,
+                    file.original_name ?? "Untitled file",
+                    "file",
+                  );
+                  startFileDragMove(file);
+                }}
+                onDragEnd={clearDragMoveItem}
+                typeLabel={typeLabel}
+                sizeLabel={sizeLabel}
+                modifiedLabel={modifiedLabel}
+                visibilityLabel={visibilityLabel}
+              />
+            );
+          })
+        )}
+        onToggleVisibleFiles={(checked, visibleFileIds) => {
+          if (checked) {
+            setSelectedFileIds((prev) => {
+              const next = new Set(prev);
+              for (const id of visibleFileIds) next.add(id);
+              return next;
+            });
+          } else {
+            setSelectedFileIds((prev) => {
+              const next = new Set(prev);
+              for (const id of visibleFileIds) next.delete(id);
+              return next;
+            });
+          }
+        }}
+        onBulkDownload={() => {
+          void handleBulkDownload();
+        }}
+        onOpenBulkDeleteModal={openBulkDeleteModal}
+        onClearFileSelection={clearSelection}
+      />
     </div>
   );
 }
