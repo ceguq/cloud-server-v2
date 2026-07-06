@@ -80,6 +80,7 @@ import { MyFilesBreadcrumbs } from "./my-files/components/MyFilesBreadcrumbs";
 import { MyFilesFileGridItem } from "./my-files/components/MyFilesFileGridItem";
 import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
+import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
 import { MyFilesFolderSection } from "./my-files/components/MyFilesFolderSection";
@@ -2301,120 +2302,36 @@ export function MyFiles({
       />
 
       {/* Global Folder Action Menu */}
-      {activeFolderAction && folderActionMenuPosition ? (
-        <div
-          ref={folderMenuWrapRef}
-          className="rounded-xl shadow-2xl"
-          style={{
-            position: "fixed",
-            top: folderActionMenuPosition.y,
-            left: folderActionMenuPosition.x,
-            width: 176,
-            zIndex: 9999,
-            background: myFilesColors.panelBg,
-            border: `1px solid ${myFilesColors.border}`,
-            borderRadius: 10,
-            padding: 6,
-          }}
-          role="menu"
-          aria-label={`Folder menu ${activeFolderAction.name}`}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-            style={{ color: myFilesColors.text, background: "transparent" }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = `${accentColor}10`;
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            onClick={() => {
-              closeFolderActionMenu();
-              setDetailsItem({ type: "folder", item: activeFolderAction });
-            }}
-            aria-label={`Details ${activeFolderAction.name}`}
-          >
-            <div className="flex items-center gap-2">
-              <FileText size={14} />
-              <span>Details</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            role="menuitem"
-            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-            style={{ color: myFilesColors.text, background: "transparent" }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = `${accentColor}10`;
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            onClick={() => {
-              closeFolderActionMenu();
-              setSelectedFolderForAction(activeFolderAction);
-              openRenameFolderModal(activeFolderAction);
-            }}
-            aria-label={`Rename ${activeFolderAction.name}`}
-          >
-            <div className="flex items-center gap-2">
-              <Edit3 size={14} />
-              <span>Rename</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            role="menuitem"
-            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-            style={{ color: myFilesColors.text, background: "transparent" }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = `${accentColor}10`;
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            onClick={() => {
-              closeFolderActionMenu();
-              openMoveFolderModal(activeFolderAction);
-            }}
-            aria-label={`Move ${activeFolderAction.name}`}
-          >
-            <div className="flex items-center gap-2">
-              <Folder size={14} />
-              <span>Move to...</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            role="menuitem"
-            className="mt-1 w-full rounded-lg px-2 py-1 text-left text-xs font-semibold"
-            style={{ color: "#f87171", background: "transparent" }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "rgba(239,68,68,0.12)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            onClick={() => {
-              closeFolderActionMenu();
-              openDeleteFolderModal(activeFolderAction);
-            }}
-            aria-label={`Delete ${activeFolderAction.name}`}
-          >
-            <div className="flex items-center gap-2">
-              <Trash2 size={14} />
-              <span>Trash</span>
-            </div>
-          </button>
-        </div>
-      ) : null}
+      <MyFilesFolderActionMenu
+        folder={activeFolderAction}
+        position={folderActionMenuPosition}
+        menuRef={folderMenuWrapRef}
+        panelBg={myFilesColors.panelBg}
+        borderColor={myFilesColors.border}
+        textColor={myFilesColors.text}
+        accentColor={accentColor}
+        onShowDetails={() => {
+          if (!activeFolderAction) return;
+          closeFolderActionMenu();
+          setDetailsItem({ type: "folder", item: activeFolderAction });
+        }}
+        onRename={() => {
+          if (!activeFolderAction) return;
+          closeFolderActionMenu();
+          setSelectedFolderForAction(activeFolderAction);
+          openRenameFolderModal(activeFolderAction);
+        }}
+        onMove={() => {
+          if (!activeFolderAction) return;
+          closeFolderActionMenu();
+          openMoveFolderModal(activeFolderAction);
+        }}
+        onDelete={() => {
+          if (!activeFolderAction) return;
+          closeFolderActionMenu();
+          openDeleteFolderModal(activeFolderAction);
+        }}
+      />
 
 
       {/* Details Modal */}
