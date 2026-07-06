@@ -227,6 +227,8 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | Login | `app/pages/LoginPage.tsx` + `app/pages/login/` | Aktif | Login email/password |
 | Public Share | `app/pages/PublicSharePage.tsx` + `app/pages/public-share/` | Aktif | Fetch public share metadata dan download |
 
+Catatan refactor My Files: `frontend/src/app/pages/MyFiles.tsx` telah menyelesaikan fase refactor boundary logika inti dengan ekstraksi helper/hook seperti `myFilesMenuPositioning.ts`, `myFilesSelectionUtils.ts`, `useMyFilesSelection.ts`, `useMyFilesActionMenus.ts`, `myFilesMoveModalUtils.ts`, `myFilesFolderModalUtils.ts`, dan `myFilesDetailsModalUtils.ts`. `MyFiles.tsx` tetap sengaja dipertahankan sebagai page-level orchestrator; logic rename/delete/share/data-loading/preview tetap parent-owned karena lebih terkait async/API/refs/blob/URL lifecycle. Arsip OpenSpec: `openspec/changes/archive/2026-07-06-refactor-myfiles-core-logic-boundaries/`.
+
 ### 5.4 Services Frontend
 
 | Service | Fungsi | Catatan |
