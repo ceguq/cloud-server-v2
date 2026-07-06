@@ -79,6 +79,7 @@ import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWi
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
 import { PreviewPdfFrame } from "./my-files/components/PreviewPdfFrame";
+import { PreviewFallbackFrame } from "./my-files/components/PreviewFallbackFrame";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
@@ -2463,10 +2464,9 @@ export function MyFiles({
             )}
           </div>
         ) : previewUrl ? (
-          <iframe
-            src={previewUrl}
-            title={previewFileName}
-            className="h-full w-full rounded-xl"
+          <PreviewFallbackFrame
+            previewUrl={previewUrl}
+            previewFileName={previewFileName}
           />
         ) : (
           <div className="text-xs" style={{ color: myFilesColors.muted }}>
