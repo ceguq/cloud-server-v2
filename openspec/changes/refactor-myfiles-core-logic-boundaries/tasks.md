@@ -1,13 +1,13 @@
 # Refactor MyFiles Core Logic Boundaries - Tasks
 
-**Status:** Planning  
+**Status:** Documentation finalized; awaiting manual validation/archive  
 **Date:** 2026-07-06
 
 ## Stage 1 — Read-only audit
 
-- [ ] Audit the current MyFiles.tsx implementation after the completed UI extraction work.
-- [ ] Identify remaining state groups, handlers, API calls, and helper clusters.
-- [ ] Recommend exactly one first safe logic extraction.
+- [x] Audit the current MyFiles.tsx implementation after the completed UI extraction work.
+- [x] Identify remaining state groups, handlers, API calls, and helper clusters.
+- [x] Recommend exactly one first safe logic extraction.
 
 ## Stage 2 — Safe helper extraction
 
@@ -27,10 +27,10 @@
 - [x] Extract details modal state-value helpers.
 - [x] Move only pure details modal open/close state value construction into the new helper module.
 - [x] Keep useState ownership, setState application, selectedFolderForAction, submitFolderModal, API calls, refresh logic, modal rendering, click handlers, and async behavior owned by MyFiles.tsx.
-- [ ] Do not move state unless it has been audited.
-- [ ] Preserve existing behavior and validation flow.
-- [ ] Extract one hook at a time only after audit.
-- [ ] Perform manual npm run build after the patch.
+- [x] Do not move state unless it has been audited.
+- [x] Preserve existing behavior and validation flow.
+- [x] Extract one hook at a time only after audit.
+- [x] Perform manual npm run build successfully after each implementation patch.
 
 ## Stage 3 — Hook extraction candidates
 
@@ -41,10 +41,17 @@
 - [x] Move only file/folder action menu state, menu refs, menu position state, open/close handlers, and click-outside behavior into the new hook.
 - [x] Keep file/folder action callbacks, API calls, modal state, preview state, data loading/navigation, and selection state outside this hook.
 - [ ] Candidate hooks may include useMyFilesSelection, useMyFilesMenus, useMyFilesMoveState, useMyFilesShareState, or similar names, but final names will be based on the actual code audit.
-- [ ] Keep API behavior unchanged.
+- [x] Keep API behavior unchanged.
 
 ## Stage 4 — Validation
 
-- [ ] Perform manual npm run build after every patch.
+- [x] Perform manual npm run build after every patch.
 - [ ] Perform manual smoke-test of My Files core flows.
 - [ ] Do not archive the change until tasks and validation remain consistent.
+
+## Note
+
+- MyFiles.tsx remains the page-level orchestrator intentionally.
+- Remaining rename/delete/share/data-loading/preview logic is intentionally left parent-owned because it is more coupled to async/API/refs/blob/URL lifecycle behavior.
+- Further refactor should require a new OpenSpec or a new audited phase.
+- Data loading hook extraction, preview helper/hook extraction, share modal helper/hook extraction, broad modal hook extraction, and any API/service orchestration extraction remain future work and are intentionally unchecked.
