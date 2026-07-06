@@ -85,6 +85,7 @@ import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
 import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
+import { MyFilesFolderModal } from "./my-files/components/MyFilesFolderModal";
 import { MyFilesFileRenameModal } from "./my-files/components/MyFilesFileRenameModal";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
 import { MyFilesFolderListItem } from "./my-files/components/MyFilesFolderListItem";
@@ -2265,115 +2266,32 @@ export function MyFiles({
       />
 
 
-      {/* Folder/Create/Rename Modal */}
-      {isFolderModalOpen && (
-
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-6"
-            style={{
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-              background: myFilesColors.cardBg,
-              border: `1px solid ${myFilesColors.border}`,
-            }}
-          >
-            <div className="mb-4">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: myFilesColors.title }}
-              >
-                {folderModalMode === "create" ? "New Folder" : "Rename Folder"}
-              </h2>
-              <p className="text-xs mt-1" style={{ color: myFilesColors.muted }}>
-                {folderModalMode === "create"
-                  ? "Buat folder baru di dalam folder saat ini."
-                  : "Perbarui nama folder."}
-              </p>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitFolderModal();
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <label className="text-xs" style={{ color: myFilesColors.muted }}>
-                  Folder name
-                </label>
-                <input
-                  autoFocus
-                  type="text"
-                  className="mt-1 w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-blue-500"
-                  placeholder="Nama folder"
-                  value={folderModalName}
-                  onChange={(e) => {
-                    setFolderModalName(e.target.value);
-                    if (folderModalError) setFolderModalError("");
-                  }}
-                  aria-label="Nama folder"
-                  style={{
-                    background: myFilesColors.inputBg,
-                    border: `1px solid ${myFilesColors.inputBorder}`,
-                    color: myFilesColors.inputText,
-                    caretColor: accentColor,
-                  }}
-                />
-              </div>
-
-              {folderModalError && (
-                <div
-                  className="text-xs rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
-                  style={{ color: "#f87171" }}
-                >
-                  {folderModalError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeFolderModal}
-                  disabled={folderActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-medium"
-                  style={{
-                    background: myFilesColors.buttonSoftBg,
-                    border: `1px solid ${myFilesColors.border}`,
-                    color: myFilesColors.text,
-                    opacity: folderActionLoading ? 0.6 : 1,
-                  }}
-                  aria-label="Cancel"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={folderActionLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-semibold text-white"
-                  style={{
-                    background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
-                    opacity: folderActionLoading ? 0.7 : 1,
-                  }}
-                  aria-label={folderModalMode === "create" ? "Create" : "Save"}
-                >
-                  {folderActionLoading
-                    ? folderModalMode === "create"
-                      ? "Creating..."
-                      : "Saving..."
-                    : folderModalMode === "create"
-                      ? "Create"
-                      : "Save"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <MyFilesFolderModal
+        isOpen={isFolderModalOpen}
+        mode={folderModalMode}
+        folderModalName={folderModalName}
+        folderModalError={folderModalError}
+        folderActionLoading={folderActionLoading}
+        titleColor={myFilesColors.title}
+        textColor={myFilesColors.text}
+        mutedColor={myFilesColors.muted}
+        inputBg={myFilesColors.inputBg}
+        inputBorder={myFilesColors.inputBorder}
+        inputText={myFilesColors.inputText}
+        accentColor={accentColor}
+        buttonSoftBg={myFilesColors.buttonSoftBg}
+        cardBg={myFilesColors.cardBg}
+        borderColor={myFilesColors.border}
+        onClose={closeFolderModal}
+        onNameChange={(value) => {
+          setFolderModalName(value);
+          if (folderModalError) setFolderModalError("");
+        }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitFolderModal();
+        }}
+      />
 
       {previewModalOpen && previewModalMode === "minimized" ? (
         <PreviewMinimizedWidget
