@@ -251,6 +251,13 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Keep bulk folder delete modal, preview/share/move modals, and final cleanup tasks unchecked
   - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
 
+- [x] **3.1n Create `MyFilesBulkFolderDeleteModal.tsx` component**
+  - [x] Extract only the Bulk Folder Delete modal JSX from `MyFiles.tsx`
+  - [x] Note: Only the modal overlay, delete confirmation card, selected folder count text, loading state UI, result summary UI, and buttons were moved.
+  - [x] Note: `isBulkFolderDeleteModalOpen`, `bulkFolderDeleteIds`, `bulkFolderDeleteLoading`, `bulkFolderDeleteResult`, `handleConfirmBulkFolderDelete`, `closeBulkFolderDeleteModal`, result calculation, and API behavior remain owned by `MyFiles.tsx`.
+  - [ ] Keep preview/share/move modals and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [ ] **3.2 Create `MyFilesList.tsx` component**
   - [ ] Extract list view rendering logic
   - [ ] Handle file item rendering
