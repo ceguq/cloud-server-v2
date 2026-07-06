@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: MyFiles core logic boundaries shall preserve behavior
-The MyFiles page may move safe state and helper boundaries into dedicated hooks or helper modules, but it shall preserve existing My Files behavior, API calls, UI behavior, and validation flow.
+The MyFiles page SHALL preserve existing My Files behavior, API calls, UI behavior, and validation flow when safe state and helper boundaries are moved into dedicated hooks or helper modules.
 
 #### Scenario: Refactor preserves My Files behavior
 
@@ -11,7 +11,7 @@ The MyFiles page may move safe state and helper boundaries into dedicated hooks 
 - **AND** the frontend production build succeeds
 
 ### Requirement: MyFiles refactor shall proceed in small audited patches
-Every MyFiles logic extraction shall be preceded by a read-only audit and implemented as a small, reviewable patch.
+Every MyFiles logic extraction SHALL be preceded by a read-only audit and SHALL be implemented as a small, reviewable patch.
 
 #### Scenario: Safe small patch workflow
 
