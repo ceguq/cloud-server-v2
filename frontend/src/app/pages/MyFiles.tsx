@@ -78,6 +78,7 @@ import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { PreviewMinimizedWidget } from "./my-files/components/PreviewMinimizedWidget";
 import { PreviewHeaderTitle } from "./my-files/components/PreviewHeaderTitle";
 import { PreviewHeaderActions } from "./my-files/components/PreviewHeaderActions";
+import { PreviewPdfFrame } from "./my-files/components/PreviewPdfFrame";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
@@ -2368,14 +2369,9 @@ export function MyFiles({
             />
           </div>
         ) : previewContentType === "application/pdf" ? (
-          <iframe
-            src={
-              previewUrl
-                ? `${previewUrl}#toolbar=1&navpanes=0&scrollbar=1`
-                : undefined
-            }
-            title={previewFileName}
-            className="h-full w-full rounded-xl"
+          <PreviewPdfFrame
+            previewUrl={previewUrl ?? null}
+            previewFileName={previewFileName}
           />
         ) : previewContentType.startsWith("video/") ? (
           <div
