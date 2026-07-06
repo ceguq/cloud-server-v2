@@ -82,6 +82,7 @@ import { PreviewPdfFrame } from "./my-files/components/PreviewPdfFrame";
 import { PreviewFallbackFrame } from "./my-files/components/PreviewFallbackFrame";
 import { PreviewAudioPlayerFrame } from "./my-files/components/PreviewAudioPlayerFrame";
 import { PreviewVideoFrame } from "./my-files/components/PreviewVideoFrame";
+import { PreviewTextFrame } from "./my-files/components/PreviewTextFrame";
 import { AudioPreviewPlayer } from "./my-files/components/AudioPreviewPlayer";
 import { MyFilesPreviewModal } from "./my-files/components/MyFilesPreviewModal";
 import { MyFilesMoveModal } from "./my-files/components/MyFilesMoveModal";
@@ -2401,48 +2402,14 @@ export function MyFiles({
           previewContentType === "text/html" ||
           previewContentType === "text/markdown" ||
           previewContentType === "text/csv" ? (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {previewTextError ? (
-              <div className="text-xs" style={{ color: "#f87171" }}>
-                {previewTextError}
-              </div>
-            ) : previewIsTextTooLarge ? (
-              <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                Preview text terlalu besar. Silakan download file untuk
-                melihat isinya.
-              </div>
-            ) : previewTextLoading ? (
-              <div className="text-xs" style={{ color: myFilesColors.muted }}>
-                Loading preview text...
-              </div>
-            ) : (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 16,
-                  color: myFilesColors.text,
-                  background: "transparent",
-                  fontFamily:
-                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  whiteSpace: "pre",
-                  overflow: "auto",
-                  tabSize: 2,
-                }}
-              >
-                {previewText}
-              </pre>
-            )}
-          </div>
+          <PreviewTextFrame
+            previewTextError={previewTextError}
+            previewIsTextTooLarge={previewIsTextTooLarge}
+            previewTextLoading={previewTextLoading}
+            previewText={previewText}
+            textColor={myFilesColors.text}
+            mutedColor={myFilesColors.muted}
+          />
         ) : previewUrl ? (
           <PreviewFallbackFrame
             previewUrl={previewUrl}
