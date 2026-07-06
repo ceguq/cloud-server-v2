@@ -253,6 +253,13 @@ This document tracks the implementation of the MyFiles.tsx refactor using a stag
   - [ ] Test scrolling and virtualization (if used)
   - [ ] Verify styles apply correctly
 
+- [x] **3.1l Create `MyFilesBulkDownloadResultModal.tsx` component**
+  - [x] Extract only the Bulk Download Result modal JSX from `MyFiles.tsx`
+  - [x] Note: Only the modal overlay, result card, title, counts, and close button markup were moved.
+  - [x] Note: `bulkDownloadResult`, `bulkDownloadLoading`, `handleBulkDownload`, `closeBulkDownloadResult`, `setBulkDownloadResult`, selected file IDs, result calculation, and API behavior remain owned by `MyFiles.tsx`.
+  - [ ] Keep bulk file delete modal, bulk folder delete modal, move modal, share modal, preview modal, and final cleanup tasks unchecked
+  - [ ] Keep validation checklist unchecked because the user must run `npm run build` manually after the patch
+
 - [ ] **3.3 Create `MyFilesGrid.tsx` component**
   - [ ] Extract grid view rendering logic
   - [ ] Handle file item rendering in grid

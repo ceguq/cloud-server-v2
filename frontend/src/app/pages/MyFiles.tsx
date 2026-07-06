@@ -85,6 +85,7 @@ import { MyFilesFileListItem } from "./my-files/components/MyFilesFileListItem";
 import { MyFilesFileSection } from "./my-files/components/MyFilesFileSection";
 import { MyFilesFolderActionMenu } from "./my-files/components/MyFilesFolderActionMenu";
 import { MyFilesFolderDeleteModal } from "./my-files/components/MyFilesFolderDeleteModal";
+import { MyFilesBulkDownloadResultModal } from "./my-files/components/MyFilesBulkDownloadResultModal";
 import { MyFilesFolderModal } from "./my-files/components/MyFilesFolderModal";
 import { MyFilesFileRenameModal } from "./my-files/components/MyFilesFileRenameModal";
 import { MyFilesFolderGridItem } from "./my-files/components/MyFilesFolderGridItem";
@@ -3288,94 +3289,15 @@ export function MyFiles({
         </div>
       )}
 
-      {/* Bulk Download Result Modal */}
-      {bulkDownloadResult && (
-        <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bulk-download-result-title"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-[#1a2540] bg-[#0f1729] p-6"
-            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2
-                  id="bulk-download-result-title"
-                  className="text-sm font-semibold"
-                  style={{ color: "#e2e8f0" }}
-                >
-                  Download selesai
-                </h2>
-                <p className="mt-2 text-xs" style={{ color: "#94a3b8" }}>
-                  Jika browser memblokir multiple download otomatis, beberapa
-                  file mungkin perlu diunduh ulang.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeBulkDownloadResult}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm"
-                style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
-                }}
-                aria-label="Tutup hasil bulk download"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div
-              className="rounded-xl border border-[#1a2540] bg-[#111c2f] p-4"
-              role="status"
-            >
-              <div className="text-xs" style={{ color: "#94a3b8" }}>
-                Hasil proses
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div
-                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
-                  style={{ color: "#34d399" }}
-                >
-                  <div className="text-lg font-semibold">
-                    {bulkDownloadResult.okCount}
-                  </div>
-                  <div className="text-[11px]">berhasil</div>
-                </div>
-                <div
-                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
-                  style={{ color: "#f87171" }}
-                >
-                  <div className="text-lg font-semibold">
-                    {bulkDownloadResult.failCount}
-                  </div>
-                  <div className="text-[11px]">gagal</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={closeBulkDownloadResult}
-                className="rounded-xl px-3 py-2 text-xs font-medium"
-                style={{
-                  background: "#0d1829",
-                  border: "1px solid #1a2540",
-                  color: "#94a3b8",
-                }}
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MyFilesBulkDownloadResultModal
+        result={bulkDownloadResult}
+        titleColor="#e2e8f0"
+        mutedColor="#94a3b8"
+        cardBg="#0f1729"
+        borderColor="#1a2540"
+        buttonSoftBg="#0d1829"
+        onClose={closeBulkDownloadResult}
+      />
 
       <MyFilesFileSection
         typedFiles={typedFiles}
