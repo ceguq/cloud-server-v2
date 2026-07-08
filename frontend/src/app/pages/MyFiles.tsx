@@ -52,6 +52,7 @@ import {
 } from "./my-files/myFilesDetailsModalUtils";
 import { calculatePreviewImageZoomState } from "./my-files/myFilesPreviewZoomUtils";
 import { getExistingFileShareLink } from "./my-files/myFilesShareUtils";
+import { useMyFilesOpenInNewTab } from "./my-files/hooks/useMyFilesOpenInNewTab";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import {
   formatBytes,
@@ -159,9 +160,7 @@ export function MyFiles({
     closeFolderActionMenu,
   } = useMyFilesActionMenus();
 
-
-
-
+  const { openFileInNewTab, openingFileId } = useMyFilesOpenInNewTab();
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchFocused, setSearchFocused] = useState<boolean>(false);
@@ -1730,9 +1729,14 @@ export function MyFiles({
             previewing={previewingFileId === file.id}
             sharing={isSharing}
             feedback={feedback}
+            openingInNewTab={openingFileId === file.id}
             onPreview={() => {
               handleCloseFileActionMenu();
               void handlePreviewFile(file);
+            }}
+            onOpenInNewTab={() => {
+              handleCloseFileActionMenu();
+              void openFileInNewTab(file);
             }}
             onDetails={() => {
               handleCloseFileActionMenu();

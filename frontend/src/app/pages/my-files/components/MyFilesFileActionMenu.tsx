@@ -7,6 +7,7 @@ import {
   Edit3,
   Folder,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { MenuItemButton } from "../components/MenuItemButton";
 import type { FileActionFeedback } from "../types";
@@ -25,8 +26,10 @@ export type MyFilesFileActionMenuProps = {
   accentColor: string;
   previewing: boolean;
   sharing: boolean;
+  openingInNewTab: boolean;
   feedback: FileActionFeedback | null;
   onPreview: () => void;
+  onOpenInNewTab: () => void;
   onDetails: () => void;
   onDownload: () => void;
   onShare: () => void;
@@ -47,8 +50,10 @@ export function MyFilesFileActionMenu({
   accentColor,
   previewing,
   sharing,
+  openingInNewTab,
   feedback,
   onPreview,
+  onOpenInNewTab,
   onDetails,
   onDownload,
   onShare,
@@ -83,6 +88,16 @@ export function MyFilesFileActionMenu({
         disabled={!file || previewing}
         ariaLabel={`Preview ${file.original_name}`}
         onClick={onPreview}
+        textColor={textColor}
+        accentColor={accentColor}
+      />
+
+      <MenuItemButton
+        label="Open in new tab"
+        icon={<ExternalLink size={14} />}
+        disabled={openingInNewTab}
+        ariaLabel={`Open in new tab ${file.original_name}`}
+        onClick={onOpenInNewTab}
         textColor={textColor}
         accentColor={accentColor}
       />

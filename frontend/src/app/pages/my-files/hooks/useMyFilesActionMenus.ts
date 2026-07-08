@@ -40,17 +40,30 @@ export function useMyFilesActionMenus() {
       setOpenFileActionId(null);
       setFileActionMenuPosition(null);
 
+      if (openFolderActionId === folderId) {
+        closeFolderActionMenu();
+        return;
+      }
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const isContextMenu = event.type === "contextmenu";
+      const positionX = isContextMenu ? event.clientX : rect.right - FOLDER_MENU_WIDTH;
+      const positionY = isContextMenu ? event.clientY : rect.bottom + 6;
+
       setOpenFolderActionId(folderId);
       setFolderActionMenuPosition(
         calculateActionMenuPosition({
-          clientX: event.clientX,
-          clientY: event.clientY,
+          clientX: positionX,
+          clientY: positionY,
           menuWidth: FOLDER_MENU_WIDTH,
           menuHeight: FOLDER_MENU_HEIGHT,
+          padding: 8,
+          viewportWidth: typeof window !== "undefined" ? window.innerWidth - 12 : undefined,
+          viewportHeight: typeof window !== "undefined" ? window.innerHeight : undefined,
         }),
       );
     },
-    [],
+    [closeFolderActionMenu, openFolderActionId],
   );
 
   const openFileMenuAtCursor = useCallback(
@@ -67,23 +80,15 @@ export function useMyFilesActionMenus() {
       }
 
       const rect = event.currentTarget.getBoundingClientRect();
-      const left =
-        typeof window !== "undefined"
-          ? Math.min(
-              window.innerWidth - FILE_MENU_WIDTH - 12,
-              Math.max(12, rect.right - FILE_MENU_WIDTH),
-            )
-          : rect.right - FILE_MENU_WIDTH;
-      const top =
-        typeof window !== "undefined"
-          ? Math.min(window.innerHeight - FILE_MENU_HEIGHT, rect.bottom + 6)
-          : rect.bottom + 6;
+      const isContextMenu = event.type === "contextmenu";
+      const positionX = isContextMenu ? event.clientX : rect.right - FILE_MENU_WIDTH;
+      const positionY = isContextMenu ? event.clientY : rect.bottom + 6;
 
       setOpenFileActionId(fileId);
       setFileActionMenuPosition(
         calculateActionMenuPosition({
-          clientX: left,
-          clientY: top,
+          clientX: positionX,
+          clientY: positionY,
           menuWidth: FILE_MENU_WIDTH,
           menuHeight: FILE_MENU_HEIGHT,
           padding: 8,

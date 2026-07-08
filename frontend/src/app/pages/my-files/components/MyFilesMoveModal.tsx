@@ -45,6 +45,7 @@ export function MyFilesMoveModal({
   inputText,
   cardBg,
   borderColor,
+  panelBg,
   buttonSoftBg,
   accentColor,
   onClose,
