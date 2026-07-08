@@ -662,6 +662,15 @@ export function Dashboard() {
                 : card.sub;
           const showStorageLoading =
             loading && (card.kind === "storage" || card.kind === "files");
+
+          // Determine indicator tone: "neutral" for honest labels, "up" for Real API
+          const isHonestLabel = [
+            "Current usage",
+            "Total count",
+            "Live count",
+          ].includes(card.change);
+          const indicatorTone = isHonestLabel ? ("neutral" as const) : ("up" as const);
+
           return (
             <DashboardStatCard
               key={card.label}
@@ -669,8 +678,8 @@ export function Dashboard() {
               value={showStorageLoading ? <LoadingSpinner size={20} /> : storageValue ?? card.value}
               subtitle={storageSub ?? card.sub}
               changeLabel={card.change}
-              changeTone={card.up ? "up" : "down"}
-              changeIcon={card.up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+              changeTone={indicatorTone}
+              changeIcon={indicatorTone === "neutral" ? null : card.up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
               icon={
                 Icon ? (
                   <Icon size={18} style={{ color: card.color }} />

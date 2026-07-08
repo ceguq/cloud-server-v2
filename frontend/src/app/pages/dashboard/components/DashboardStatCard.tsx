@@ -37,8 +37,18 @@ export function DashboardStatCard({
   iconBorderColor,
   className,
 }: DashboardStatCardProps) {
-  const changeColor = changeTone === "down" ? "#f87171" : "#34d399";
-  const changeBackground = changeTone === "down" ? "rgba(248,113,113,0.1)" : "rgba(52,211,153,0.1)";
+  const changeColor = 
+    changeTone === "down" 
+      ? "#f87171" 
+      : changeTone === "neutral"
+        ? "#64748b"
+        : "#34d399";
+  const changeBackground =
+    changeTone === "down"
+      ? "rgba(248,113,113,0.1)"
+      : changeTone === "neutral"
+        ? "rgba(100,116,139,0.1)"
+        : "rgba(52,211,153,0.1)";
 
   return (
     <div
