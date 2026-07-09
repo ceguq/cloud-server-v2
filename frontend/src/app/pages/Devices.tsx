@@ -197,17 +197,16 @@ export function Devices() {
             {devices.length} devices registered · {onlineCount} online
           </p>
         </div>
-        <button
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-not-allowed"
+        <div
+          className="rounded-full border px-3 py-2 text-xs font-semibold"
           style={{
-            background: `linear-gradient(135deg, ${accentColor} 0%, #22d3ee 100%)`,
-            color: "#fff",
+            borderColor: deviceColors.border,
+            color: deviceColors.muted,
+            background: deviceColors.cardBg,
           }}
-          disabled
-          title="Coming soon"
         >
-          <Plus size={13} /> Add Device
-        </button>
+          Devices are detected automatically
+        </div>
 
 
       </div>
@@ -394,20 +393,16 @@ export function Devices() {
                     </div>
                   </div>
 
-                  <button
-                    className="mt-3 w-full py-1.5 rounded-lg text-xs font-medium transition-colors opacity-60 cursor-not-allowed"
+                  <div
+                    className="mt-3 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-semibold"
                     style={{
-                      background: deviceColors.buttonBg,
+                      background: deviceColors.panelBg,
                       border: `1px solid ${deviceColors.border}`,
                       color: deviceColors.muted,
                     }}
-                    disabled
-                    title="Coming soon"
                   >
-
-                    <RefreshCw size={11} className="inline mr-1.5" />
-                    Coming soon
-                  </button>
+                    Read-only
+                  </div>
                 </div>
               );
             })}
