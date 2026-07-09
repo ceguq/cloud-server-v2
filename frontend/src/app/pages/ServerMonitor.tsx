@@ -727,30 +727,34 @@ export function ServerMonitor() {
               {formatPercent(monitorData?.disk.usage_percent)}
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: "Used", value: Math.round(monitorData?.disk.usage_percent || 0), fill: colors.cyan },
-                  { name: "Free", value: Math.round(100 - (monitorData?.disk.usage_percent || 0)), fill: colors.cyanSoft }
-                ]}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                <Cell fill={colors.cyan} />
-                <Cell fill={colors.cyanSoft} />
-              </Pie>
-              <Tooltip
-                contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
-                labelStyle={{ color: colors.text }}
-                formatter={(value) => `${value}%`}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {typeof monitorData?.disk.usage_percent === "number" && Number.isFinite(monitorData.disk.usage_percent) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Used", value: Math.round(monitorData.disk.usage_percent), fill: colors.cyan },
+                    { name: "Free", value: Math.round(100 - monitorData.disk.usage_percent), fill: colors.cyanSoft }
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  <Cell fill={colors.cyan} />
+                  <Cell fill={colors.cyanSoft} />
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  labelStyle={{ color: colors.text }}
+                  formatter={(value) => `${value}%`}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartUnavailable colors={colors} title="Disk usage unavailable" />
+          )}
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="p-2 rounded-lg" style={{ background: colors.tileBg }}>
               <div style={{ color: colors.muted }}>Used</div>
