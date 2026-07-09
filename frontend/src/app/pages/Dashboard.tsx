@@ -497,23 +497,14 @@ export function Dashboard() {
       value: memoryUsage,
       suffix: "%",
       color: "#22d3ee",
-
-      data: [
-        { time: "15m", value: memoryUsage },
-        { time: "5m", value: memoryUsage },
-        { time: "1m", value: memoryUsage },
-      ],
+      data: null,
     },
     {
       label: "Disk Usage",
       value: diskUsage,
       suffix: "%",
       color: "#22d3ee",
-      data: [
-        { time: "15m", value: diskUsage },
-        { time: "5m", value: diskUsage },
-        { time: "1m", value: diskUsage },
-      ],
+      data: null,
     },
   ];
 
@@ -1077,37 +1068,43 @@ export function Dashboard() {
                     {metric.suffix}
                   </span>
                 </div>
-                <ResponsiveContainer width="100%" height={50}>
-                  <AreaChart data={metric.data}>
-                    <defs>
-                      <linearGradient
-                        id={`g-${metric.label}`}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor={metric.color}
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor={metric.color}
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke={metric.color}
-                      strokeWidth={1.5}
-                      fill={`url(#g-${metric.label})`}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {metric.data ? (
+                  <ResponsiveContainer width="100%" height={50}>
+                    <AreaChart data={metric.data}>
+                      <defs>
+                        <linearGradient
+                          id={`g-${metric.label}`}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor={metric.color}
+                            stopOpacity={0.3}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor={metric.color}
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke={metric.color}
+                        strokeWidth={1.5}
+                        fill={`url(#g-${metric.label})`}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-xs" style={{ color: dashboardColors.muted2, height: "50px", display: "flex", alignItems: "center" }}>
+                    Current snapshot
+                  </div>
+                )}
               </div>
             ))}
           </div>
