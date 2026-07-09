@@ -570,7 +570,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: dashboardColors.title }}>
-            Welcome back, Alex
+            Dashboard overview
           </h1>
           <p className="text-sm mt-0.5" style={{ color: dashboardColors.muted }}>
             Here's what's happening with your cloud today.
@@ -775,14 +775,13 @@ export function Dashboard() {
               >
                 Storage Overview
               </span>
-              <button
-                type="button"
+              <span
                 className="text-xs"
                 style={{ color: accentColor }}
                 title="Storage details"
               >
                 Details
-              </button>
+              </span>
             </div>
             <div className="flex items-center justify-center mb-3">
               {(() => {
@@ -951,13 +950,13 @@ export function Dashboard() {
               >
                 Recent Activity
               </span>
-              <button
+              <span
                 className="text-xs"
                 style={{ color: accentColor }}
                 title="See all"
               >
                 See All
-              </button>
+              </span>
             </div>
             <div className="space-y-3">
               {recentActivityLoading ? (
