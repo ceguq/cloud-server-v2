@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Monitor,
   Plus,
@@ -57,6 +57,7 @@ export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     safeReadAppearanceTheme,
@@ -121,25 +122,24 @@ export function Devices() {
     }
   }, []);
 
+  const loadDevices = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const list = await getDevices();
+      if (isMountedRef.current) setDevices(list);
+    } catch {
+      if (isMountedRef.current) setError("Failed to load devices.");
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let isMounted = true;
-
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const list = await getDevices();
-        if (isMounted) setDevices(list);
-      } catch {
-        if (isMounted) setError("Failed to load devices.");
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    run();
+    isMountedRef.current = true;
+    loadDevices();
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
   }, []);
 
@@ -222,7 +222,21 @@ export function Devices() {
 
 
       {error && (
-        <DevicesErrorMessage message={error} />
+        <div className="mb-4">
+          <DevicesErrorMessage message={error} />
+          <button
+            onClick={loadDevices}
+            className="mt-2 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold"
+            style={{
+              borderColor: deviceColors.border,
+              color: deviceColors.text,
+              background: deviceColors.cardBg,
+            }}
+            type="button"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
 
