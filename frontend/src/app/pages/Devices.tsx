@@ -361,9 +361,11 @@ export function Devices() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <HardDrive size={11} style={{ color: deviceColors.iconMuted }} />
-                        <span className="text-xs" style={{ color: deviceColors.muted }}>Storage</span>
+                        <span className="text-xs" style={{ color: deviceColors.muted }}>Browser</span>
                       </div>
-                      <span className="text-xs" style={{ color: deviceColors.muted2 }}>—</span>
+                      <span className="text-xs" style={{ color: deviceColors.muted2 }}>
+                        {device.browser ?? "Unknown"}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between">
