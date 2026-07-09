@@ -54,10 +54,6 @@ import {
   CheckCircle,
   RefreshCw,
   Clock,
-  Eye,
-  Download,
-  Trash2,
-  Edit3,
 } from "lucide-react";
 import {
   AreaChart,
@@ -184,13 +180,6 @@ export function Dashboard() {
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(resolveAppearanceTheme(safeReadAppearanceTheme()));
 
-  const [openDashboardMenuId, setOpenDashboardMenuId] = useState<string | null>(null);
-  const [dashboardMenuPosition, setDashboardMenuPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const dashboardMenuWrapRef = useRef<HTMLDivElement | null>(null);
-
   const navigateToMyFiles = () => {
     const nextPath = "/my-files";
     if (window.location.pathname !== nextPath) {
@@ -231,10 +220,6 @@ export function Dashboard() {
     useState<ServerMonitorResponse | null>(null);
   const [serverMonitorLoading, setServerMonitorLoading] = useState(false);
   const [serverMonitorError, setServerMonitorError] = useState(false);
-
-  // existing UI keeps fileMenu actions as placeholders
-
-  // (won't affect recent files rendering)
 
   const [recentFiles, setRecentFiles] = useState<RecentFileUI[]>([]);
   const [recentFilesLoading, setRecentFilesLoading] = useState(false);
@@ -297,29 +282,6 @@ export function Dashboard() {
       };
     }
   }, []);
-
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      if (!openDashboardMenuId) return;
-      const wrap = dashboardMenuWrapRef.current;
-      const target = e.target as Node | null;
-      if (!wrap) {
-        setOpenDashboardMenuId(null);
-        setDashboardMenuPosition(null);
-        return;
-      }
-      if (!target) return;
-      if (!wrap.contains(target)) {
-        setOpenDashboardMenuId(null);
-        setDashboardMenuPosition(null);
-      }
-    };
-
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [openDashboardMenuId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1060,80 +1022,6 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-
-      {openDashboardMenuId && dashboardMenuPosition ? (
-        <div
-          ref={dashboardMenuWrapRef}
-          className="rounded-lg shadow-2xl overflow-hidden"
-          style={{
-            position: "fixed",
-            top: dashboardMenuPosition.y,
-            left: dashboardMenuPosition.x,
-            width: 176,
-            zIndex: 9999,
-            background:
-              resolvedTheme === "light" ? "#ffffff" : themeUI.subtleBg2,
-            border: `1px solid ${themeUI.divider}`,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.22)",
-            backgroundClip: "padding-box",
-            isolation: "isolate",
-          }}
-          role="menu"
-          aria-label="Dashboard item menu"
-          onMouseDown={(e) => {
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-          }}
-        >
-          {([
-            { icon: Eye, label: "Preview", danger: false },
-            { icon: Download, label: "Download", danger: false },
-            { icon: Share2, label: "Share", danger: false },
-            { icon: Edit3, label: "Rename", danger: false },
-            { icon: Trash2, label: "Delete", danger: true },
-          ] as const).map((action) => {
-            const AIcon = action.icon;
-            return (
-                <button
-                  key={action.label}
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
-                  style={{
-                    color: action.danger ? "#f87171" : dashboardColors.muted2,
-                    background: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = action.danger
-                      ? "rgba(248,113,113,0.12)"
-                      : `${accentColor}10`;
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget;
-                    el.style.background = "transparent";
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setOpenDashboardMenuId(null);
-                    setDashboardMenuPosition(null);
-                    navigateToMyFiles();
-                  }}
-                role="menuitem"
-                aria-label={action.label}
-              >
-                <AIcon size={12} />
-                {action.label}
-                </button>
-            );
-          })}
-        </div>
-      ) : null}
 
       {/* Bottom Row */}
       <div className="grid grid-cols-3 gap-4">
