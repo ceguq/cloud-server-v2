@@ -422,6 +422,7 @@ export function GDrive() {
   const [isChecklistMode, setIsChecklistMode] = useState(false);
   const [checkedRowKeys, setCheckedRowKeys] = useState<string[]>([]);
   const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
+  const [bulkDownloadMessage, setBulkDownloadMessage] = useState<string>("");
   const [isBulkTrashModalOpen, setIsBulkTrashModalOpen] = useState(false);
   const [bulkTrashLoading, setBulkTrashLoading] = useState(false);
 
@@ -1226,18 +1227,50 @@ export function GDrive() {
 
   const handleBulkDownload = async () => {
     if (bulkDownloadLoading) return;
+    // Clear prior message
+    setBulkDownloadMessage("");
+
+    // Build selection from visible files but exclude folders
     const all = folderItems.concat(regularFileItems);
-    const selectedFiles = checkedRowKeys
+    const selected = checkedRowKeys
       .map((key) => all.find((f) => f.rowKey === key))
       .filter(Boolean) as GDriveFileUI[];
-    if (selectedFiles.length === 0) return;
+
+    // Exclude folder items explicitly
+    const selectedFiles = selected.filter((f) => !isGDriveFolder(f));
+
+    if (selectedFiles.length === 0) {
+      setBulkDownloadMessage("No downloadable files selected.");
+      return;
+    }
 
     setBulkDownloadLoading(true);
     try {
+      let success = 0;
+      let failed = 0;
       for (const file of selectedFiles) {
-        if (!file.accountId || !file.id) continue;
-        // eslint-disable-next-line no-await-in-loop
-        await downloadGDriveFile(file.accountId, file.id, file.name);
+        if (!file.accountId || !file.id) {
+          failed += 1;
+          continue;
+        }
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await downloadGDriveFile(file.accountId, file.id, file.name);
+          success += 1;
+        } catch {
+          failed += 1;
+          // continue with remaining files
+        }
+      }
+
+      const total = selectedFiles.length;
+      if (failed === 0) {
+        // keep quiet on full success (preserve current behavior)
+        setBulkDownloadMessage("");
+      } else if (success === 0) {
+        setBulkDownloadMessage("Downloads failed for all selected files.");
+      } else {
+        setBulkDownloadMessage(`${failed} of ${total} files could not be downloaded.`);
       }
     } finally {
       setBulkDownloadLoading(false);
@@ -3941,6 +3974,11 @@ const renderFileActions = (file: GDriveFileUI) => {
                       >
                         Clear
                       </button>
+                      {bulkDownloadMessage ? (
+                        <div className="mt-2 text-sm" style={{ color: "#ef4444" }}>
+                          {bulkDownloadMessage}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
