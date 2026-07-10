@@ -36,6 +36,32 @@ function getErrorMessage(e: any, fallback: string): string {
   return e?.response?.data?.message || fallback;
 }
 
+function parseFilenameFromContentDisposition(header: string | null | undefined): string | null {
+  if (!header) return null;
+
+  const matches = /filename\*=(?:UTF-8'')?"?([^";]+)"?/i.exec(header) ||
+    /filename="?([^";]+)"?/i.exec(header);
+
+  if (!matches?.[1]) return null;
+
+  try {
+    return decodeURIComponent(matches[1]);
+  } catch {
+    return matches[1];
+  }
+}
+
+async function parseBlobErrorMessage(data: Blob): Promise<string | null> {
+  if (!data || !(data instanceof Blob)) return null;
+  try {
+    const text = await data.text();
+    const payload = JSON.parse(text);
+    return payload?.message ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function PublicSharePage() {
   const pathname = window.location.pathname;
 
@@ -179,31 +205,54 @@ export function PublicSharePage() {
     }
 
     setDownloadLoading(true);
-    setErrorMessage(""); // clear any previous inline error
+    setErrorMessage("");
+    setPasswordError("");
+
+    let objectUrl: string | null = null;
+    let anchor: HTMLAnchorElement | null = null;
 
     try {
-      const params = share?.requires_password ? { password } : undefined;
-      const downloadUrl = new URL(`${apiBase}/share/${token}/download`);
-      if (params) {
-        downloadUrl.searchParams.set("password", password);
+      if (share?.requires_password) {
+        const response = await axios.post(`${apiBase}/share/${token}/download`,
+          { password },
+          {
+            headers: {
+              Accept: "application/json",
+            },
+            responseType: "blob",
+          }
+        );
+
+        const blob = response.data as Blob;
+        const disposition = response.headers["content-disposition"] as string | undefined;
+        const filename =
+          parseFilenameFromContentDisposition(disposition) ||
+          share.file?.original_name ||
+          "download";
+
+        objectUrl = URL.createObjectURL(blob);
+        anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = filename;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+      } else {
+        const downloadUrl = new URL(`${apiBase}/share/${token}/download`);
+        window.location.href = downloadUrl.toString();
       }
-
-      // Step 1: re-check token is still valid
-      await axios.get(`${apiBase}/share/${token}`, {
-        headers: { Accept: "application/json" },
-        params,
-      });
-
-      // Step 2: token valid — trigger download
-      // Use window.location.href so the browser handles the binary response
-      // (avoids loading the whole file into JS memory for large files).
-      window.location.href = downloadUrl.toString();
-
     } catch (e: any) {
       const status = getErrorStatus(e);
       const requiresPassword = Boolean(e?.response?.data?.requires_password);
+      let message = getErrorMessage(e, "Gagal memvalidasi share link.");
 
-      // Invalidate the displayed share card so the Download button is hidden
+      if (e?.response?.data instanceof Blob) {
+        const jsonMessage = await parseBlobErrorMessage(e.response.data);
+        if (jsonMessage) {
+          message = jsonMessage;
+        }
+      }
+
       setShare(null);
 
       if (status === 404) {
@@ -216,9 +265,15 @@ export function PublicSharePage() {
         setPasswordRequired(true);
         setPasswordError("Password salah atau diperlukan untuk mengunduh file ini.");
       } else {
-        setErrorMessage(getErrorMessage(e, "Gagal memvalidasi share link."));
+        setErrorMessage(message);
       }
     } finally {
+      if (anchor && anchor.parentNode) {
+        anchor.parentNode.removeChild(anchor);
+      }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
       setDownloadLoading(false);
     }
   }

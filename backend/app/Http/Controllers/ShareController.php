@@ -252,6 +252,8 @@ class ShareController extends Controller
             ], 404)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         }
 
+        // `input()` supports POST body fields as well as query parameters,
+        // so protected shares can use POST password submission while GET remains compatible.
         $providedPassword = is_string($request->input('password')) ? trim($request->input('password')) : '';
         if (!empty($shareLink->password)) {
             if ($providedPassword === '' || !Hash::check($providedPassword, $shareLink->password)) {

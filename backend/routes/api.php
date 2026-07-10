@@ -31,6 +31,7 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 // Public share link endpoints (NOT using auth:sanctum)
 Route::get('/share/{token}', [ShareController::class, 'show']);
 Route::get('/share/{token}/download', [ShareController::class, 'download']);
+Route::post('/share/{token}/download', [ShareController::class, 'download']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
