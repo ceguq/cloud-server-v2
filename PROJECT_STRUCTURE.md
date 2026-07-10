@@ -219,7 +219,6 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | Uploads | `app/pages/Uploads.tsx` + `app/pages/uploads/` | Aktif | Tampilan queue global dari upload manager |
 | Devices | `app/pages/Devices.tsx` + `app/pages/devices/` | Partial | Menarik `/devices`, tapi data bergantung writer yang belum ada |
 | Activity | `app/pages/Activity.tsx` + `app/pages/activity/` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only; Export Log available for currently loaded/filtered visible rows (frontend-only) |
-| Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links | Error state now includes Retry via existing fetch flow |
 | Activity Log | `pages/ActivityLogPage.tsx` | Admin aktif/partial | Admin log global dengan pagination/filter, bulk hide localStorage only |
 | Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
 | Server Monitor | `app/pages/ServerMonitor.tsx` + `app/pages/server-monitor/` | Aktif | Metrics real dari backend, chart historical belum ada |
