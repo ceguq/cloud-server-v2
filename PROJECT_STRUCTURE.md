@@ -139,7 +139,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | Share links protected | `GET /share-links`, `POST /files/{file}/share`, `DELETE /share-links/{shareLink}` | Aktif | Password field belum aman/terpakai |
 | Storage | `GET /storage`, `GET /storage/breakdown` | Aktif | Quota 100 GB hanya reporting |
 | Server monitor | `GET /server-monitor` | Aktif | Read-only system metrics |
-| Devices | `GET /devices` | Aktif/partial | User-scoped; login sukses otomatis create/update device best-effort, repeat same-browser login update row yang sama, Chrome/Brave dibedakan, `trusted` existing dipertahankan; management tetap read-only |
+| Devices | `GET /devices`, `PATCH /devices/{device}`, `DELETE /devices/{device}`, `PATCH /devices/{device}/trusted` | Aktif | User-scoped; semua write route memerlukan device milik user yang sama dan device milik user lain mengembalikan 404; login sukses otomatis create/update device best-effort, repeat same-browser login update row yang sama, Chrome/Brave dibedakan, `trusted` existing dipertahankan |
 | Local trash files/folders | `GET`, `POST restore`, `DELETE force` | Aktif, caveat folder global | File scoped user, folder belum scoped user |
 | Google Drive accounts/files | OAuth connect/callback, list accounts/files, account files | Aktif | OAuth state encrypted, token encrypted |
 | Google Drive actions | download, trash, restore, visibility, rename, permanent delete, create folder, upload | Aktif, config-dependent | Scope `.env.example` masih readonly |
@@ -156,7 +156,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | `StorageController.php` | Usage info dan category breakdown | Aktif, quota not enforced |
 | `ActivityLogController.php` | User/admin paginated logs with action filter | Aktif |
 | `Admin/UserController.php` | Read-only user list | Aktif |
-| `DeviceController.php` | Read-only devices per user | Aktif; tidak expose `device_hash`/full `user_agent` |
+| `DeviceController.php` | List devices, rename `display_name`, delete device record, trust/untrust, safe response serialization, ownership enforcement | Aktif; tidak expose `device_hash`/full `user_agent` |
 | `ServerMonitorController.php` | OS, CPU, memory, disk, network, service status | Aktif |
 | `GDriveController.php` | OAuth, accounts, list, trash, rename, visibility, download, upload | Aktif, besar |
 | `ActivityLogService.php` | Safe best-effort logging, metadata sanitization | Aktif |
@@ -217,7 +217,7 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | GDrive | `app/pages/GDrive.tsx` + `app/pages/gdrive/` | Aktif | OAuth accounts, file list, folder navigation, upload, download/preview, trash/restore, rename, visibility, create folder |
 | Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links; error state now includes Retry via existing fetch flow |
 | Uploads | `app/pages/Uploads.tsx` + `app/pages/uploads/` | Aktif | Tampilan queue global dari upload manager |
-| Devices | `app/pages/Devices.tsx` + `app/pages/devices/` | Aktif/partial | Menarik real user-scoped `/devices`; record dibuat dari login sukses; manual Refresh + duplicate request guard; trust/revoke/write actions tetap read-only |
+| Devices | `app/pages/Devices.tsx` + `app/pages/devices/` | Aktif | Menarik real user-scoped `/devices`; tracking otomatis dari login sukses; Refresh, Rename, Delete, Trust/Untrust, duplicate-request guard, dan local state update setelah write berhasil |
 | Activity | `app/pages/Activity.tsx` + `app/pages/activity/` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only; Export Log available for currently loaded/filtered visible rows (frontend-only) |
 | Activity Log | `pages/ActivityLogPage.tsx` | Admin aktif/partial | Admin log global dengan pagination/filter, bulk hide localStorage only |
 | Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
@@ -244,7 +244,7 @@ Catatan refactor My Files: `frontend/src/app/pages/MyFiles.tsx` telah menyelesai
 | `storageBreakdownService.ts` | category breakdown | Aktif |
 | `activityLogService.ts` | user/admin activity logs | Aktif |
 | `adminUserService.ts` | admin users list | Aktif |
-| `deviceService.ts` | devices list | Aktif; data berasal dari device records login-created |
+| `deviceService.ts` | devices list, rename, delete, trusted toggle | Aktif; `getDevices`, `renameDevice`, `deleteDevice`, dan `setDeviceTrusted` terhubung ke route device user-scoped |
 | `serverMonitorService.ts` | server monitor response type + fetch | Aktif |
 | `gdriveService.ts` | Google Drive accounts/files/download/blob/trash/restore/visibility/delete/rename/create/upload | Aktif |
 | `duplicateFileService.ts` | duplicate file groups | Aktif |
@@ -270,7 +270,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Activity log | Selesai/partial | Backend log aktif; UI delete hanya local hide |
 | Trash local | Selesai/partial | File scoped user, folder global |
 | Duplicate finder local | Selesai | By original name + size |
-| Devices | Aktif/partial | Endpoint dan UI aktif; login sukses otomatis create/update device, Chrome/Brave dibedakan; management trust/revoke/write masih read-only |
+| Devices | Aktif | Device record management aktif; delete hanya menghapus record dari daftar, tidak revoke token atau log browser out; `trusted` hanya label/state NimbusDrive; login sukses berikutnya bisa membuat ulang device record yang dihapus |
 | Server monitor | Selesai/partial | Real current metrics, belum time-series history |
 | Google Drive connect/list | Selesai | OAuth, account list, file list, per-account navigation |
 | Google Drive mutations | Selesai secara kode, config-dependent | Upload/trash/restore/rename/share/delete/create folder butuh scope Drive yang sesuai |
@@ -284,7 +284,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 
 - **Server Monitor:** Manual Refresh uses the existing metrics loader with duplicate-request guard, while existing Retry behavior remains active. Disk usage unavailable state now avoids showing fake 0%/100% pie chart data; the UI shows an unavailable placeholder instead.
 
-- **Devices:** Read-only device list remains active with real user-scoped API data from login-created records. Manual Refresh re-runs the existing devices fetch with a duplicate-request guard. The fake Storage placeholder was replaced by the real `browser` field returned by the API. Error state includes a `Retry` action. Disabled "Coming soon" actions were replaced/removed in favor of clearer read-only UX.
+- **Devices:** Refresh, Rename, Delete, and Trust/Untrust are now active with confirmation/loading/error states. The page preserves browser/platform/IP/last-seen/trusted display and updates local state after successful writes. Deleting a device record only removes the record from this list; it does not revoke tokens or log the browser out.
 
 - **MyFiles:** Refactor phases completed/archived and post-refactor regressions were fixed where applicable (see openspec archive and recent commits).
 - **LoginPage:** registration toggle removed; registration and password recovery are unavailable.
@@ -313,8 +313,8 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 5. Komponen/controller terlalu besar.
    Banyak page sudah punya subfolder modular, tetapi file induk masih besar: `MyFiles.tsx` 4,830 line, `GDrive.tsx` 4,103 line, `ActivityLogPage.tsx` 1,312 line, `Trash.tsx` 1,296 line, dan `GDriveController.php` 886 line.
 
-6. Device management actions masih read-only.
-   Login sukses sudah otomatis membuat atau memperbarui device record, tetapi belum ada endpoint/UI untuk trust, revoke, rename, atau delete device. Ini sengaja tetap read-only untuk saat ini.
+6. Device record management selesai, tetapi revocation/session tidak diimplementasi.
+   Record device sudah bisa di-list, rename, delete, dan trust/untrust; namun delete record tidak melakukan revoke token atau remote logout, dan `trusted` tidak dipakai untuk authorization. Login sukses berikutnya bisa membuat ulang record device yang sudah dihapus.
 
 7. Settings masih local-only/hardcoded.
    Banyak field profile/security/storage/API key hanya UI, bukan data user/backend. Theme/accent adalah bagian yang benar-benar persist di localStorage.
@@ -386,7 +386,7 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 3. Sinkronkan Google Drive scope docs/env dengan fitur mutasi dan tambahkan handling scope insufficient yang eksplisit.
 4. Tambahkan tests backend untuk auth, ownership, folder recursion, share link, trash, storage quota, dan GDrive happy/error path dengan HTTP fake.
 5. Lanjutkan ekstraksi `MyFiles.tsx` dan `GDrive.tsx` ke hook/action modules untuk state, side effect, modal state, dan action handler; subfolder komponen/formatter sudah ada dan bisa menjadi pola.
-6. Tambahkan endpoint/UI manajemen device seperti trust, revoke, rename, atau delete bila fitur Devices ingin melampaui read-only.
+6. Pertahankan batasan device management saat ini: record device sudah aktif, tetapi revocation token/session dan authorization berbasis `trusted` belum diimplementasi.
 7. Hapus `authServices.ts` atau jadikan re-export dari `authService.ts`.
 8. Tambahkan fallback atau validasi startup untuk `VITE_API_BASE_URL`.
 9. Buat batas quota upload real sebelum file disimpan.
