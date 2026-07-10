@@ -187,13 +187,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
         {error ? <LoginErrorMessage message={error} /> : null}
 
-        <button
-          type="button"
-          tabIndex={tabIndex}
-          className="mx-auto mt-4 block text-xs text-blue-100/60 transition hover:text-blue-100"
+        <div
+          className="mx-auto mt-4 block text-xs text-blue-100/60"
+          style={{ opacity: 0.8 }}
         >
-          Forgot Password?
-        </button>
+          Password recovery is not available yet
+        </div>
 
         <button
           type="submit"
@@ -295,13 +294,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               ? "Already have an account? Sign in and continue your cloud workspace."
               : "Don't have an account? Register and start your private cloud journey."}
           </p>
-          <button
-            type="button"
-            onClick={() => toggleMode(isLoginPanel ? false : true)}
-            className="mt-7 h-11 min-w-[150px] rounded-full border border-white/55 bg-white/10 px-7 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/18 focus:outline-none focus:ring-2 focus:ring-white/60"
+          <div
+            className="mt-7 h-11 min-w-[150px] rounded-full border border-white/55 bg-white/10 px-7 text-sm font-semibold uppercase tracking-wide text-white/60 flex items-center justify-center"
+            style={{ cursor: "default" }}
           >
-            {isLoginPanel ? "LOGIN" : "REGISTER"}
-          </button>
+            Registration is not available yet
+          </div>
         </div>
       </div>
     );
@@ -409,13 +407,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 ? "Already have an account? Sign in and continue your cloud workspace."
                 : "Don't have an account? Register and start your private cloud journey."}
             </p>
-            <button
-              type="button"
-              onClick={() => toggleMode(!isRegisterMode)}
-              className="mt-5 h-10 min-w-[140px] rounded-full border border-white/55 bg-white/10 px-6 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/18"
+            <div
+              className="mt-5 h-10 min-w-[140px] rounded-full border border-white/55 bg-white/10 px-6 text-xs font-semibold uppercase tracking-wide text-white/60 flex items-center justify-center"
+              style={{ cursor: "default" }}
             >
-              {isRegisterMode ? "LOGIN" : "REGISTER"}
-            </button>
+              Registration is not available yet
+            </div>
           </div>
 
           <div className="bg-[#0f1729] px-6 py-7">
