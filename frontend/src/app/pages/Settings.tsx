@@ -296,16 +296,16 @@ export function Settings() {
                 <div className="text-xs mb-2" style={{ color: settingsColors.muted }}>
                   alex@example.com
                 </div>
-                <button
+                <div
                   className="text-xs px-3 py-1.5 rounded-lg"
                   style={{
                     background: settingsColors.panelBg,
-                    color: settingsColors.text,
+                    color: settingsColors.muted,
                     border: `1px solid ${settingsColors.panelBorder}`,
                   }}
                 >
-                  Change Avatar
-                </button>
+                  Avatar editing is not available yet
+                </div>
               </div>
             </div>
 
@@ -326,11 +326,12 @@ export function Settings() {
                     </label>
                     <input
                       defaultValue={f.value}
+                      readOnly
                       className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                       style={{
                         background: settingsColors.panelBg,
                         border: `1px solid ${settingsColors.panelBorder}`,
-                        color: settingsColors.text,
+                        color: settingsColors.muted,
                         caretColor: accentColor,
                       }}
                     />
@@ -344,21 +345,26 @@ export function Settings() {
                 <textarea
                   defaultValue="Cloud enthusiast, self-hosting advocate."
                   rows={3}
+                  readOnly
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
                   style={{
                     background: settingsColors.panelBg,
                     border: `1px solid ${settingsColors.panelBorder}`,
-                    color: settingsColors.text,
+                    color: settingsColors.muted,
                     caretColor: accentColor,
                   }}
                 />
               </div>
-              <button
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
+              <div
+                className="text-xs px-3 py-1.5 rounded-lg"
+                style={{
+                  background: settingsColors.panelBg,
+                  color: settingsColors.muted,
+                  border: `1px solid ${settingsColors.panelBorder}`,
+                }}
               >
-                <Save size={13} /> Save Changes
-              </button>
+                Profile editing is not available yet
+              </div>
             </div>
           </div>
         )}
