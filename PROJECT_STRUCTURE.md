@@ -130,7 +130,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | Health | `GET /ping` | Aktif | JSON ping API |
 | Auth public | `POST /auth/login` | Aktif | Membuat Sanctum token, log `auth.login` |
 | Auth protected | `GET /auth/me`, `POST /auth/logout` | Aktif | Logout menghapus current token |
-| Public share | `GET /share/{token}`, `GET /share/{token}/download` | Aktif | Tanpa auth, cache-control no-store |
+| Public share | `GET /share/{token}`, `GET /share/{token}/download`, `POST /share/{token}/download` | Aktif | Tanpa auth, cache-control no-store |
 | Admin users | `GET /admin/users` | Aktif | Admin middleware |
 | Activity logs | `GET /activity-logs`, `GET /admin/activity-logs` | Aktif | User scope dan admin global |
 | Folders | `GET/POST/PATCH/DELETE /folders`, `PATCH /folders/{folder}/move` | Aktif, caveat multi-user | Folder belum punya `user_id` |
@@ -169,7 +169,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | `users` / `User` | `name`, `email`, hashed `password`, `role` | Role helper `isAdmin()` dan `isUser()` |
 | `folders` / `Folder` | UUID, `name`, `parent_id`, timestamps, soft deletes | Tidak ada `user_id`; ini risiko multi-user terbesar |
 | `files` / `File` | UUID, `user_id`, `folder_id`, original/stored/path/mime/size, soft deletes | File ownership enforced di controller |
-| `share_links` / `ShareLink` | UUID, `file_id`, token, expires, password, download count | Password belum di-hash dan belum divalidasi saat public access |
+| `share_links` / `ShareLink` | UUID, `file_id`, token, expires, password, download count | Password divalidasi saat public access; protected download POST support active |
 | `activity_logs` / `ActivityLog` | UUID, user/action/description/subject/metadata/ip/user_agent | Metadata disanitasi di service |
 | `devices` / `Device` | UUID, user/device/browser/ip/trusted/last_seen | Belum ada pencatat otomatis di login/request |
 | `gdrive_accounts` / `GDriveAccount` | UUID, user, email/account id, encrypted tokens, scopes, timestamps, revoked_at | Token terenkripsi via casts |
@@ -215,10 +215,11 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | Dashboard | `app/pages/Dashboard.tsx` + `app/pages/dashboard/` | Aktif/partial | Ambil storage, recent files, share links count, devices count, activity logs, server monitor, storage breakdown |
 | My Files | `app/pages/MyFiles.tsx` + `app/pages/my-files/` | Aktif | File/folder manager lengkap; helper/komponen kecil mulai modular, state/action utama masih di file induk |
 | GDrive | `app/pages/GDrive.tsx` + `app/pages/gdrive/` | Aktif | OAuth accounts, file list, folder navigation, upload, download/preview, trash/restore, rename, visibility, create folder |
-| Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links |
+| Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links; error state now includes Retry via existing fetch flow |
 | Uploads | `app/pages/Uploads.tsx` + `app/pages/uploads/` | Aktif | Tampilan queue global dari upload manager |
 | Devices | `app/pages/Devices.tsx` + `app/pages/devices/` | Partial | Menarik `/devices`, tapi data bergantung writer yang belum ada |
-| Activity | `app/pages/Activity.tsx` + `app/pages/activity/` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only |
+| Activity | `app/pages/Activity.tsx` + `app/pages/activity/` | Aktif/partial | Menarik backend activity logs, filter/search, hide/delete localStorage only; Export Log available for currently loaded/filtered visible rows (frontend-only) |
+| Shared | `app/pages/Shared.tsx` + `app/pages/shared/` | Aktif | List/copy/open/delete share links | Error state now includes Retry via existing fetch flow |
 | Activity Log | `pages/ActivityLogPage.tsx` | Admin aktif/partial | Admin log global dengan pagination/filter, bulk hide localStorage only |
 | Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
 | Server Monitor | `app/pages/ServerMonitor.tsx` + `app/pages/server-monitor/` | Aktif | Metrics real dari backend, chart historical belum ada |
@@ -265,7 +266,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Local file manager | Selesai dengan risiko maintainability | Fitur lengkap; `MyFiles.tsx` sudah modular sebagian tetapi masih sangat besar |
 | Folder nesting/move/trash | Partial | Logic aktif, tapi folder belum user-scoped |
 | Preview file lokal | Selesai | Image/PDF/video/audio/text/code-like extension |
-| Share link publik | Partial | Token/expiry/download count aktif; password belum aman dan belum enforced |
+| Share link publik | Partial | Token/expiry/download count aktif; protected downloads now validate passwords and support POST body downloads |
 | Storage usage/breakdown | Selesai/partial | Reporting real, quota 100 GB belum enforcement |
 | Activity log | Selesai/partial | Backend log aktif; UI delete hanya local hide |
 | Trash local | Selesai/partial | File scoped user, folder global |
@@ -277,6 +278,20 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Settings | Partial | Theme/accent persist; banyak setting lain hardcoded/local UI |
 | Admin users | Partial | Read-only list aktif; bug render nama sudah diperbaiki |
 | Test coverage | Minimal | Hanya Laravel example tests, belum ada tests fitur utama/frontend |
+
+### 5.6 Recent frontend cleanup notes
+
+- **Dashboard:** Uses real dashboard counts/data where available. Misleading fake trend labels and fake Memory/Disk chart history were cleaned up. The Recent Files dead action menu was removed and inactive Dashboard UI elements were cleaned up.
+
+- **Server Monitor:** Disk usage unavailable state now avoids showing fake 0%/100% pie chart data; the UI shows an unavailable placeholder instead.
+
+- **Devices:** Read-only device list remains active. The fake Storage placeholder was replaced by the real `browser` field returned by the API. Error state now includes a `Retry` action to re-run the devices fetch. Disabled "Coming soon" actions were replaced/removed in favor of clearer read-only UX.
+
+- **MyFiles:** Refactor phases completed/archived and post-refactor regressions were fixed where applicable (see openspec archive and recent commits).
+- **LoginPage:** registration toggle removed; registration and password recovery are unavailable.
+- **Settings:** profile is read-only; notifications, security, and storage actions are neutralized; fake storage percentages removed; Sync & Backup and API Keys placeholders removed; appearance theme and accent remain functional locally.
+- **Trash:** initial load retry exists, restore failures are surfaced, selection clears correctly after successful restore/delete and bulk actions, and confirmation copy is consistently English.
+- **PublicSharePage:** load-error retry exists; async page load uses a cancellation guard; protected downloads now use POST body blob handling and avoid passwords in the URL.
 
 ## 7. Temuan Audit Prioritas
 
@@ -379,4 +394,4 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 
 ## 10. Catatan Workspace
 
-Pada saat audit ini dibuat ulang, ada perubahan lokal di `TODO.md`, `frontend/src/app/pages/GDrive.tsx`, dan `frontend/src/app/pages/MyFiles.tsx`. Dokumen ini diperbarui setelah membaca perubahan tersebut. `TODO.md` sekarang berisi checklist behavior checkbox My Files; `GDrive.tsx` mengubah wheel handling preview image; `MyFiles.tsx` menambah import `X` dan `PreviewHeaderTitle`.
+This document is based on the current committed code. Local working-tree status should be verified separately with `git status`.
