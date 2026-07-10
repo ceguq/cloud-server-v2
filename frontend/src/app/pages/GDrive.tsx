@@ -1770,14 +1770,6 @@ export function GDrive() {
   const isGDrivePreviewable = (file: GDriveFileUI): boolean => {
     const mime = (file.mime || "").toLowerCase();
 
-    if (
-      mime === "application/vnd.google-apps.document" ||
-      mime === "application/vnd.google-apps.presentation" ||
-      mime === "application/vnd.google-apps.drawing"
-    ) {
-      return true;
-    }
-
     if (mime.startsWith("application/vnd.google-apps.")) return false;
 
     if (mime.startsWith("image/")) return true;
