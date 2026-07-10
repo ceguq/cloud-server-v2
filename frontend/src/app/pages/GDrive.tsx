@@ -381,6 +381,9 @@ export function GDrive() {
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState(false);
   const [filesErrorMessage, setFilesErrorMessage] = useState<string>("");
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreErrorMessage, setLoadMoreErrorMessage] = useState<string>("");
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
   const [connectingAccount, setConnectingAccount] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
@@ -396,6 +399,8 @@ export function GDrive() {
       ? gdriveFolderPath[gdriveFolderPath.length - 1].id
       : null;
 
+  const pageRequestContext = `${activeAccountId}|${driveListMode}|${currentFolderId ?? ""}|${refreshTick}`;
+  const fileListRequestContextRef = useRef<string>(pageRequestContext);
 
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -949,8 +954,12 @@ export function GDrive() {
         return;
       }
 
+      fileListRequestContextRef.current = pageRequestContext;
       setFilesError(false);
       setFilesErrorMessage("");
+      setNextPageToken(null);
+      setLoadMoreErrorMessage("");
+      setIsLoadingMore(false);
 
       if (!accountId) {
         setGdriveFiles([]);
@@ -987,6 +996,8 @@ export function GDrive() {
 
         const list = res?.data ?? [];
         setGdriveFiles(list);
+        setNextPageToken(res?.meta?.next_page_token ?? null);
+        setLoadMoreErrorMessage("");
         setFilesErrorMessage("");
 
         const syncedAccountIds = new Set(
@@ -1032,6 +1043,51 @@ export function GDrive() {
       cancelled = true;
     };
   }, [accountsLoaded, activeAccountId, connectedAccountIdsKey, refreshTick, driveListMode, currentFolderId]);
+
+  const loadMoreGDriveFiles = async () => {
+    const accountId = activeAccountId;
+    if (!accountId || !nextPageToken || filesLoading || isLoadingMore) {
+      return;
+    }
+
+    const requestContext = pageRequestContext;
+    setIsLoadingMore(true);
+    setLoadMoreErrorMessage("");
+
+    try {
+      const res =
+        driveListMode === "files"
+          ? await getGDriveAccountFiles(accountId, {
+              page_size: 50,
+              page_token: nextPageToken,
+              folder_id: currentFolderId,
+            })
+          : await getTrashedGDriveFiles(accountId, {
+              page_size: 50,
+              page_token: nextPageToken,
+            });
+
+      if (fileListRequestContextRef.current !== requestContext) {
+        return;
+      }
+
+      const nextFiles = res?.data ?? [];
+      setGdriveFiles((prev) => {
+        const existingIds = new Set(prev.map((file) => String(file.id ?? "")));
+        const appended = nextFiles.filter((file) => {
+          const fileId = String(file.id ?? "");
+          return fileId !== "" && !existingIds.has(fileId);
+        });
+        return prev.concat(appended);
+      });
+      setNextPageToken(res?.meta?.next_page_token ?? null);
+    } catch (error) {
+      const message = getErrorResponseMessage(error).trim();
+      setLoadMoreErrorMessage(message || "Failed to load more Drive files.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const gdriveAllFiles = useMemo((): GDriveFileUI[] => {
     return (gdriveFiles ?? []).map((file): GDriveFileUI => {
@@ -4546,6 +4602,28 @@ const renderFileActions = (file: GDriveFileUI) => {
                   ) : null
                 )}
 
+                {(nextPageToken && !filesLoading && !filesError && gdriveFiles.length > 0) ? (
+                  <div className="border-t px-4 py-4" style={{ borderColor: colors.border }}>
+                    {loadMoreErrorMessage ? (
+                      <div className="mb-3 text-sm" style={{ color: "#ef4444" }}>
+                        {loadMoreErrorMessage}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={loadMoreGDriveFiles}
+                      disabled={isLoadingMore}
+                      className="rounded-full border px-4 py-2 text-sm font-semibold"
+                      style={{
+                        background: isLoadingMore ? colors.rowHover : colors.surfaceBg,
+                        color: colors.title,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      {isLoadingMore ? "Loading…" : "Load More"}
+                    </button>
+                  </div>
+                ) : null}
 
 
               </div>
