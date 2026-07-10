@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Devices
     Route::get('/devices', [DeviceController::class, 'index']);
     Route::patch('/devices/{device}', [DeviceController::class, 'update']);
+    Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
 
 
     // Trash endpoints (soft deleted files)

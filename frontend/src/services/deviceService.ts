@@ -33,3 +33,7 @@ export async function renameDevice(deviceId: string, displayName: string): Promi
 
   return response.data.data;
 }
+
+export async function deleteDevice(deviceId: string): Promise<void> {
+  await api.delete(`/devices/${deviceId}`);
+}

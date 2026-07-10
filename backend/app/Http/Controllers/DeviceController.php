@@ -44,6 +44,19 @@ class DeviceController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, Device $device): JsonResponse
+    {
+        if ($device->user_id !== $request->user()->id) {
+            abort(404);
+        }
+
+        $device->delete();
+
+        return response()->json([
+            'message' => 'Device deleted successfully.',
+        ]);
+    }
+
     private function serializeDevice(Device $device): array
     {
         return [

@@ -5,6 +5,7 @@ import {
   Clock,
   HardDrive,
   Pencil,
+  Trash2,
   Wifi,
   WifiOff,
   Shield,
@@ -13,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-import { getDevices, renameDevice, type Device } from "../../services/deviceService";
+import { deleteDevice, getDevices, renameDevice, type Device } from "../../services/deviceService";
 import { formatLastSeen, getDeviceStatus, getIcon } from "./devices/deviceFormatters";
 import { DevicesLoadingState } from "./devices/components/DevicesLoadingState";
 import { DevicesErrorMessage } from "./devices/components/DevicesErrorMessage";
@@ -65,6 +66,9 @@ export function Devices() {
   const [editingName, setEditingName] = useState("");
   const [renamingDeviceId, setRenamingDeviceId] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [deleteConfirmDeviceId, setDeleteConfirmDeviceId] = useState<string | null>(null);
+  const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     safeReadAppearanceTheme,
@@ -150,6 +154,8 @@ export function Devices() {
     setEditingDeviceId(device.id);
     setEditingName(device.display_name ?? "");
     setRenameError(null);
+    setDeleteConfirmDeviceId(null);
+    setDeleteError(null);
   };
 
   const cancelRename = () => {
@@ -185,6 +191,58 @@ export function Devices() {
       if (isMountedRef.current) setRenameError("Failed to rename device.");
     } finally {
       if (isMountedRef.current) setRenamingDeviceId(null);
+    }
+  };
+
+  const getDisplayName = (device: Device) =>
+    (device.display_name ??
+      [device.browser, device.platform].filter(Boolean).join(" on ")) ||
+    "Unknown device";
+
+  const startDelete = (device: Device) => {
+    if (deletingDeviceId || renamingDeviceId) return;
+
+    if (editingDeviceId === device.id) {
+      cancelRename();
+    }
+
+    setDeleteConfirmDeviceId(device.id);
+    setDeleteError(null);
+  };
+
+  const cancelDelete = () => {
+    if (deletingDeviceId) return;
+
+    setDeleteConfirmDeviceId(null);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = async (deviceId: string) => {
+    if (deletingDeviceId) return;
+
+    try {
+      setDeletingDeviceId(deviceId);
+      setDeleteError(null);
+      await deleteDevice(deviceId);
+
+      if (isMountedRef.current) {
+        setDevices((current) => current.filter((device) => device.id !== deviceId));
+
+        if (editingDeviceId === deviceId) {
+          setEditingDeviceId(null);
+          setEditingName("");
+          setRenameError(null);
+        }
+
+        if (deleteConfirmDeviceId === deviceId) {
+          setDeleteConfirmDeviceId(null);
+          setDeleteError(null);
+        }
+      }
+    } catch {
+      if (isMountedRef.current) setDeleteError("Failed to delete device.");
+    } finally {
+      if (isMountedRef.current) setDeletingDeviceId(null);
     }
   };
 
@@ -366,6 +424,9 @@ export function Devices() {
               const status = getDeviceStatus(device);
               const isEditing = editingDeviceId === device.id;
               const isRenaming = renamingDeviceId === device.id;
+              const isDeleteConfirming = deleteConfirmDeviceId === device.id;
+              const isDeleting = deletingDeviceId === device.id;
+              const displayName = getDisplayName(device);
 
               return (
                 <div
@@ -427,7 +488,7 @@ export function Devices() {
                         />
                       ) : (
                         <div className="truncate text-sm font-semibold" style={{ color: deviceColors.title }}>
-                          {device.display_name ?? "Unknown device"}
+                          {displayName}
                         </div>
                       )}
                       <div className="text-xs mt-0.5" style={{ color: deviceColors.muted }}>
@@ -500,7 +561,7 @@ export function Devices() {
                     <div className="mt-3 flex items-center gap-2">
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRenaming || editingName.trim().length === 0}
+                        disabled={isRenaming || isDeleting || editingName.trim().length === 0}
                         onClick={() => saveRename(device.id)}
                         style={{
                           background: deviceColors.panelBg,
@@ -514,7 +575,7 @@ export function Devices() {
                       </button>
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRenaming}
+                        disabled={isRenaming || isDeleting}
                         onClick={cancelRename}
                         style={{
                           background: deviceColors.panelBg,
@@ -527,21 +588,87 @@ export function Devices() {
                         Cancel
                       </button>
                     </div>
-                  ) : (
-                    <button
-                      className="mt-3 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={renamingDeviceId !== null}
-                      onClick={() => startRename(device)}
+                  ) : isDeleteConfirming ? (
+                    <div
+                      className="mt-3 rounded-lg border p-3"
                       style={{
                         background: deviceColors.panelBg,
                         borderColor: deviceColors.border,
-                        color: deviceColors.muted,
                       }}
-                      type="button"
                     >
-                      <Pencil size={11} />
-                      Rename
-                    </button>
+                      <div className="text-xs font-semibold" style={{ color: deviceColors.title }}>
+                        Delete {displayName}?
+                      </div>
+                      <p className="mt-1 text-[10px]" style={{ color: deviceColors.muted }}>
+                        This removes the record from this list only. It can appear again after the next successful login.
+                      </p>
+                      {deleteError && (
+                        <div className="mt-2 text-[10px]" style={{ color: "#f87171" }}>
+                          {deleteError}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isDeleting}
+                          onClick={() => confirmDelete(device.id)}
+                          style={{
+                            background: deviceColors.panelBg,
+                            borderColor: "rgba(248,113,113,0.35)",
+                            color: "#f87171",
+                          }}
+                          type="button"
+                        >
+                          <Trash2 size={11} />
+                          {isDeleting ? "Deleting…" : "Delete"}
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isDeleting}
+                          onClick={cancelDelete}
+                          style={{
+                            background: deviceColors.panelBg,
+                            borderColor: deviceColors.border,
+                            color: deviceColors.muted,
+                          }}
+                          type="button"
+                        >
+                          <X size={11} />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={renamingDeviceId !== null || deletingDeviceId !== null}
+                        onClick={() => startRename(device)}
+                        style={{
+                          background: deviceColors.panelBg,
+                          borderColor: deviceColors.border,
+                          color: deviceColors.muted,
+                        }}
+                        type="button"
+                      >
+                        <Pencil size={11} />
+                        Rename
+                      </button>
+                      <button
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={renamingDeviceId !== null || deletingDeviceId !== null}
+                        onClick={() => startDelete(device)}
+                        style={{
+                          background: deviceColors.panelBg,
+                          borderColor: "rgba(248,113,113,0.35)",
+                          color: "#f87171",
+                        }}
+                        type="button"
+                      >
+                        <Trash2 size={11} />
+                        Delete
+                      </button>
+                    </div>
                   )}
                 </div>
               );
