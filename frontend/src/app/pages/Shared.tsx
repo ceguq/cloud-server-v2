@@ -397,15 +397,29 @@ export function Shared() {
 
       {/* Global error */}
       {error && (
-        <SharedErrorMessage
-          message={error}
-          className="mb-4 px-4 py-3 rounded-xl text-xs"
-          backgroundColor="rgba(248,113,113,0.08)"
-          borderColor="rgba(248,113,113,0.25)"
-          textColor={sharedColors.errorText}
-          role="alert"
-          ariaLive="polite"
-        />
+        <div className="mb-4 space-y-3">
+          <SharedErrorMessage
+            message={error}
+            className="px-4 py-3 rounded-xl text-xs"
+            backgroundColor="rgba(248,113,113,0.08)"
+            borderColor="rgba(248,113,113,0.25)"
+            textColor={sharedColors.errorText}
+            role="alert"
+            ariaLive="polite"
+          />
+          <button
+            type="button"
+            onClick={loadShareLinks}
+            className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold"
+            style={{
+              background: sharedColors.buttonSoftBg,
+              border: `1px solid ${sharedColors.border}`,
+              color: sharedColors.text,
+            }}
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {/* Loading skeleton */}
