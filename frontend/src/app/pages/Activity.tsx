@@ -440,6 +440,39 @@ export function Activity() {
 
   const clearSelection = () => setSelectedActivityIds(new Set());
 
+  const escapeCsvCell = (value: string): string => {
+    return `"${value.replace(/"/g, '""')}"`;
+  };
+
+  const exportVisibleActivities = () => {
+    if (filteredActivities.length === 0) return;
+
+    const rows = filteredActivities.map((item) => [
+      item.date,
+      item.time,
+      item.action,
+      item.file,
+      item.user,
+    ]);
+
+    const header = ["Date", "Time", "Action", "Description", "User"];
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => escapeCsvCell(String(cell ?? ""))).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    anchor.download = `activity-export-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
   const filteredActivities = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -570,9 +603,18 @@ export function Activity() {
 
         </div>
         <button
+          type="button"
+          onClick={exportVisibleActivities}
+          disabled={filteredActivities.length === 0}
+          aria-label="Export visible activity rows as CSV"
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-          style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}`, color: activityColors.text }}
-
+          style={{
+            background: activityColors.panelBg,
+            border: `1px solid ${activityColors.border}`,
+            color: activityColors.text,
+            opacity: filteredActivities.length === 0 ? 0.5 : 1,
+            cursor: filteredActivities.length === 0 ? "not-allowed" : "pointer",
+          }}
         >
           <Download size={13} /> Export Log
         </button>
