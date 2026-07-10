@@ -145,6 +145,11 @@ export function PublicSharePage() {
     }
   }
 
+  function handleRetry() {
+    if (loading) return;
+    loadShare();
+  }
+
   // ── handleDownload ────────────────────────────────────────────────────────
   /**
    * Re-validates the share token with the backend FIRST.
@@ -296,6 +301,7 @@ export function PublicSharePage() {
               </>
             }
             message={errorMessage}
+            onRetry={handleRetry}
           />
         ) : null}
 
