@@ -95,13 +95,22 @@ export function Uploads() {
   const cancelled = queue.filter((i) => i.status === "cancelled").length;
 
   const overallProgress = useMemo(() => {
-    if (total === 0) return 0;
-    const sum = queue.reduce(
+    // Include only relevant statuses: queued, uploading, completed
+    const progressItems = queue.filter((item) =>
+      item.status === "queued" ||
+      item.status === "uploading" ||
+      item.status === "completed",
+    );
+
+    if (progressItems.length === 0) return null; // indicate no active uploads
+
+    const sum = progressItems.reduce(
       (acc, it) => acc + (it.status === "completed" ? 100 : it.progress || 0),
       0,
     );
-    return Math.round(sum / total);
-  }, [queue, total]);
+
+    return Math.round(sum / progressItems.length);
+  }, [queue]);
 
   const uploadsColors =
     resolvedTheme === "light"
@@ -197,7 +206,8 @@ export function Uploads() {
           { label: "Failed", value: failed + cancelled, color: "#ef4444" },
           {
             label: "Overall Progress",
-            value: `${overallProgress}%`,
+            value:
+              overallProgress === null ? "No active uploads" : `${overallProgress}%`,
             color: accentColor,
           },
         ].map((s) => (
