@@ -57,7 +57,7 @@ export function Uploads() {
   );
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { items, addFiles, cancelItem, retryItem, addFilesError } = useUploadManager();
+  const { items, addFiles, cancelItem, retryItem, addFilesError, removeCompletedItems } = useUploadManager();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -275,10 +275,28 @@ export function Uploads() {
           <span className="text-sm font-semibold" style={{ color: uploadsColors.title }}>
             Upload Queue
           </span>
-          <div className="text-xs" style={{ color: uploadsColors.muted }}>
-            {total === 0
-              ? ""
-              : `${uploading} uploading · ${completed} completed`}
+
+          <div className="flex items-center gap-3">
+            <div className="text-xs" style={{ color: uploadsColors.muted }}>
+              {total === 0
+                ? ""
+                : `${uploading} uploading · ${completed} completed`}
+            </div>
+
+            {completed > 0 ? (
+              <button
+                type="button"
+                onClick={() => removeCompletedItems()}
+                className="px-2 py-1 rounded-lg text-xs font-semibold"
+                style={{
+                  background: uploadsColors.buttonSoftBg,
+                  border: `1px solid ${uploadsColors.border}`,
+                  color: uploadsColors.muted2,
+                }}
+              >
+                Clear completed
+              </button>
+            ) : null}
           </div>
         </div>
 
