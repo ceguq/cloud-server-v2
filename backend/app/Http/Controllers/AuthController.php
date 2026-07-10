@@ -74,8 +74,10 @@ class AuthController extends Controller
         try {
             $userAgent = $request->userAgent() ?? '';
             $normalizedUserAgent = $this->normalizeUserAgent($userAgent);
-            $deviceInfo = $this->parseUserAgent($normalizedUserAgent);
-            $deviceHash = hash('sha256', $user->id . '|' . $normalizedUserAgent);
+            $clientBrowser = $this->normalizeClientBrowser($request->input('client_browser'));
+            $deviceInfo = $this->parseUserAgent($normalizedUserAgent, $clientBrowser);
+            $normalizedBrowserName = strtolower($deviceInfo['browser']);
+            $deviceHash = hash('sha256', $user->id . '|' . $normalizedUserAgent . '|' . $normalizedBrowserName);
 
             $device = Device::query()->firstOrNew([
                 'user_id' => $user->id,
@@ -107,11 +109,23 @@ class AuthController extends Controller
         return strtolower(trim((string) preg_replace('/\s+/', ' ', $userAgent)));
     }
 
-    private function parseUserAgent(string $normalizedUserAgent): array
+    private function normalizeClientBrowser(mixed $clientBrowser): ?string
+    {
+        if (!is_string($clientBrowser)) {
+            return null;
+        }
+
+        return match (trim($clientBrowser)) {
+            'Brave' => 'Brave',
+            default => null,
+        };
+    }
+
+    private function parseUserAgent(string $normalizedUserAgent, ?string $clientBrowser = null): array
     {
         $deviceType = $this->detectDeviceType($normalizedUserAgent);
         $platform = $this->detectPlatform($normalizedUserAgent);
-        $browser = $this->detectBrowser($normalizedUserAgent);
+        $browser = $clientBrowser ?? $this->detectBrowser($normalizedUserAgent);
 
         return [
             'display_name' => "{$browser} on {$platform}",
