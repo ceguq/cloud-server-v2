@@ -89,8 +89,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/server-monitor', [ServerMonitorController::class, 'index']);
 
-    // Devices (read-only)
+    // Devices
     Route::get('/devices', [DeviceController::class, 'index']);
+    Route::patch('/devices/{device}', [DeviceController::class, 'update']);
 
 
     // Trash endpoints (soft deleted files)

@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Monitor,
-  Plus,
+  Check,
   Clock,
   HardDrive,
+  Pencil,
   Wifi,
   WifiOff,
   Shield,
   CheckCircle,
   RefreshCw,
+  X,
 } from "lucide-react";
 
-import { getDevices, type Device } from "../../services/deviceService";
+import { getDevices, renameDevice, type Device } from "../../services/deviceService";
 import { formatLastSeen, getDeviceStatus, getIcon } from "./devices/deviceFormatters";
 import { DevicesLoadingState } from "./devices/components/DevicesLoadingState";
 import { DevicesErrorMessage } from "./devices/components/DevicesErrorMessage";
@@ -59,6 +61,10 @@ export function Devices() {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const loadingRef = useRef(false);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [renamingDeviceId, setRenamingDeviceId] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     safeReadAppearanceTheme,
@@ -137,6 +143,48 @@ export function Devices() {
     } finally {
       loadingRef.current = false;
       if (isMountedRef.current) setLoading(false);
+    }
+  };
+
+  const startRename = (device: Device) => {
+    setEditingDeviceId(device.id);
+    setEditingName(device.display_name ?? "");
+    setRenameError(null);
+  };
+
+  const cancelRename = () => {
+    setEditingDeviceId(null);
+    setEditingName("");
+    setRenameError(null);
+  };
+
+  const saveRename = async (deviceId: string) => {
+    if (renamingDeviceId) return;
+
+    const nextName = editingName.trim();
+    if (!nextName) {
+      setRenameError("Device name is required.");
+      return;
+    }
+
+    try {
+      setRenamingDeviceId(deviceId);
+      setRenameError(null);
+      const updatedDevice = await renameDevice(deviceId, nextName);
+
+      if (isMountedRef.current) {
+        setDevices((current) =>
+          current.map((device) =>
+            device.id === updatedDevice.id ? updatedDevice : device,
+          ),
+        );
+        setEditingDeviceId(null);
+        setEditingName("");
+      }
+    } catch {
+      if (isMountedRef.current) setRenameError("Failed to rename device.");
+    } finally {
+      if (isMountedRef.current) setRenamingDeviceId(null);
     }
   };
 
@@ -316,6 +364,8 @@ export function Devices() {
             {devices.map((device) => {
               const Icon = getIcon(device);
               const status = getDeviceStatus(device);
+              const isEditing = editingDeviceId === device.id;
+              const isRenaming = renamingDeviceId === device.id;
 
               return (
                 <div
@@ -349,10 +399,37 @@ export function Devices() {
                     </div>
 
 
-                    <div>
-                      <div className="text-sm font-semibold" style={{ color: deviceColors.title }}>
-                        {device.display_name ?? "Unknown device"}
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          disabled={isRenaming}
+                          maxLength={100}
+                          onChange={(event) => setEditingName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              saveRename(device.id);
+                            }
+
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              cancelRename();
+                            }
+                          }}
+                          value={editingName}
+                          className="h-8 w-full rounded-lg border px-2 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{
+                            background: deviceColors.panelBg,
+                            borderColor: deviceColors.border,
+                            color: deviceColors.title,
+                          }}
+                        />
+                      ) : (
+                        <div className="truncate text-sm font-semibold" style={{ color: deviceColors.title }}>
+                          {device.display_name ?? "Unknown device"}
+                        </div>
+                      )}
                       <div className="text-xs mt-0.5" style={{ color: deviceColors.muted }}>
 
                         {device.device_type ?? "Unknown type"} · {device.platform ?? "Unknown platform"}
@@ -377,6 +454,11 @@ export function Devices() {
 
                         {device.trusted && <CheckCircle size={10} style={{ color: "#3b82f6" }} />}
                       </div>
+                      {isEditing && renameError && (
+                        <div className="mt-1 text-[10px]" style={{ color: "#f87171" }}>
+                          {renameError}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -414,16 +496,53 @@ export function Devices() {
                     </div>
                   </div>
 
-                  <div
-                    className="mt-3 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-semibold"
-                    style={{
-                      background: deviceColors.panelBg,
-                      border: `1px solid ${deviceColors.border}`,
-                      color: deviceColors.muted,
-                    }}
-                  >
-                    Read-only
-                  </div>
+                  {isEditing ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isRenaming || editingName.trim().length === 0}
+                        onClick={() => saveRename(device.id)}
+                        style={{
+                          background: deviceColors.panelBg,
+                          borderColor: deviceColors.border,
+                          color: "#34d399",
+                        }}
+                        type="button"
+                      >
+                        <Check size={11} />
+                        {isRenaming ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isRenaming}
+                        onClick={cancelRename}
+                        style={{
+                          background: deviceColors.panelBg,
+                          borderColor: deviceColors.border,
+                          color: deviceColors.muted,
+                        }}
+                        type="button"
+                      >
+                        <X size={11} />
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="mt-3 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={renamingDeviceId !== null}
+                      onClick={() => startRename(device)}
+                      style={{
+                        background: deviceColors.panelBg,
+                        borderColor: deviceColors.border,
+                        color: deviceColors.muted,
+                      }}
+                      type="button"
+                    >
+                      <Pencil size={11} />
+                      Rename
+                    </button>
+                  )}
                 </div>
               );
             })}

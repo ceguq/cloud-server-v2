@@ -17,8 +17,19 @@ type DevicesResponse = {
   data: Device[];
 };
 
+type DeviceResponse = {
+  data: Device;
+};
+
 export async function getDevices(): Promise<Device[]> {
   const response = await api.get<DevicesResponse>("/devices");
   return response.data.data ?? [];
 }
 
+export async function renameDevice(deviceId: string, displayName: string): Promise<Device> {
+  const response = await api.patch<DeviceResponse>(`/devices/${deviceId}`, {
+    display_name: displayName,
+  });
+
+  return response.data.data;
+}
