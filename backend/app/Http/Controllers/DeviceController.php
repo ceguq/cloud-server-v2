@@ -57,6 +57,24 @@ class DeviceController extends Controller
         ]);
     }
 
+    public function updateTrusted(Request $request, Device $device): JsonResponse
+    {
+        if ($device->user_id !== $request->user()->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'trusted' => ['required', 'boolean'],
+        ]);
+
+        $device->trusted = $validated['trusted'];
+        $device->save();
+
+        return response()->json([
+            'data' => $this->serializeDevice($device),
+        ]);
+    }
+
     private function serializeDevice(Device $device): array
     {
         return [

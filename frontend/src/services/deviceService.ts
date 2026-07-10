@@ -37,3 +37,11 @@ export async function renameDevice(deviceId: string, displayName: string): Promi
 export async function deleteDevice(deviceId: string): Promise<void> {
   await api.delete(`/devices/${deviceId}`);
 }
+
+export async function setDeviceTrusted(deviceId: string, trusted: boolean): Promise<Device> {
+  const response = await api.patch<DeviceResponse>(`/devices/${deviceId}/trusted`, {
+    trusted,
+  });
+
+  return response.data.data;
+}

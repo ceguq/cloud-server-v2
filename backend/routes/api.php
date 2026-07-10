@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Devices
     Route::get('/devices', [DeviceController::class, 'index']);
     Route::patch('/devices/{device}', [DeviceController::class, 'update']);
+    Route::patch('/devices/{device}/trusted', [DeviceController::class, 'updateTrusted']);
     Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
 
 

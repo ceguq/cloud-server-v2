@@ -14,7 +14,13 @@ import {
   X,
 } from "lucide-react";
 
-import { deleteDevice, getDevices, renameDevice, type Device } from "../../services/deviceService";
+import {
+  deleteDevice,
+  getDevices,
+  renameDevice,
+  setDeviceTrusted,
+  type Device,
+} from "../../services/deviceService";
 import { formatLastSeen, getDeviceStatus, getIcon } from "./devices/deviceFormatters";
 import { DevicesLoadingState } from "./devices/components/DevicesLoadingState";
 import { DevicesErrorMessage } from "./devices/components/DevicesErrorMessage";
@@ -69,6 +75,9 @@ export function Devices() {
   const [deleteConfirmDeviceId, setDeleteConfirmDeviceId] = useState<string | null>(null);
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [trustConfirmDeviceId, setTrustConfirmDeviceId] = useState<string | null>(null);
+  const [savingTrustDeviceId, setSavingTrustDeviceId] = useState<string | null>(null);
+  const [trustError, setTrustError] = useState<string | null>(null);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     safeReadAppearanceTheme,
@@ -156,6 +165,8 @@ export function Devices() {
     setRenameError(null);
     setDeleteConfirmDeviceId(null);
     setDeleteError(null);
+    setTrustConfirmDeviceId(null);
+    setTrustError(null);
   };
 
   const cancelRename = () => {
@@ -208,6 +219,8 @@ export function Devices() {
 
     setDeleteConfirmDeviceId(device.id);
     setDeleteError(null);
+    setTrustConfirmDeviceId(null);
+    setTrustError(null);
   };
 
   const cancelDelete = () => {
@@ -243,6 +256,53 @@ export function Devices() {
       if (isMountedRef.current) setDeleteError("Failed to delete device.");
     } finally {
       if (isMountedRef.current) setDeletingDeviceId(null);
+    }
+  };
+
+  const startTrustChange = (device: Device) => {
+    if (savingTrustDeviceId || deletingDeviceId || renamingDeviceId) return;
+
+    if (editingDeviceId === device.id) {
+      cancelRename();
+    }
+
+    setTrustConfirmDeviceId(device.id);
+    setTrustError(null);
+    setDeleteConfirmDeviceId(null);
+    setDeleteError(null);
+  };
+
+  const cancelTrustChange = () => {
+    if (savingTrustDeviceId) return;
+
+    setTrustConfirmDeviceId(null);
+    setTrustError(null);
+  };
+
+  const confirmTrustChange = async (deviceId: string, trusted: boolean) => {
+    if (savingTrustDeviceId) return;
+
+    try {
+      setSavingTrustDeviceId(deviceId);
+      setTrustError(null);
+      const updatedDevice = await setDeviceTrusted(deviceId, trusted);
+
+      if (isMountedRef.current) {
+        setDevices((current) =>
+          current.map((device) =>
+            device.id === updatedDevice.id ? updatedDevice : device,
+          ),
+        );
+
+        if (trustConfirmDeviceId === deviceId) {
+          setTrustConfirmDeviceId(null);
+          setTrustError(null);
+        }
+      }
+    } catch {
+      if (isMountedRef.current) setTrustError("Failed to update trusted status.");
+    } finally {
+      if (isMountedRef.current) setSavingTrustDeviceId(null);
     }
   };
 
@@ -426,7 +486,12 @@ export function Devices() {
               const isRenaming = renamingDeviceId === device.id;
               const isDeleteConfirming = deleteConfirmDeviceId === device.id;
               const isDeleting = deletingDeviceId === device.id;
+              const isTrustConfirming = trustConfirmDeviceId === device.id;
+              const isSavingTrust = savingTrustDeviceId === device.id;
               const displayName = getDisplayName(device);
+              const targetTrusted = !device.trusted;
+              const trustActionLabel = targetTrusted ? "Trust" : "Untrust";
+              const trustSavingLabel = targetTrusted ? "Trusting…" : "Untrusting…";
 
               return (
                 <div
@@ -558,10 +623,10 @@ export function Devices() {
                   </div>
 
                   {isEditing ? (
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRenaming || isDeleting || editingName.trim().length === 0}
+                        disabled={isRenaming || isDeleting || isSavingTrust || editingName.trim().length === 0}
                         onClick={() => saveRename(device.id)}
                         style={{
                           background: deviceColors.panelBg,
@@ -575,7 +640,7 @@ export function Devices() {
                       </button>
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRenaming || isDeleting}
+                        disabled={isRenaming || isDeleting || isSavingTrust}
                         onClick={cancelRename}
                         style={{
                           background: deviceColors.panelBg,
@@ -587,6 +652,56 @@ export function Devices() {
                         <X size={11} />
                         Cancel
                       </button>
+                    </div>
+                  ) : isTrustConfirming ? (
+                    <div
+                      className="mt-3 rounded-lg border p-3"
+                      style={{
+                        background: deviceColors.panelBg,
+                        borderColor: deviceColors.border,
+                      }}
+                    >
+                      <div className="text-xs font-semibold" style={{ color: deviceColors.title }}>
+                        {trustActionLabel} {displayName}?
+                      </div>
+                      <p className="mt-1 text-[10px]" style={{ color: deviceColors.muted }}>
+                        This only changes the trusted label in NimbusDrive. It does not log this browser out, revoke tokens, or block future login.
+                      </p>
+                      {trustError && (
+                        <div className="mt-2 text-[10px]" style={{ color: "#f87171" }}>
+                          {trustError}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isSavingTrust}
+                          onClick={() => confirmTrustChange(device.id, targetTrusted)}
+                          style={{
+                            background: deviceColors.panelBg,
+                            borderColor: deviceColors.border,
+                            color: targetTrusted ? "#34d399" : "#f59e0b",
+                          }}
+                          type="button"
+                        >
+                          <Shield size={11} />
+                          {isSavingTrust ? trustSavingLabel : trustActionLabel}
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isSavingTrust}
+                          onClick={cancelTrustChange}
+                          style={{
+                            background: deviceColors.panelBg,
+                            borderColor: deviceColors.border,
+                            color: deviceColors.muted,
+                          }}
+                          type="button"
+                        >
+                          <X size={11} />
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   ) : isDeleteConfirming ? (
                     <div
@@ -610,7 +725,7 @@ export function Devices() {
                       <div className="mt-3 flex items-center gap-2">
                         <button
                           className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isDeleting}
+                          disabled={isDeleting || isSavingTrust}
                           onClick={() => confirmDelete(device.id)}
                           style={{
                             background: deviceColors.panelBg,
@@ -624,7 +739,7 @@ export function Devices() {
                         </button>
                         <button
                           className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isDeleting}
+                          disabled={isDeleting || isSavingTrust}
                           onClick={cancelDelete}
                           style={{
                             background: deviceColors.panelBg,
@@ -642,7 +757,7 @@ export function Devices() {
                     <div className="mt-3 flex items-center gap-2">
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={renamingDeviceId !== null || deletingDeviceId !== null}
+                        disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
                         onClick={() => startRename(device)}
                         style={{
                           background: deviceColors.panelBg,
@@ -656,7 +771,21 @@ export function Devices() {
                       </button>
                       <button
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={renamingDeviceId !== null || deletingDeviceId !== null}
+                        disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
+                        onClick={() => startTrustChange(device)}
+                        style={{
+                          background: deviceColors.panelBg,
+                          borderColor: deviceColors.border,
+                          color: device.trusted ? "#f59e0b" : "#34d399",
+                        }}
+                        type="button"
+                      >
+                        <Shield size={11} />
+                        {device.trusted ? "Untrust" : "Trust"}
+                      </button>
+                      <button
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
                         onClick={() => startDelete(device)}
                         style={{
                           background: deviceColors.panelBg,
