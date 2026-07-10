@@ -2081,7 +2081,7 @@ export function GDrive() {
 
 const renderFileActions = (file: GDriveFileUI) => {
 
-    const hasOpenUrl = !!(file.webViewLink || file.webContentLink);
+    const hasOpenUrl = !!(file.shared && (file.webViewLink || file.webContentLink));
     const isGDriveFileIdValid = hasValidGDriveFileId(file);
     const canPreview = !isGDriveFolder(file) && isGDriveFileIdValid;
 
