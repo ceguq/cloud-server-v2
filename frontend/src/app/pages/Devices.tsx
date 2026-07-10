@@ -58,6 +58,7 @@ export function Devices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const loadingRef = useRef(false);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
     safeReadAppearanceTheme,
@@ -123,7 +124,10 @@ export function Devices() {
   }, []);
 
   const loadDevices = async () => {
+    if (loadingRef.current) return;
+
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError(null);
       const list = await getDevices();
@@ -131,6 +135,7 @@ export function Devices() {
     } catch {
       if (isMountedRef.current) setError("Failed to load devices.");
     } finally {
+      loadingRef.current = false;
       if (isMountedRef.current) setLoading(false);
     }
   };
@@ -197,15 +202,31 @@ export function Devices() {
             {devices.length} devices registered · {onlineCount} online
           </p>
         </div>
-        <div
-          className="rounded-full border px-3 py-2 text-xs font-semibold"
-          style={{
-            borderColor: deviceColors.border,
-            color: deviceColors.muted,
-            background: deviceColors.cardBg,
-          }}
-        >
-          Devices are detected automatically
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadDevices}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              borderColor: deviceColors.border,
+              color: deviceColors.text,
+              background: deviceColors.cardBg,
+            }}
+            type="button"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <div
+            className="rounded-full border px-3 py-2 text-xs font-semibold"
+            style={{
+              borderColor: deviceColors.border,
+              color: deviceColors.muted,
+              background: deviceColors.cardBg,
+            }}
+          >
+            Devices are detected automatically
+          </div>
         </div>
 
 
