@@ -224,6 +224,8 @@ export function Dashboard() {
   const [recentFiles, setRecentFiles] = useState<RecentFileUI[]>([]);
   const [recentFilesLoading, setRecentFilesLoading] = useState(false);
   const [recentFilesError, setRecentFilesError] = useState(false);
+  const dashboardLoadInFlightRef = useRef(false);
+  const [dashboardRefreshLoading, setDashboardRefreshLoading] = useState(false);
 
 
 
@@ -283,19 +285,35 @@ export function Dashboard() {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadDashboardData = async (options?: { isCancelled?: () => boolean }) => {
+    if (dashboardLoadInFlightRef.current) return;
+
+    const isCancelled = options?.isCancelled ?? (() => false);
+    const canUpdate = () => !isCancelled();
+
+    dashboardLoadInFlightRef.current = true;
+
+    if (canUpdate()) {
+      setDashboardRefreshLoading(true);
+      setError("");
+      setStorageBreakdownError(false);
+      setRecentFilesError(false);
+      setSharedLinksError(false);
+      setActiveDevicesError(false);
+      setRecentActivityError(false);
+      setServerMonitorError(false);
+    }
 
     const runStorage = async () => {
       try {
         setLoading(true);
         setError("");
         const info = await storageService.getStorageInfo();
-        if (!cancelled) setStorageInfo(info);
+        if (canUpdate()) setStorageInfo(info);
       } catch (e) {
-        if (!cancelled) setError("Dashboard data unavailable");
+        if (canUpdate()) setError("Dashboard data unavailable");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (canUpdate()) setLoading(false);
       }
     };
 
@@ -305,7 +323,7 @@ export function Dashboard() {
         setRecentFilesError(false);
 
         const data = await recentFileService.getRecentFiles();
-        if (!cancelled) {
+        if (canUpdate()) {
           const mapped: RecentFileUI[] = data.map((f) => ({
             ...f,
             display_date:
@@ -316,9 +334,9 @@ export function Dashboard() {
           setRecentFiles(mapped);
         }
       } catch (e) {
-        if (!cancelled) setRecentFilesError(true);
+        if (canUpdate()) setRecentFilesError(true);
       } finally {
-        if (!cancelled) setRecentFilesLoading(false);
+        if (canUpdate()) setRecentFilesLoading(false);
       }
     };
 
@@ -337,14 +355,14 @@ export function Dashboard() {
           if (Array.isArray(maybe)) count = maybe.length;
         }
 
-        if (!cancelled) setSharedLinksCount(count);
+        if (canUpdate()) setSharedLinksCount(count);
       } catch (e) {
-        if (!cancelled) {
+        if (canUpdate()) {
           setSharedLinksError(true);
           setSharedLinksCount(0);
         }
       } finally {
-        if (!cancelled) setSharedLinksLoading(false);
+        if (canUpdate()) setSharedLinksLoading(false);
       }
     };
 
@@ -368,18 +386,18 @@ export function Dashboard() {
           }
         }
 
-        if (!cancelled) {
+        if (canUpdate()) {
           setActiveDevicesCount(count);
           setDevices(items);
         }
       } catch (e) {
-        if (!cancelled) {
+        if (canUpdate()) {
           setActiveDevicesError(true);
           setActiveDevicesCount(0);
           setDevices([]);
         }
       } finally {
-        if (!cancelled) setActiveDevicesLoading(false);
+        if (canUpdate()) setActiveDevicesLoading(false);
       }
     };
 
@@ -393,16 +411,16 @@ export function Dashboard() {
           ? response.data.slice(0, 5)
           : [];
 
-        if (!cancelled) {
+        if (canUpdate()) {
           setRecentActivity(items);
         }
       } catch (e) {
-        if (!cancelled) {
+        if (canUpdate()) {
           setRecentActivityError(true);
           setRecentActivity([]);
         }
       } finally {
-        if (!cancelled) setRecentActivityLoading(false);
+        if (canUpdate()) setRecentActivityLoading(false);
       }
     };
 
@@ -412,14 +430,14 @@ export function Dashboard() {
         setStorageBreakdownError(false);
 
         const data = await getStorageBreakdown();
-        if (!cancelled) setStorageBreakdownInfo(data);
+        if (canUpdate()) setStorageBreakdownInfo(data);
       } catch (e) {
-        if (!cancelled) {
+        if (canUpdate()) {
           setStorageBreakdownError(true);
           setStorageBreakdownInfo(null);
         }
       } finally {
-        if (!cancelled) setStorageBreakdownLoading(false);
+        if (canUpdate()) setStorageBreakdownLoading(false);
       }
     };
 
@@ -429,24 +447,37 @@ export function Dashboard() {
         setServerMonitorError(false);
 
         const response = await getServerMonitor();
-        if (!cancelled) setServerMonitor(response);
+        if (canUpdate()) setServerMonitor(response);
       } catch (e) {
-        if (!cancelled) {
+        if (canUpdate()) {
           setServerMonitorError(true);
           setServerMonitor(null);
         }
       } finally {
-        if (!cancelled) setServerMonitorLoading(false);
+        if (canUpdate()) setServerMonitorLoading(false);
       }
     };
 
-    runStorage();
-    runStorageBreakdown();
-    runRecent();
-    runSharedLinksCount();
-    runActiveDevicesCount();
-    runRecentActivity();
-    runServerMonitor();
+    try {
+      await Promise.all([
+        runStorage(),
+        runStorageBreakdown(),
+        runRecent(),
+        runSharedLinksCount(),
+        runActiveDevicesCount(),
+        runRecentActivity(),
+        runServerMonitor(),
+      ]);
+    } finally {
+      dashboardLoadInFlightRef.current = false;
+      if (canUpdate()) setDashboardRefreshLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadDashboardData({ isCancelled: () => cancelled });
 
     return () => {
       cancelled = true;
@@ -576,6 +607,23 @@ export function Dashboard() {
             Here's what's happening with your cloud today.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => loadDashboardData()}
+          disabled={dashboardRefreshLoading}
+          className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+          style={{
+            background: dashboardColors.cardBg,
+            borderColor: dashboardColors.border,
+            color: dashboardColors.text,
+          }}
+        >
+          <RefreshCw
+            size={13}
+            className={dashboardRefreshLoading ? "animate-spin" : ""}
+          />
+          {dashboardRefreshLoading ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
       {/* Stat Cards */}
