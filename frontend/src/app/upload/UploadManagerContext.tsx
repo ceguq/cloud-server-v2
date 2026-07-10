@@ -47,6 +47,8 @@ type UploadManagerContextValue = {
   setCollapsed: (v: boolean) => void;
   // Track last successful upload for UI refresh triggers
   lastUploadCompleteTime: number;
+  // Add-files validation error (e.g. file too large)
+  addFilesError?: string | undefined;
 };
 
 const UploadManagerContext = createContext<UploadManagerContextValue | null>(
@@ -87,6 +89,9 @@ export function UploadManagerProvider({
   const [collapsed, setCollapsed] = useState(false);
   const [isTrayVisible, setIsTrayVisible] = useState(false);
   const [lastUploadCompleteTime, setLastUploadCompleteTime] = useState(0);
+  const [addFilesError, setAddFilesError] = useState<string | undefined>(
+    undefined,
+  );
 
   const processingRef = useRef(false);
   const queueRef = useRef<UploadQueueItem[]>([]);
@@ -95,6 +100,11 @@ export function UploadManagerProvider({
 
   // keep queueRef in sync
   queueRef.current = items;
+
+  // Backend-validated limit: Laravel `max:1024000` (kilobytes)
+  // Define frontend constants to match server validation.
+  const MAX_UPLOAD_FILE_SIZE_KB = 1024000;
+  const MAX_UPLOAD_FILE_SIZE_BYTES = MAX_UPLOAD_FILE_SIZE_KB * 1024;
 
   const hasActiveUploads = useMemo(() => {
     return items.some((i) => i.status === "queued" || i.status === "uploading");
@@ -242,12 +252,48 @@ export function UploadManagerProvider({
     (files: File[], folderId?: string | null) => {
       if (!files || files.length === 0) return;
 
+      // Clear previous add-files errors before processing
+      setAddFilesError(undefined);
+
       // tampilkan tray hanya saat user menambahkan upload baru
       setCollapsed(false);
       setIsTrayVisible(true);
 
       const folder = folderId ?? null;
-      const newItems: UploadQueueItem[] = files.map((file) => ({
+
+      // Validate each file against the backend size limit and collect oversized names
+      const oversizedNames: string[] = [];
+      const validFiles: File[] = [];
+
+      for (const file of files) {
+        const size = typeof file.size === "number" ? file.size : 0;
+        if (size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+          oversizedNames.push(file.name);
+        } else {
+          validFiles.push(file);
+        }
+      }
+
+      if (oversizedNames.length > 0) {
+        if (oversizedNames.length === 1) {
+          setAddFilesError(
+            `File exceeds the 1 GB upload limit: ${oversizedNames[0]}`,
+          );
+        } else {
+          const shown = oversizedNames.slice(0, 5).join(", ");
+          const more = oversizedNames.length > 5 ? ` and ${oversizedNames.length - 5} more` : "";
+          setAddFilesError(
+            `Files exceed the 1 GB upload limit: ${shown}${more}`,
+          );
+        }
+      }
+
+      if (validFiles.length === 0) {
+        // nothing to enqueue
+        return;
+      }
+
+      const newItems: UploadQueueItem[] = validFiles.map((file) => ({
         id: createLocalId(),
         file,
         fileName: file.name,

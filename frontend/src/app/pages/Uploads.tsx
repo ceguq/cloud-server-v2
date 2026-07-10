@@ -57,7 +57,7 @@ export function Uploads() {
   );
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { items, addFiles, cancelItem, retryItem } = useUploadManager();
+  const { items, addFiles, cancelItem, retryItem, addFilesError } = useUploadManager();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -251,8 +251,13 @@ export function Uploads() {
           {isDragOver ? "Drop files here" : "Drag & drop files here"}
         </p>
         <p className="text-xs" style={{ color: uploadsColors.muted }}>
-          or click to browse · Max 5 GB per file
+          or click to browse · Max 1 GB per file
         </p>
+        {addFilesError ? (
+          <div className="mt-2 text-sm" style={{ color: uploadsColors.errorText }}>
+            {addFilesError}
+          </div>
+        ) : null}
       </div>
 
       {/* Upload Queue */}
