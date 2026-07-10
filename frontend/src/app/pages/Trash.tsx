@@ -150,6 +150,7 @@ export function Trash({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [restoreError, setRestoreError] = useState("");
 
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [foldersError, setFoldersError] = useState("");
@@ -243,10 +244,12 @@ export function Trash({
     };
   }, []);
 
-  async function loadTrashFiles() {
+  async function loadTrashFiles({ silent = false }: { silent?: boolean } = {}) {
     try {
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
       const data = await getTrashFiles();
       setTrashFiles(Array.isArray(data) ? data : []);
@@ -254,30 +257,59 @@ export function Trash({
       // Bersihkan selection setelah refresh data Trash selesai
       clearSelection();
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Failed to load deleted files.");
+      if (!silent) {
+        setError(err?.response?.data?.message || "Failed to load deleted files.");
+      }
+      throw err;
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }
 
-  async function loadTrashFolders() {
-    setLoading(true);
-    setError("");
+  async function loadTrashFolders({ silent = false }: { silent?: boolean } = {}) {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const folders = await getTrashFolders();
       setTrashFolders(Array.isArray(folders) ? folders : []);
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message || "Failed to load deleted folders.",
-      );
+      if (!silent) {
+        setError(
+          err?.response?.data?.message || "Failed to load deleted folders.",
+        );
+      }
+      throw err;
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }
+
+  async function loadTrashData() {
+    if (loading) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      await Promise.all([
+        loadTrashFiles({ silent: true }),
+        loadTrashFolders({ silent: true }),
+      ]);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to load trash data.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTrashFiles();
-    loadTrashFolders();
+    void loadTrashData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,12 +341,19 @@ export function Trash({
   };
 
   const handleRestore = async (fileId: string) => {
+    setRestoreError("");
     setRestoreLoadingId(fileId);
     try {
       await restoreFile(fileId);
       setTrashFiles((prev) => prev.filter((f) => f.id !== fileId));
+      setSelectedFileIds((prev) => {
+        const next = new Set(prev);
+        next.delete(fileId);
+        return next;
+      });
+      setRestoreError("");
     } catch (e) {
-      // tetap non-blocking tanpa alert
+      setRestoreError("Failed to restore file.");
     } finally {
       setRestoreLoadingId(null);
     }
@@ -330,6 +369,11 @@ export function Trash({
     try {
       await forceDeleteFile(id);
       setTrashFiles((prev) => prev.filter((f) => f.id !== id));
+      setSelectedFileIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       closeForceDeleteModal();
     } catch (e) {
       setForceDeleteError("Failed to delete permanently.");
@@ -386,22 +430,22 @@ export function Trash({
 
     if (action === "restore-files") {
       await loadTrashFiles();
-      clearSelection();
+      setSelectedFileIds(new Set());
     } else if (action === "delete-files") {
       await loadTrashFiles();
       if (okCount > 0) {
         onStorageChanged?.();
       }
-      clearSelection();
+      setSelectedFileIds(new Set());
     } else if (action === "restore-folders") {
       await loadTrashFolders();
-      clearFolderSelection();
+      setSelectedFolderIds(new Set());
     } else {
       await loadTrashFolders();
       if (okCount > 0) {
         onStorageChanged?.();
       }
-      clearFolderSelection();
+      setSelectedFolderIds(new Set());
     }
 
     setBulkActionResult({ okCount, failCount });
@@ -413,31 +457,31 @@ export function Trash({
   const bulkActionContent = bulkAction
     ? {
         "restore-files": {
-          title: "Restore file?",
-          description: `${bulkActionIds.length} file terpilih akan direstore.`,
+          title: "Restore selected items?",
+          description: `Restore ${bulkActionIds.length} selected file${bulkActionIds.length === 1 ? "" : "s"} from Trash?`,
           actionLabel: "Restore",
-          loadingLabel: "Merestore file...",
+          loadingLabel: "Restoring files...",
           danger: false,
         },
         "delete-files": {
-          title: "Hapus file permanen?",
-          description: `${bulkActionIds.length} file terpilih akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`,
-          actionLabel: "Hapus Permanen",
-          loadingLabel: "Menghapus file permanen...",
+          title: "Permanently delete selected items?",
+          description: `Permanently delete ${bulkActionIds.length} selected file${bulkActionIds.length === 1 ? "" : "s"}? This action cannot be undone.`,
+          actionLabel: "Delete permanently",
+          loadingLabel: "Deleting files permanently...",
           danger: true,
         },
         "restore-folders": {
-          title: "Restore folder?",
-          description: `${bulkActionIds.length} folder terpilih akan direstore.`,
+          title: "Restore selected items?",
+          description: `Restore ${bulkActionIds.length} selected folder${bulkActionIds.length === 1 ? "" : "s"} from Trash?`,
           actionLabel: "Restore",
-          loadingLabel: "Merestore folder...",
+          loadingLabel: "Restoring folders...",
           danger: false,
         },
         "delete-folders": {
-          title: "Hapus folder permanen?",
-          description: `${bulkActionIds.length} folder terpilih akan dihapus permanen. Tindakan ini tidak dapat dibatalkan. Seluruh isi folder ikut dihapus permanen.`,
-          actionLabel: "Hapus Permanen",
-          loadingLabel: "Menghapus folder permanen...",
+          title: "Permanently delete selected items?",
+          description: `Permanently delete ${bulkActionIds.length} selected folder${bulkActionIds.length === 1 ? "" : "s"}? This action cannot be undone.`,
+          actionLabel: "Delete permanently",
+          loadingLabel: "Deleting folders permanently...",
           danger: true,
         },
       }[bulkAction]
@@ -459,17 +503,44 @@ export function Trash({
         </div>
       </div>
 
+      {restoreError && !loading && (
+        <div className="mb-4">
+          <TrashErrorMessage
+            className="text-sm"
+            message={restoreError}
+            textColor="#ef4444"
+            role="alert"
+            ariaLive="assertive"
+          />
+        </div>
+      )}
+
       {loading && (
         <TrashLoadingState className="text-sm" textColor={trashColors.text} />
       )}
       {!loading && error && (
-        <TrashErrorMessage
-          className="text-sm"
-          message={error}
-          textColor="#ef4444"
-          role="alert"
-          ariaLive="assertive"
-        />
+        <div className="space-y-3">
+          <TrashErrorMessage
+            className="text-sm"
+            message={error}
+            textColor="#ef4444"
+            role="alert"
+            ariaLive="assertive"
+          />
+          <button
+            type="button"
+            onClick={() => void loadTrashData()}
+            disabled={loading}
+            className="rounded-lg px-3 py-2 text-xs font-medium"
+            style={{
+              background: trashColors.panelBg,
+              border: `1px solid ${trashColors.border}`,
+              color: trashColors.text,
+            }}
+          >
+            Retry
+          </button>
+        </div>
       )}
       {!loading &&
         !error &&
@@ -1011,14 +1082,21 @@ export function Trash({
                     aria-label={`Restore ${folder.name}`}
                     disabled={restoreFolderLoadingId === folder.id}
                     onClick={async () => {
+                      setRestoreError("");
                       setRestoreFolderLoadingId(folder.id);
                       try {
                         await restoreFolder(folder.id);
                         setTrashFolders((current) =>
                           current.filter((item) => item.id !== folder.id),
                         );
+                        setSelectedFolderIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(folder.id);
+                          return next;
+                        });
+                        setRestoreError("");
                       } catch {
-                        // non-blocking
+                        setRestoreError("Failed to restore folder.");
                       } finally {
                         setRestoreFolderLoadingId(null);
                       }
@@ -1106,7 +1184,7 @@ export function Trash({
                   color: trashColors.text,
                   opacity: bulkActionLoading ? 0.55 : 1,
                 }}
-                aria-label="Tutup modal bulk action"
+                aria-label="Close bulk action modal"
               >
                 ×
               </button>
@@ -1118,7 +1196,7 @@ export function Trash({
                 style={{ color: "#f87171" }}
               >
                 <AlertTriangle size={14} />
-                <span>Tindakan ini tidak dapat dibatalkan.</span>
+                <span>This action cannot be undone.</span>
               </div>
             )}
 
@@ -1141,7 +1219,7 @@ export function Trash({
                   style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
                 >
                   <div className="text-xs" style={{ color: trashColors.text }}>
-                    Hasil proses
+                    Result
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div
@@ -1151,7 +1229,7 @@ export function Trash({
                       <div className="text-lg font-semibold">
                         {bulkActionResult.okCount}
                       </div>
-                      <div className="text-[11px]">berhasil</div>
+                      <div className="text-[11px]">succeeded</div>
                     </div>
                     <div
                       className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2"
@@ -1160,7 +1238,7 @@ export function Trash({
                       <div className="text-lg font-semibold">
                         {bulkActionResult.failCount}
                       </div>
-                      <div className="text-[11px]">gagal</div>
+                      <div className="text-[11px]">failed</div>
                     </div>
                   </div>
                 </div>
@@ -1176,7 +1254,7 @@ export function Trash({
                       color: trashColors.text,
                     }}
                   >
-                    Tutup
+                    Close
                   </button>
                 </div>
               </>
@@ -1245,8 +1323,7 @@ export function Trash({
               Delete Permanently?
             </h2>
             <p className="text-xs mt-2" style={{ color: trashColors.text }}>
-              File ini akan dihapus permanen dari storage dan tidak bisa
-              direstore.
+              This file will be deleted permanently from storage and cannot be restored.
             </p>
 
             <div
@@ -1316,8 +1393,7 @@ export function Trash({
               Delete Folder Permanently?
             </h2>
             <p className="text-xs mt-2" style={{ color: trashColors.text }}>
-              Folder, subfolder, dan seluruh file di dalamnya akan dihapus
-              permanen. Tindakan ini tidak bisa direstore.
+              This folder, its subfolders, and all files inside it will be deleted permanently. This action cannot be restored.
             </p>
 
             <div
@@ -1372,13 +1448,18 @@ export function Trash({
                           folder.id !== selectedFolderForForceDelete.id,
                       ),
                     );
+                    setSelectedFolderIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(selectedFolderForForceDelete.id);
+                      return next;
+                    });
 
                     setIsFolderForceDeleteModalOpen(false);
                     setSelectedFolderForForceDelete(null);
                   } catch (err: any) {
                     setForceDeleteFolderError(
                       err?.response?.data?.message ||
-                        "Gagal menghapus folder secara permanen.",
+                        "Failed to delete the folder permanently.",
                     );
                   } finally {
                     setForceDeleteFolderLoading(false);

@@ -7,14 +7,8 @@ import {
   Bell,
   Shield,
   HardDrive,
-  Key,
   Palette,
-  Cloud,
-  Eye,
-  EyeOff,
   Save,
-  Download,
-  Lock,
 } from "lucide-react";
 
 type AppearanceTheme = "dark" | "light" | "system";
@@ -46,9 +40,7 @@ const sections = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
   { id: "storage", label: "Storage", icon: HardDrive },
-  { id: "sync", label: "Sync & Backup", icon: Cloud },
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "api", label: "API Keys", icon: Key },
 ];
 
 function Toggle({
@@ -106,7 +98,6 @@ export function Settings() {
     window.addEventListener("popstate", applyHash);
     return () => window.removeEventListener("popstate", applyHash);
   }, []);
-  const [showPass, setShowPass] = useState(false);
 
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(safeReadAppearanceTheme);
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
@@ -383,6 +374,9 @@ export function Settings() {
               className="rounded-xl px-5"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
             >
+              <div className="py-3 text-xs" style={{ color: settingsColors.muted }}>
+                Notification preferences are not available yet.
+              </div>
 
               {[
                 { label: "Upload Complete", desc: "Notify when file uploads finish", on: true },
@@ -401,12 +395,16 @@ export function Settings() {
                   descColor={settingsColors.muted}
                   borderColor={settingsColors.border}
                 >
-                  <Toggle
-                    on={n.on}
-                    accentColor={accentColor}
-                    offBg={settingsColors.panelBg}
-                    knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                  />
+                  <div
+                    className="text-xs px-3 py-1.5 rounded-lg"
+                    style={{
+                      background: settingsColors.panelBg,
+                      color: settingsColors.muted,
+                      border: `1px solid ${settingsColors.panelBorder}`,
+                    }}
+                  >
+                    Coming soon
+                  </div>
                 </SettingRow>
               ))}
 
@@ -425,46 +423,26 @@ export function Settings() {
             />
 
             <div
+              className="rounded-xl px-5 py-3 mb-4 text-xs"
+              style={{
+                background: settingsColors.cardBg,
+                border: `1px solid ${settingsColors.border}`,
+                color: settingsColors.muted,
+              }}
+            >
+              Security settings are not available yet.
+            </div>
+
+            <div
               className="rounded-xl p-5 mb-4"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
             >
-              <h3 className="text-sm font-semibold mb-4" style={{ color: settingsColors.title }}>
-                Change Password
+              <h3 className="text-sm font-semibold mb-2" style={{ color: settingsColors.title }}>
+                Password
               </h3>
-
-              {["Current Password", "New Password", "Confirm Password"].map((f) => (
-                <div key={f} className="mb-3">
-              <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
-                    {f}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPass ? "text" : "password"}
-                      placeholder="********"
-                      className="w-full px-3 py-2 pr-9 rounded-lg text-sm outline-none"
-                      style={{
-                        background: settingsColors.panelBg,
-                        border: `1px solid ${settingsColors.panelBorder}`,
-                        color: settingsColors.text,
-                        caretColor: accentColor,
-                      }}
-                    />
-              <button
-                      onClick={() => setShowPass(!showPass)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                    >
-                      {showPass ? <EyeOff size={13} style={{ color: settingsColors.muted }} /> : <Eye size={13} style={{ color: settingsColors.muted }} />}
-
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
-              >
-                <Lock size={13} /> Update Password
-              </button>
+              <div className="text-xs" style={{ color: settingsColors.muted }}>
+                Password updates are not available yet.
+              </div>
             </div>
 
             <div
@@ -478,12 +456,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <Toggle
-                  on={false}
-                  accentColor={accentColor}
-                  offBg={settingsColors.panelBg}
-                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                />
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.muted,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
+                  Coming soon
+                </div>
               </SettingRow>
               <SettingRow
                 label="Login Notifications"
@@ -492,12 +474,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <Toggle
-                  on={true}
-                  accentColor={accentColor}
-                  offBg={settingsColors.panelBg}
-                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                />
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.muted,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
+                  Coming soon
+                </div>
               </SettingRow>
               <SettingRow
                 label="Session Timeout"
@@ -506,12 +492,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <Toggle
-                  on={true}
-                  accentColor={accentColor}
-                  offBg={settingsColors.panelBg}
-                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                />
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.muted,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
+                  Coming soon
+                </div>
               </SettingRow>
               <SettingRow
                 label="End-to-End Encryption"
@@ -520,12 +510,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <Toggle
-                  on={false}
-                  accentColor={accentColor}
-                  offBg={settingsColors.panelBg}
-                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                />
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.muted,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
+                  Coming soon
+                </div>
               </SettingRow>
             </div>
           </div>
@@ -543,48 +537,25 @@ export function Settings() {
 
 
             <div
+              className="rounded-xl px-5 py-3 mb-4 text-xs"
+              style={{
+                background: settingsColors.cardBg,
+                border: `1px solid ${settingsColors.border}`,
+                color: settingsColors.muted,
+              }}
+            >
+              Storage settings are not available yet.
+            </div>
+
+            <div
               className="rounded-xl p-5 mb-4"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
             >
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium" style={{ color: settingsColors.title }}>
-                  Storage Usage
-                </span>
-                <span className="text-sm font-bold" style={{ color: accentColor }}>
-                  68% used
-                </span>
+              <div className="text-sm font-medium" style={{ color: settingsColors.title }}>
+                Storage usage
               </div>
-              <div
-                className="h-3 rounded-full overflow-hidden mb-3"
-                style={{ background: settingsColors.panelBg }}
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: "68%", background: `linear-gradient(90deg, ${accentColor}, #22d3ee)` }}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Photos", pct: 38, color: "#3b82f6" },
-                  { label: "Videos", pct: 22, color: "#22d3ee" },
-                  { label: "Documents", pct: 18, color: "#a78bfa" },
-                ].map((s) => (
-                  <div
-                    key={s.label}
-                    className="p-3 rounded-lg"
-                    style={{
-                      background: settingsColors.panelBg,
-                      border: `1px solid ${settingsColors.panelBorder}`,
-                    }}
-                  >
-                    <div className="text-xs font-semibold mb-0.5" style={{ color: s.color }}>
-                      {s.pct}%
-                    </div>
-                    <div className="text-xs" style={{ color: settingsColors.muted }}>
-                      {s.label}
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-2 text-xs" style={{ color: settingsColors.muted }}>
+                Live storage usage is available from the Dashboard.
               </div>
             </div>
 
@@ -611,16 +582,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <button
+                <div
                   className="text-xs px-3 py-1.5 rounded-lg"
                   style={{
                     background: settingsColors.panelBg,
-                    color: settingsColors.text,
+                    color: settingsColors.muted,
                     border: `1px solid ${settingsColors.panelBorder}`,
                   }}
                 >
-                  Run Scan
-                </button>
+                  Storage scan is not available yet.
+                </div>
               </SettingRow>
               <SettingRow
                 label="Download All Data"
@@ -629,16 +600,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <button
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
                   style={{
                     background: settingsColors.panelBg,
-                    color: settingsColors.text,
+                    color: settingsColors.muted,
                     border: `1px solid ${settingsColors.panelBorder}`,
                   }}
                 >
-                  <Download size={12} /> Export
-                </button>
+                  Storage export is not available yet.
+                </div>
               </SettingRow>
             </div>
           </div>
@@ -724,29 +695,6 @@ export function Settings() {
           </div>
         )}
 
-        {!['profile', 'notifications', 'security', 'storage', 'appearance'].includes(activeSection as "profile" | "notifications" | "security" | "storage" | "appearance") && (
-          <div className="flex flex-col items-center justify-center h-full" style={{ color: settingsColors.muted }}>
-
-            <div
-              className="w-16 h-16 rounded-xl flex items-center justify-center mb-3"
-              style={{
-                background: settingsColors.cardBg,
-                border: `1px solid ${settingsColors.border}`,
-              }}
-            >
-              {sections.find((s) => s.id === activeSection) &&
-                (() => {
-                  const S = sections.find((s) => s.id === activeSection)!;
-                  const SIcon = S.icon;
-                  return <SIcon size={24} style={{ color: settingsColors.emptyIcon }} />;
-                })()}
-            </div>
-            <div className="text-sm font-medium" style={{ color: settingsColors.muted }}>
-              {sections.find((s) => s.id === activeSection)?.label} Settings
-            </div>
-            <div className="text-xs mt-1" style={{ color: settingsColors.muted2 }}>Coming soon</div>
-          </div>
-        )}
       </div>
     </div>
   );
