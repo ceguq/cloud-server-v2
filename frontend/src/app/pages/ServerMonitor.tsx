@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getServerMonitor,
@@ -141,6 +141,7 @@ export function ServerMonitor() {
   const [monitorData, setMonitorData] = useState<ServerMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestInFlightRef = useRef(false);
   const [cpuHistory, setCpuHistory] = useState<Array<{ time: string; usage: number; load_1m: number }>>([]);
   const [memoryHistory, setMemoryHistory] = useState<Array<{ time: string; used: number; free: number }>>([]);
   const [accentColor, setAccentColor] = useState(() => safeReadAccentColor());
@@ -253,7 +254,11 @@ export function ServerMonitor() {
   }, [accentColor, isDark]);
 
   const loadServerMonitor = async (options?: { silent?: boolean }) => {
+    if (requestInFlightRef.current) return;
+
     try {
+      requestInFlightRef.current = true;
+
       if (options?.silent) {
         setRefreshing(true);
       } else {
@@ -296,6 +301,7 @@ export function ServerMonitor() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      requestInFlightRef.current = false;
     }
   };
 
@@ -369,6 +375,7 @@ export function ServerMonitor() {
         </div>
         <button
           onClick={handleRefresh}
+          disabled={loading || refreshing}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
           style={{
             background: colors.panelSoftBg,
@@ -376,7 +383,8 @@ export function ServerMonitor() {
             color: colors.text,
           }}
         >
-          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} /> Refresh
+          <RefreshCw size={13} className={loading || refreshing ? "animate-spin" : ""} />
+          {loading || refreshing ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 
