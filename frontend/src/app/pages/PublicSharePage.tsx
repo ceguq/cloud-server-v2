@@ -61,16 +61,24 @@ export function PublicSharePage() {
   const [downloadLoading, setDownloadLoading] = useState(false);
 
   // ── initial load ─────────────────────────────────────────────────────────
-  async function loadShare(passwordValue?: string) {
+  async function loadShare(passwordValue?: string, isCancelled?: () => boolean) {
+    const cancelled = () => isCancelled?.() ?? false;
+
+    if (cancelled()) return;
     setLoading(true);
+    if (cancelled()) return;
     setErrorMessage("");
+    if (cancelled()) return;
     setPasswordError("");
+    if (cancelled()) return;
     setShare(null);
 
     try {
       if (!token) {
-        setErrorMessage("Share link tidak ditemukan.");
-        setLoading(false);
+        if (!cancelled()) {
+          setErrorMessage("Share link tidak ditemukan.");
+          setLoading(false);
+        }
         return;
       }
 
@@ -85,10 +93,14 @@ export function PublicSharePage() {
       const data: ShareData = payload?.data ?? payload;
       const requiresPassword = Boolean(data?.requires_password);
 
+      if (cancelled()) return;
       setPasswordRequired(requiresPassword);
-      setPassword( passwordValue ?? "");
+      if (cancelled()) return;
+      setPassword(passwordValue ?? "");
+      if (cancelled()) return;
       setShare(data);
     } catch (e: any) {
+      if (cancelled()) return;
       const status = getErrorStatus(e);
       const requiresPassword = Boolean(e?.response?.data?.requires_password);
 
@@ -106,6 +118,7 @@ export function PublicSharePage() {
         setErrorMessage(getErrorMessage(e, "Gagal memuat share link."));
       }
     } finally {
+      if (cancelled()) return;
       setLoading(false);
     }
   }
@@ -117,8 +130,7 @@ export function PublicSharePage() {
       setPasswordRequired(false);
       setPassword("");
       setPasswordError("");
-      await loadShare();
-      if (cancelled) return;
+      await loadShare(undefined, () => cancelled);
     }
 
     load();
