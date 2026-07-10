@@ -839,6 +839,16 @@ export function GDrive() {
     [gdriveAccounts],
   );
 
+  const connectedAccounts = useMemo(
+    () => gdriveAccounts.filter((account) => account.is_connected),
+    [gdriveAccounts],
+  );
+
+  const disconnectedAccounts = useMemo(
+    () => gdriveAccounts.filter((account) => !account.is_connected),
+    [gdriveAccounts],
+  );
+
   const [didInitialAutoSwitch, setDidInitialAutoSwitch] = useState(false);
 
   useEffect(() => {
@@ -863,8 +873,16 @@ export function GDrive() {
         const list = res?.data ?? [];
         setGdriveAccounts(list);
         setActiveAccountId((prev) => {
-          if (prev) return prev;
-          return normalizeAccountId(list.find((account) => account.is_connected)?.id);
+          const connectedIds = list
+            .filter((account) => account.is_connected)
+            .map((account) => normalizeAccountId(account.id))
+            .filter(Boolean);
+
+          if (prev && connectedIds.includes(normalizeAccountId(prev))) {
+            return prev;
+          }
+
+          return connectedIds[0] ?? "";
         });
       } catch {
         if (cancelled) return;
@@ -1386,7 +1404,7 @@ export function GDrive() {
 
   const renderAccountCard = (account: GDriveAccount, index: number) => {
     const accountId = normalizeAccountId(account.id);
-    const isActive = accountId === activeAccountId;
+    const isActive = account.is_connected && accountId === activeAccountId;
     const avatarColor = getAvatarColor(index, isActive, accentColor);
     const statusColor = account.is_connected ? "#22c55e" : "#ef4444";
     const quota = getQuotaDisplay(account);
@@ -3578,8 +3596,24 @@ const renderFileActions = (file: GDriveFileUI) => {
             />
           ) : (
             <div className="space-y-2">
-              {gdriveAccounts.map((account, index) => renderAccountCard(account, index))}
+            <div className="space-y-2">
+              {connectedAccounts.map((account, index) => renderAccountCard(account, index))}
             </div>
+
+            {disconnectedAccounts.length > 0 ? (
+              <div className="space-y-2 pt-3">
+                <div className="text-[11px] font-semibold" style={{ color: colors.muted }}>
+                  Disconnected accounts
+                </div>
+                <div className="space-y-2">
+                  {disconnectedAccounts.map((account, index) => renderAccountCard(account, index))}
+                </div>
+                <div className="text-[10px]" style={{ color: colors.muted2 }}>
+                  Revoked accounts cannot be used.
+                </div>
+              </div>
+            ) : null}
+          </div>
           )}
         </aside>
 
