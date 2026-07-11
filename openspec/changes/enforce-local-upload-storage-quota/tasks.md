@@ -8,6 +8,7 @@
 ## Verification
 - [x] Verify syntax manually.
 - [x] Verify route behavior manually.
+- [x] Add focused feature tests for quota enforcement.
 
 ## Scope guardrails
 - [x] Keep scope backend-only.
