@@ -140,6 +140,20 @@ function isAccountUnavailableError(error: unknown): boolean {
   );
 }
 
+function getErrorResponseCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+
+  const errorCode = (error as { response?: { data?: { error_code?: unknown } } }).response?.data?.error_code;
+  return typeof errorCode === "string" && errorCode.trim().length > 0 ? errorCode : undefined;
+}
+
+function isReconnectRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const reconnectRequired = (error as { response?: { data?: { reconnect_required?: unknown } } }).response?.data?.reconnect_required;
+  return reconnectRequired === true || getErrorResponseCode(error) === "gdrive_insufficient_scope";
+}
+
 function safeReadAppearanceTheme(): AppearanceTheme {
   if (typeof window === "undefined") return "dark";
   try {
@@ -920,6 +934,10 @@ export function GDrive() {
     }
   };
 
+  const handleReconnectAccount = async () => {
+    await handleConnectAccount();
+  };
+
   const handleDisconnectAccount = async (accountId: string) => {
     if (!accountId || disconnectingAccountId) return;
 
@@ -1048,6 +1066,8 @@ export function GDrive() {
           setFilesErrorMessage(GOOGLE_DRIVE_ACCOUNT_NOT_FOUND_MESSAGE);
         } else if (isAccountUnavailableError(error)) {
           setFilesErrorMessage(ACCOUNT_UNAVAILABLE_FILES_ERROR_MESSAGE);
+        } else if (isReconnectRequiredError(error)) {
+          setFilesErrorMessage("Google Drive authorization needs to be updated.");
         } else {
           setFilesErrorMessage(GENERIC_FILES_ERROR_MESSAGE);
         }
@@ -1547,22 +1567,40 @@ export function GDrive() {
               Browsing files
             </div>
 
-            <button
-              type="button"
-              disabled={disconnectingAccountId === account.id}
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleDisconnectAccount(account.id);
-              }}
-              className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
-              style={{
-                color: "#ef4444",
-                background: "transparent",
-                opacity: disconnectingAccountId === account.id ? 0.55 : 1,
-              }}
-            >
-              {disconnectingAccountId === account.id ? "Disconnecting" : "Disconnect"}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={connectingAccount}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleReconnectAccount();
+                }}
+                className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+                style={{
+                  color: accentColor,
+                  background: "transparent",
+                  opacity: connectingAccount ? 0.55 : 1,
+                }}
+              >
+                {connectingAccount ? "Connecting" : "Reconnect"}
+              </button>
+              <button
+                type="button"
+                disabled={disconnectingAccountId === account.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleDisconnectAccount(account.id);
+                }}
+                className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+                style={{
+                  color: "#ef4444",
+                  background: "transparent",
+                  opacity: disconnectingAccountId === account.id ? 0.55 : 1,
+                }}
+              >
+                {disconnectingAccountId === account.id ? "Disconnecting" : "Disconnect"}
+              </button>
+            </div>
           </div>
         ) : null}
       </div>

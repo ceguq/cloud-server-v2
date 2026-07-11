@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\GDriveAccount;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -12,6 +13,7 @@ use Throwable;
 class GoogleDriveService
 
 {
+    private const INSUFFICIENT_SCOPE_MESSAGE = 'Google Drive authorization needs to be updated.';
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
     private const DRIVE_FILE_MEDIA_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 
@@ -253,6 +255,50 @@ class GoogleDriveService
         return $this->updateTrashState($account, $fileId, false);
     }
 
+    private function isInsufficientScopeResponse(Response $response): bool
+    {
+        $status = (int) $response->status();
+        if ($status !== 401 && $status !== 403) {
+            return false;
+        }
+
+        try {
+            $payload = $response->json();
+        } catch (Throwable) {
+            $payload = null;
+        }
+
+        return $this->containsInsufficientScopeSignal($payload);
+    }
+
+    private function containsInsufficientScopeSignal(mixed $value): bool
+    {
+        if (is_string($value)) {
+            $normalized = strtolower($value);
+
+            return str_contains($normalized, 'insufficient_scope')
+                || str_contains($normalized, 'insufficientpermissions')
+                || str_contains($normalized, 'permission_denied')
+                || str_contains($normalized, 'autherror')
+                || str_contains($normalized, 'accessnotconfigured');
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if ($this->containsInsufficientScopeSignal($item)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function throwInsufficientScopeException(): never
+    {
+        throw new RuntimeException(self::INSUFFICIENT_SCOPE_MESSAGE, 403);
+    }
+
     public function deletePermanently(GDriveAccount $account, string $fileId): array
     {
         $account = $this->ensureFreshAccessToken($account);
@@ -268,6 +314,10 @@ class GoogleDriveService
                 'id' => $fileId,
                 'deleted' => true,
             ];
+        }
+
+        if ($this->isInsufficientScopeResponse($response)) {
+            $this->throwInsufficientScopeException();
         }
 
         $status = (int) $response->status();
@@ -288,13 +338,20 @@ class GoogleDriveService
             if (count($anyonePermissions) === 0) {
                 $encodedFileId = rawurlencode($fileId);
 
-                Http::withToken($account->access_token)
+                $response = Http::withToken($account->access_token)
                     ->post(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions?sendNotificationEmail=false&fields=id', [
                         'type' => 'anyone',
                         'role' => 'reader',
                         'allowFileDiscovery' => false,
-                    ])
-                    ->throw();
+                    ]);
+
+                if ($response->failed()) {
+                    if ($this->isInsufficientScopeResponse($response)) {
+                        $this->throwInsufficientScopeException();
+                    }
+
+                    $response->throw();
+                }
             }
         } elseif ($visibility === 'private') {
             foreach ($this->listAnyonePermissions($account, $fileId) as $permission) {
@@ -306,9 +363,16 @@ class GoogleDriveService
                 $encodedFileId = rawurlencode($fileId);
                 $encodedPermissionId = rawurlencode($permissionId);
 
-                Http::withToken($account->access_token)
-                    ->delete(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions/' . $encodedPermissionId)
-                    ->throw();
+                $response = Http::withToken($account->access_token)
+                    ->delete(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions/' . $encodedPermissionId);
+
+                if ($response->failed()) {
+                    if ($this->isInsufficientScopeResponse($response)) {
+                        $this->throwInsufficientScopeException();
+                    }
+
+                    $response->throw();
+                }
             }
         } else {
             throw new RuntimeException('Invalid Google Drive visibility.', 422);
@@ -324,12 +388,19 @@ class GoogleDriveService
         $response = Http::withToken($account->access_token)
             ->get(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId . '/permissions', [
                 'fields' => 'permissions(id,type,role,allowFileDiscovery)',
-            ])
-            ->throw()
-            ->json();
+            ]);
 
-        $permissions = is_array($response) && isset($response['permissions']) && is_array($response['permissions'])
-            ? $response['permissions']
+        if ($response->failed()) {
+            if ($this->isInsufficientScopeResponse($response)) {
+                $this->throwInsufficientScopeException();
+            }
+
+            $response->throw();
+        }
+
+        $payload = $response->json();
+        $permissions = is_array($payload) && isset($payload['permissions']) && is_array($payload['permissions'])
+            ? $payload['permissions']
             : [];
 
         return array_values(array_filter($permissions, function ($permission) {
@@ -344,11 +415,19 @@ class GoogleDriveService
         $response = Http::withToken($account->access_token)
             ->get(self::DRIVE_FILES_ENDPOINT . '/' . $encodedFileId, [
                 'fields' => 'id,name,mimeType,iconLink,webViewLink,webContentLink,size,createdTime,modifiedTime,trashed,owners(displayName,emailAddress,photoLink),shared,starred',
-            ])
-            ->throw()
-            ->json();
+            ]);
 
-        return is_array($response) ? $response : [];
+        if ($response->failed()) {
+            if ($this->isInsufficientScopeResponse($response)) {
+                $this->throwInsufficientScopeException();
+            }
+
+            $response->throw();
+        }
+
+        $payload = $response->json();
+
+        return is_array($payload) ? $payload : [];
     }
 
     private function updateTrashState(GDriveAccount $account, string $fileId, bool $trashed): array
@@ -361,11 +440,19 @@ class GoogleDriveService
                 'trashed' => $trashed,
             ], [
                 'fields' => self::DRIVE_FILE_UPDATE_FIELDS,
-            ])
-            ->throw()
-            ->json();
+            ]);
 
-        if (! is_array($response)) {
+        if ($response->failed()) {
+            if ($this->isInsufficientScopeResponse($response)) {
+                $this->throwInsufficientScopeException();
+            }
+
+            $response->throw();
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
             return [
                 'id' => $fileId,
                 'trashed' => $trashed,
@@ -373,11 +460,11 @@ class GoogleDriveService
         }
 
         return [
-            'id' => $response['id'] ?? $fileId,
-            'name' => $response['name'] ?? null,
-            'trashed' => $response['trashed'] ?? $trashed,
-            'mimeType' => $response['mimeType'] ?? null,
-            'modifiedTime' => $response['modifiedTime'] ?? null,
+            'id' => $payload['id'] ?? $fileId,
+            'name' => $payload['name'] ?? null,
+            'trashed' => $payload['trashed'] ?? $trashed,
+            'mimeType' => $payload['mimeType'] ?? null,
+            'modifiedTime' => $payload['modifiedTime'] ?? null,
         ];
     }
 
@@ -390,11 +477,19 @@ class GoogleDriveService
                 'name' => $newName,
             ], [
                 'fields' => self::DRIVE_FILE_UPDATE_FIELDS,
-            ])
-            ->throw()
-            ->json();
+            ]);
 
-        if (! is_array($response)) {
+        if ($response->failed()) {
+            if ($this->isInsufficientScopeResponse($response)) {
+                $this->throwInsufficientScopeException();
+            }
+
+            $response->throw();
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
             return [
                 'id' => $fileId,
                 'name' => $newName,
@@ -402,11 +497,11 @@ class GoogleDriveService
         }
 
         return [
-            'id' => $response['id'] ?? $fileId,
-            'name' => $response['name'] ?? $newName,
-            'trashed' => $response['trashed'] ?? false,
-            'mimeType' => $response['mimeType'] ?? null,
-            'modifiedTime' => $response['modifiedTime'] ?? null,
+            'id' => $payload['id'] ?? $fileId,
+            'name' => $payload['name'] ?? $newName,
+            'trashed' => $payload['trashed'] ?? false,
+            'mimeType' => $payload['mimeType'] ?? null,
+            'modifiedTime' => $payload['modifiedTime'] ?? null,
         ];
     }
 
@@ -542,6 +637,10 @@ class GoogleDriveService
         $status = $httpResponse->status();
 
         if ($httpResponse->failed()) {
+            if ($this->isInsufficientScopeResponse($httpResponse)) {
+                $this->throwInsufficientScopeException();
+            }
+
             $googleMessage = $httpResponse->json('error.message')
                 ?? $httpResponse->json('error_description')
                 ?? 'Google Drive upload request failed.';
@@ -576,15 +675,23 @@ class GoogleDriveService
         $url = self::DRIVE_FILES_ENDPOINT . '?fields=' . urlencode($fields);
 
         $response = Http::withToken($account->access_token)
-            ->post($url, $metadata)
-            ->throw()
-            ->json();
+            ->post($url, $metadata);
 
-        if (! is_array($response)) {
+        if ($response->failed()) {
+            if ($this->isInsufficientScopeResponse($response)) {
+                $this->throwInsufficientScopeException();
+            }
+
+            $response->throw();
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
             throw new RuntimeException('Google Drive create folder failed.', 500);
         }
 
-        return $response;
+        return $payload;
     }
 }
 

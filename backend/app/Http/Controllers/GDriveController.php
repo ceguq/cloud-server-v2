@@ -66,6 +66,20 @@ class GDriveController extends Controller
         ], 422);
     }
 
+    private function insufficientScopeResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Google Drive authorization needs to be updated.',
+            'error_code' => 'gdrive_insufficient_scope',
+            'reconnect_required' => true,
+        ], 403);
+    }
+
+    private function isInsufficientScopeException(Throwable $e): bool
+    {
+        return (int) $e->getCode() === 403
+            && str_contains($e->getMessage(), 'Google Drive authorization needs to be updated.');
+    }
 
     public function index(Request $request, GoogleDriveService $googleDriveService): JsonResponse
     {
@@ -734,6 +748,10 @@ class GDriveController extends Controller
                 'data' => $data,
             ]);
         } catch (Throwable $e) {
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
+
             Log::warning('Google Drive trash failed', [
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
@@ -769,6 +787,10 @@ class GDriveController extends Controller
                 'data' => $data,
             ]);
         } catch (Throwable $e) {
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
+
             Log::warning('Google Drive restore failed', [
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
@@ -808,6 +830,10 @@ class GDriveController extends Controller
             ]);
         } catch (Throwable $e) {
             $statusCode = (int) $e->getCode();
+
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
 
             if (in_array($statusCode, [401, 403], true)) {
                 return response()->json([
@@ -884,6 +910,10 @@ class GDriveController extends Controller
         } catch (Throwable $e) {
             $statusCode = (int) $e->getCode();
 
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
+
             if (in_array($statusCode, [401, 403], true)) {
                 return response()->json([
                     'success' => false,
@@ -943,6 +973,10 @@ class GDriveController extends Controller
                 ),
             ]);
         } catch (Throwable $e) {
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
+
             $statusCode = 500;
             if ($e instanceof \Illuminate\Http\Client\HttpClientException) {
                 $response = $e->response;
@@ -1011,6 +1045,10 @@ class GDriveController extends Controller
         } catch (Throwable $e) {
             $statusCode = (int) $e->getCode();
 
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
+
             if ($statusCode === 403) {
                 return response()->json([
                     'success' => false,
@@ -1055,6 +1093,10 @@ class GDriveController extends Controller
             ]);
         } catch (Throwable $e) {
             $statusCode = (int) $e->getCode();
+
+            if ($this->isInsufficientScopeException($e)) {
+                return $this->insufficientScopeResponse();
+            }
 
             if (in_array($statusCode, [401, 403], true)) {
                 return response()->json([
