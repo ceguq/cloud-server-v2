@@ -35,6 +35,7 @@ Route::post('/share/{token}/download', [ShareController::class, 'download']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::patch('/profile', [AuthController::class, 'updateProfile']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
