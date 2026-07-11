@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\GDriveAccount;
+use GuzzleHttp\Psr7\AppendStream;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -604,58 +606,60 @@ class GoogleDriveService
 
         $boundary = 'nimbus_' . bin2hex(random_bytes(16));
 
-        $eol = "\r\n";
-
-        $fileBytes = file_get_contents($file->getRealPath());
-        if (! is_string($fileBytes)) {
-            throw new RuntimeException('Failed to read uploaded file bytes.');
+        $fileHandle = fopen($file->getRealPath(), 'rb');
+        if ($fileHandle === false) {
+            throw new RuntimeException('Failed to open uploaded file stream.');
         }
 
-        $body = '';
-        $body .= '--' . $boundary . $eol;
-        $body .= 'Content-Type: application/json; charset=UTF-8' . $eol;
-        $body .= $eol;
-        $body .= $metadataJson . $eol;
+        try {
+            $body = new AppendStream();
+            $body->addStream(Utils::streamFor('--' . $boundary . "\r\n"));
+            $body->addStream(Utils::streamFor('Content-Type: application/json; charset=UTF-8' . "\r\n"));
+            $body->addStream(Utils::streamFor("\r\n"));
+            $body->addStream(Utils::streamFor($metadataJson . "\r\n"));
+            $body->addStream(Utils::streamFor('--' . $boundary . "\r\n"));
+            $body->addStream(Utils::streamFor('Content-Type: ' . $metadata['mimeType'] . "\r\n"));
+            $body->addStream(Utils::streamFor("\r\n"));
+            $body->addStream(Utils::streamFor($fileHandle));
+            $body->addStream(Utils::streamFor("\r\n"));
+            $body->addStream(Utils::streamFor('--' . $boundary . '--' . "\r\n"));
 
-        $body .= '--' . $boundary . $eol;
-        $body .= 'Content-Type: ' . $metadata['mimeType'] . $eol;
-        $body .= $eol;
+            $response = null;
+            $httpResponse = Http::withToken($account->access_token)
+                ->withHeaders([
+                    'Content-Type' => 'multipart/related; boundary=' . $boundary,
+                    'Accept' => 'application/json',
+                ])
+                ->withBody($body, 'multipart/related; boundary=' . $boundary)
+                ->post($url);
 
-        $body .= $fileBytes . $eol;
+            $status = $httpResponse->status();
 
-        $body .= '--' . $boundary . '--' . $eol;
+            if ($httpResponse->failed()) {
+                if ($this->isInsufficientScopeResponse($httpResponse)) {
+                    $this->throwInsufficientScopeException();
+                }
 
-        $response = null;
-        $httpResponse = Http::withToken($account->access_token)
-            ->withHeaders([
-                'Content-Type' => 'multipart/related; boundary=' . $boundary,
-                'Accept' => 'application/json',
-            ])
-            ->withBody($body, 'multipart/related; boundary=' . $boundary)
-            ->post($url);
+                $googleMessage = $httpResponse->json('error.message')
+                    ?? $httpResponse->json('error_description')
+                    ?? 'Google Drive upload request failed.';
 
-        $status = $httpResponse->status();
-
-        if ($httpResponse->failed()) {
-            if ($this->isInsufficientScopeResponse($httpResponse)) {
-                $this->throwInsufficientScopeException();
+                // Avoid leaking secrets/tokens.
+                throw new RuntimeException('Google Drive upload failed: ' . $googleMessage, $status ?: 500);
             }
 
-            $googleMessage = $httpResponse->json('error.message')
-                ?? $httpResponse->json('error_description')
-                ?? 'Google Drive upload request failed.';
+            $response = $httpResponse->json();
 
-            // Avoid leaking secrets/tokens.
-            throw new RuntimeException('Google Drive upload failed: ' . $googleMessage, $status ?: 500);
+            if (! is_array($response)) {
+                throw new RuntimeException('Google Drive upload failed.', 500);
+            }
+
+            return $response;
+        } finally {
+            if (is_resource($fileHandle)) {
+                fclose($fileHandle);
+            }
         }
-
-        $response = $httpResponse->json();
-
-        if (! is_array($response)) {
-            throw new RuntimeException('Google Drive upload failed.', 500);
-        }
-
-        return $response;
     }
 
     public function createFolder(GDriveAccount $account, string $name, ?string $parentId = null): array
