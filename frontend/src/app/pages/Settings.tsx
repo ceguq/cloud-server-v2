@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { authService } from "../../services/authService";
 import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
 import { SettingRow } from "./settings/components/SettingRow";
@@ -81,29 +81,43 @@ function Toggle({
   );
 }
 
-function EditableNamePanel({ accentColor, panelBg, panelBorder }: { accentColor: string; panelBg: string; panelBorder: string }) {
-  const [name, setName] = useState<string>("");
-  const [originalName, setOriginalName] = useState<string>("");
+function EditableNamePanel({
+  initialName,
+  accentColor,
+  panelBg,
+  panelBorder,
+  onSaved,
+}: {
+  initialName: string;
+  accentColor: string;
+  panelBg: string;
+  panelBorder: string;
+  onSaved: (updatedUser: { id?: string | number; name: string; email?: string; role?: string }, message?: string) => void;
+}) {
+  const [name, setName] = useState<string>(initialName ?? "");
+  const [originalName, setOriginalName] = useState<string>(initialName ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem('nimbus_user');
-      const parsed = raw ? JSON.parse(raw) : null;
-      const current = parsed?.name ?? '';
-      setName(current);
-      setOriginalName(current);
-    } catch {
-      setName('');
-      setOriginalName('');
-    }
-  }, []);
+    mountedRef.current = true;
+    setName(initialName ?? "");
+    setOriginalName(initialName ?? "");
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [initialName]);
 
   const canSave = () => {
-    return !saving && name.trim().length >= 2 && name.trim() !== originalName;
+    const trimmed = name.trim();
+    return (
+      !saving &&
+      trimmed.length >= 2 &&
+      trimmed.length <= 255 &&
+      trimmed !== originalName.trim()
+    );
   };
 
   const handleSave = async () => {
@@ -115,26 +129,26 @@ function EditableNamePanel({ accentColor, panelBg, panelBorder }: { accentColor:
     try {
       const data = await authService.updateProfile(name.trim());
       const updatedUser = data.user;
-      try {
-        window.localStorage.setItem('nimbus_user', JSON.stringify(updatedUser));
-      } catch {
-        // ignore
-      }
-      try {
-        window.dispatchEvent(new CustomEvent('nimbus-user-change'));
-      } catch {}
+      const successMsg = data?.message ?? "Profile updated successfully.";
+      if (!mountedRef.current) return;
 
       setOriginalName(updatedUser.name);
-      setSuccess('Profile updated');
+      setSuccess(successMsg);
+
+      try {
+        onSaved(updatedUser, successMsg);
+      } catch {
+        // ignore callback errors
+      }
     } catch (err: any) {
       if (err?.response?.status === 422) {
-        const msg = err?.response?.data?.errors?.name?.[0] || 'Invalid name';
+        const msg = err?.response?.data?.errors?.name?.[0] || "Invalid name";
         setError(msg);
       } else {
-        setError('Failed to update profile');
+        setError("Failed to update profile");
       }
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
       setTimeout(() => setSuccess(null), 3000);
     }
   };
@@ -171,7 +185,7 @@ function EditableNamePanel({ accentColor, panelBg, panelBorder }: { accentColor:
 export function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
 
-  const [user, setUser] = useState<{ id?: number; name?: string; email?: string; role?: string } | null>(() => {
+  const [user, setUser] = useState<{ id?: string | number; name?: string; email?: string; role?: string } | null>(() => {
     if (typeof window === "undefined") return null;
     try {
       const raw = window.localStorage.getItem("nimbus_user");
@@ -477,7 +491,28 @@ export function Settings() {
                 <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
                   Edit Display Name
                 </label>
-                <EditableNamePanel accentColor={accentColor} panelBg={settingsColors.panelBg} panelBorder={settingsColors.panelBorder} />
+                <EditableNamePanel
+                  initialName={user?.name ?? ''}
+                  accentColor={accentColor}
+                  panelBg={settingsColors.panelBg}
+                  panelBorder={settingsColors.panelBorder}
+                  onSaved={(updatedUser, message) => {
+                    const normalized = {
+                      id: updatedUser.id,
+                      name: updatedUser.name,
+                      email: updatedUser.email,
+                      role: updatedUser.role,
+                    };
+                    try {
+                      window.localStorage.setItem('nimbus_user', JSON.stringify(normalized));
+                    } catch {}
+                    try {
+                      window.dispatchEvent(new CustomEvent('nimbus-user-change'));
+                    } catch {}
+                    setUser(normalized);
+                    setMeLoadWarning(false);
+                  }}
+                />
               </div>
             </div>
           </div>

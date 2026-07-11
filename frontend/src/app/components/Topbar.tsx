@@ -78,7 +78,13 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
           return;
         }
         const parsed = JSON.parse(raw);
-        setUserName(parsed?.name ?? null);
+        const candidate = parsed?.name;
+        if (typeof candidate === 'string') {
+          const trimmed = candidate.trim();
+          setUserName(trimmed.length > 0 ? trimmed : null);
+        } else {
+          setUserName(null);
+        }
       } catch {
         setUserName(null);
       }
