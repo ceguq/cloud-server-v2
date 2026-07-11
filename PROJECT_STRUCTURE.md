@@ -129,7 +129,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | --- | --- | --- | --- |
 | Health | `GET /ping` | Aktif | JSON ping API |
 | Auth public | `POST /auth/login` | Aktif | Membuat Sanctum token, log `auth.login` |
-| Auth protected | `GET /auth/me`, `POST /auth/logout` | Aktif | Logout menghapus current token |
+| Auth protected | `GET /auth/me`, `POST /auth/logout`, `PATCH /profile` | Aktif | Logout menghapus current token; `PATCH /profile` updates the authenticated user's `name` only (trimmed, validated server-side) |
 | Public share | `GET /share/{token}`, `GET /share/{token}/download`, `POST /share/{token}/download` | Aktif | Tanpa auth, cache-control no-store |
 | Admin users | `GET /admin/users` | Aktif | Admin middleware |
 | Activity logs | `GET /activity-logs`, `GET /admin/activity-logs` | Aktif | User scope dan admin global |
@@ -149,6 +149,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | File | Fungsi | Status audit |
 | --- | --- | --- |
 | `AuthController.php` | Login, Sanctum token, me, logout, login activity log, automatic device create/update on successful login | Aktif; device tracking best-effort dan tidak memblokir login |
+| ProfileUpdateTest | Backend feature tests for profile update | `ProfileUpdateTest`: 10 tests, 32 assertions |
 | `FileController.php` | Duplicate finder, list/search, upload, cancel upload, download, preview, rename, trash, move, recent files | Aktif; upload tetap memakai validasi 1 GB per file, menambahkan pre-write user-scoped quota enforcement, dan mengembalikan 422 validation-style saat over quota |
 | `FolderController.php` | List/search, create, rename/update, recursive trash, move with descendant guard | Aktif, tapi global folder |
 | `ShareController.php` | Share link list/create/delete/public show/download | Aktif, password gap |
@@ -224,7 +225,7 @@ Update terbaru memperluas pola modular per page di `frontend/src/app/pages/`. Fi
 | Activity Log | `pages/ActivityLogPage.tsx` | Admin aktif/partial | Admin log global dengan pagination/filter, bulk hide localStorage only |
 | Trash | `app/pages/Trash.tsx` + `app/pages/trash/` | Aktif | Local trash files/folders, restore dan force delete |
 | Server Monitor | `app/pages/ServerMonitor.tsx` + `app/pages/server-monitor/` | Aktif | Metrics real dari backend, manual Refresh guarded against duplicate requests, Retry tetap aktif; chart historical belum ada |
-| Settings | `app/pages/Settings.tsx` + `app/pages/settings/` | Partial/local-only | Theme/accent disimpan localStorage; profile/security/storage/API settings mostly hardcoded/local UI |
+| Settings | `app/pages/Settings.tsx` + `app/pages/settings/` | Partial | Profile display-name editable and server-persisted; email read-only; Theme/accent disimpan localStorage; other settings (notifications, security, storage, API keys) remain mostly placeholder/local-only |
 | Admin Users | `app/pages/AdminUsers.tsx` + `app/pages/admin-users/` | Aktif | Read-only admin user list aktif; bug kolom Name sudah diperbaiki |
 | Login | `app/pages/LoginPage.tsx` + `app/pages/login/` | Aktif | Login email/password |
 | Public Share | `app/pages/PublicSharePage.tsx` + `app/pages/public-share/` | Aktif | Fetch public share metadata dan download |
@@ -236,7 +237,7 @@ Catatan refactor My Files: `frontend/src/app/pages/MyFiles.tsx` telah menyelesai
 | Service | Fungsi | Catatan |
 | --- | --- | --- |
 | `api.ts` | Axios instance + bearer interceptor | Tidak ada fallback global bila `VITE_API_BASE_URL` kosong |
-| `authService.ts` | login/logout/me | Aktif |
+| `authService.ts` | login/logout/me/updateProfile() | Aktif (includes `updateProfile()` used by Settings to save display name) |
 | `authServices.ts` | Duplikat `authService.ts` | Perlu dibersihkan |
 | `fileService.ts` | files CRUD, upload, download, preview helpers | Aktif |
 | `folderService.ts` | folders CRUD/move | Aktif |
@@ -290,7 +291,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 
 - **MyFiles:** Refactor phases completed/archived and post-refactor regressions were fixed where applicable (see openspec archive and recent commits).
 - **LoginPage:** registration toggle removed; registration and password recovery are unavailable.
-- **Settings:** profile is read-only; notifications, security, and storage actions are neutralized; fake storage percentages removed; Sync & Backup and API Keys placeholders removed; appearance theme and accent remain functional locally.
+- **Settings:** Profile display-name is now editable and persists server-side (PATCH `/api/profile`), email remains read-only; notifications, security, and storage actions remain neutralized/placeholders; appearance theme and accent remain functional locally. The profile display-name change survives refresh, logout/login, and other devices once the backend has been refreshed via authenticated `/auth/me`.
 - **Trash:** initial load retry exists, restore failures are surfaced, selection clears correctly after successful restore/delete and bulk actions, and confirmation copy is consistently English.
 - **PublicSharePage:** load-error retry exists; async page load uses a cancellation guard; protected downloads now use POST body blob handling and avoid passwords in the URL.
 
