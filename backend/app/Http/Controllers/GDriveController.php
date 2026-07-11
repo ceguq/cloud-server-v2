@@ -169,6 +169,7 @@ class GDriveController extends Controller
             'client_id' => $clientId,
             'redirect_uri' => $redirectUri,
             'response_type' => 'code',
+            // Keep the OAuth consent request aligned with the configured Drive scope.
             'scope' => implode(' ', $scopes),
             'access_type' => 'offline',
             'prompt' => 'consent',
