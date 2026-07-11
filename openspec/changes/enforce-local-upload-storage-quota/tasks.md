@@ -9,9 +9,11 @@
 - [x] Verify syntax manually.
 - [x] Verify route behavior manually.
 - [x] Add focused feature tests for quota enforcement.
+- [x] Mark change ready for archive (folder left in place in this patch).
 
 ## Scope guardrails
 - [x] Keep scope backend-only.
 - [x] No frontend behavior changes.
 - [x] No route changes.
 - [x] No migration.
+- [x] Keep concurrency/reservation limitation documented.

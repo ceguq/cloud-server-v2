@@ -137,7 +137,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | Files | `GET /files`, `POST /files/upload`, `GET /files/recent`, `PATCH/DELETE /files/{file}`, download, preview, move, cancel upload | Aktif | File di-scope ke user |
 | Duplicates | `GET /files/duplicates` | Aktif | Group by `original_name` + `size` |
 | Share links protected | `GET /share-links`, `POST /files/{file}/share`, `DELETE /share-links/{shareLink}` | Aktif | Password field belum aman/terpakai |
-| Storage | `GET /storage`, `GET /storage/breakdown` | Aktif | Quota 100 GB hanya reporting |
+| Storage | `GET /storage`, `GET /storage/breakdown` | Aktif | Quota 100 GB enforced pada upload lokal sebelum disk write; upload exact-limit diizinkan dan over-limit ditolak dengan 422 |
 | Server monitor | `GET /server-monitor` | Aktif | Read-only system metrics |
 | Devices | `GET /devices`, `PATCH /devices/{device}`, `DELETE /devices/{device}`, `PATCH /devices/{device}/trusted` | Aktif | User-scoped; semua write route memerlukan device milik user yang sama dan device milik user lain mengembalikan 404; login sukses otomatis create/update device best-effort, repeat same-browser login update row yang sama, Chrome/Brave dibedakan, `trusted` existing dipertahankan |
 | Local trash files/folders | `GET`, `POST restore`, `DELETE force` | Aktif, caveat folder global | File scoped user, folder belum scoped user |
@@ -149,11 +149,11 @@ Semua API utama berada di `backend/routes/api.php`.
 | File | Fungsi | Status audit |
 | --- | --- | --- |
 | `AuthController.php` | Login, Sanctum token, me, logout, login activity log, automatic device create/update on successful login | Aktif; device tracking best-effort dan tidak memblokir login |
-| `FileController.php` | Duplicate finder, list/search, upload, cancel upload, download, preview, rename, trash, move, recent files | Aktif |
+| `FileController.php` | Duplicate finder, list/search, upload, cancel upload, download, preview, rename, trash, move, recent files | Aktif; upload tetap memakai validasi 1 GB per file, menambahkan pre-write user-scoped quota enforcement, dan mengembalikan 422 validation-style saat over quota |
 | `FolderController.php` | List/search, create, rename/update, recursive trash, move with descendant guard | Aktif, tapi global folder |
 | `ShareController.php` | Share link list/create/delete/public show/download | Aktif, password gap |
 | `TrashController.php` | File/folder restore dan force delete recursive | Aktif, folder global |
-| `StorageController.php` | Usage info dan category breakdown | Aktif, quota not enforced |
+| `StorageController.php` | Usage info dan category breakdown | Aktif; usage/reporting real dan quota 100 GB enforced pada upload lokal (exact-limit allowed, over-limit rejected sebelum disk write, dan usage scoped ke user terautentikasi) |
 | `ActivityLogController.php` | User/admin paginated logs with action filter | Aktif |
 | `Admin/UserController.php` | Read-only user list | Aktif |
 | `DeviceController.php` | List devices, rename `display_name`, delete device record, trust/untrust, safe response serialization, ownership enforcement | Aktif; tidak expose `device_hash`/full `user_agent` |
@@ -266,7 +266,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Folder nesting/move/trash | Partial | Logic aktif, tapi folder belum user-scoped |
 | Preview file lokal | Selesai | Image/PDF/video/audio/text/code-like extension |
 | Share link publik | Partial | Token/expiry/download count aktif; protected downloads now validate passwords and support POST body downloads |
-| Storage usage/breakdown | Selesai/partial | Reporting real, quota 100 GB belum enforcement |
+| Storage usage/breakdown | Selesai/partial | Reporting real; 100 GB quota enforced pada upload lokal (exact-limit diizinkan, over-limit ditolak sebelum disk write, dan usage scoped ke user terautentikasi) |
 | Activity log | Selesai/partial | Backend log aktif; UI delete hanya local hide |
 | Trash local | Selesai/partial | File scoped user, folder global |
 | Duplicate finder local | Selesai | By original name + size |
@@ -276,7 +276,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Google Drive mutations | Selesai secara kode, config-dependent | Upload/trash/restore/rename/share/delete/create folder butuh scope Drive yang sesuai |
 | Settings | Partial | Theme/accent persist; banyak setting lain hardcoded/local UI |
 | Admin users | Partial | Read-only list aktif; bug render nama sudah diperbaiki |
-| Test coverage | Minimal | Hanya Laravel example tests, belum ada tests fitur utama/frontend |
+| Test coverage | Partial | Focused feature tests cover under quota, exact quota, over quota rejection, other-user usage not counted, dan no disk write pada rejected upload |
 
 ### 5.6 Recent frontend cleanup notes
 
@@ -339,8 +339,8 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 14. Google Drive upload membaca file ke memory.
     `GoogleDriveService::uploadFile()` memakai `file_get_contents()` dan multipart body manual. Untuk file besar, streaming/resumable upload lebih aman.
 
-15. Quota storage belum enforced.
-    Backend menghitung limit 100 GB, tetapi upload tidak mengecek remaining quota sebelum menyimpan file.
+15. Quota storage sekarang enforced pada upload lokal.
+    Backend menghitung limit 100 GB dan upload dicek sebelum disk write; upload exact-limit diizinkan, over-limit ditolak, dan usage scoped ke user yang terautentikasi. Concurrent uploads masih bisa race karena tidak ada reservation/locking system.
 
 ## 8. Development Commands
 
