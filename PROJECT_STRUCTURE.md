@@ -160,7 +160,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | `ServerMonitorController.php` | OS, CPU, memory, disk, network, service status | Aktif |
 | `GDriveController.php` | OAuth, accounts, list, trash, rename, visibility, download, upload | Aktif, besar | Insufficient-scope mutation failures sekarang mengembalikan 403 terstruktur dengan reconnect contract untuk upload/rename/trash/restore/visibility/create-folder/permanent-delete |
 | `ActivityLogService.php` | Safe best-effort logging, metadata sanitization | Aktif |
-| `GoogleDriveService.php` | Token exchange/refresh, Drive list/download/export/upload/mutate | Aktif |
+| `GoogleDriveService.php` | Token exchange/refresh, Drive list/download/export/upload/mutate | Aktif; upload sekarang memakai streamed multipart via `fopen(..., 'rb')` + Guzzle PSR-7 `AppendStream`, dan ada `GDriveUploadStreamingTest` (1 test, 4 assertions) yang menguji body stream |
 
 ### 4.3 Model dan Database
 
@@ -338,8 +338,8 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 13. Activity delete di UI bukan delete server.
     `Activity` dan `ActivityLogPage` menyimpan hidden/deleted ids di localStorage. Ini cocok untuk "hide locally", bukan audit log deletion.
 
-14. Google Drive upload membaca file ke memory.
-    `GoogleDriveService::uploadFile()` memakai `file_get_contents()` dan multipart body manual. Untuk file besar, streaming/resumable upload lebih aman.
+14. Google Drive upload memory usage berkurang, tetapi bukan resumable/chunked.
+    `GoogleDriveService::uploadFile()` tidak lagi memakai `file_get_contents()` untuk file upload; aliran multipart sekarang dibangun dari file resource dengan `fopen(..., 'rb')` dan Guzzle PSR-7 `AppendStream`, sehingga titik buffering penuh file di PHP memory sudah dihilangkan. Ini memperbaiki memory pressure untuk upload besar, tetapi upload masih bukan resumable/chunked dan batas PHP/web-server tetap berlaku.
 
 15. Quota storage sekarang enforced pada upload lokal.
     Backend menghitung limit 100 GB dan upload dicek sebelum disk write; upload exact-limit diizinkan, over-limit ditolak, dan usage scoped ke user yang terautentikasi. Concurrent uploads masih bisa race karena tidak ada reservation/locking system.
