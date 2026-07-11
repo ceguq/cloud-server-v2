@@ -9,5 +9,8 @@
 - [ ] Add frontend service integration for the profile update request.
 - [ ] Update the Settings Profile UI to load the current name and email, make the name editable, and handle save/loading/error/success states.
 - [ ] Perform manual verification of the Settings flow and refresh behavior.
+ - [x] Add frontend service integration for the profile update request.
+ - [x] Update the Settings Profile UI to load the current name and email, make the name editable, and handle save/loading/error/success states.
+ - [ ] Perform manual verification of the Settings flow and refresh behavior.
 - [ ] Update relevant documentation to reflect the new profile name update capability.
 - [ ] Do not commit or push unless requested separately.

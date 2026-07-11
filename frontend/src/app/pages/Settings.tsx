@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authService } from "../../services/authService";
 import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
 import { SettingRow } from "./settings/components/SettingRow";
 import { withAlpha } from "./settings/settingsColorUtils";
@@ -80,9 +81,155 @@ function Toggle({
   );
 }
 
+function EditableNamePanel({ accentColor, panelBg, panelBorder }: { accentColor: string; panelBg: string; panelBorder: string }) {
+  const [name, setName] = useState<string>("");
+  const [originalName, setOriginalName] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem('nimbus_user');
+      const parsed = raw ? JSON.parse(raw) : null;
+      const current = parsed?.name ?? '';
+      setName(current);
+      setOriginalName(current);
+    } catch {
+      setName('');
+      setOriginalName('');
+    }
+  }, []);
+
+  const canSave = () => {
+    return !saving && name.trim().length >= 2 && name.trim() !== originalName;
+  };
+
+  const handleSave = async () => {
+    setError(null);
+    setSuccess(null);
+    if (!canSave()) return;
+
+    setSaving(true);
+    try {
+      const data = await authService.updateProfile(name.trim());
+      const updatedUser = data.user;
+      try {
+        window.localStorage.setItem('nimbus_user', JSON.stringify(updatedUser));
+      } catch {
+        // ignore
+      }
+      try {
+        window.dispatchEvent(new CustomEvent('nimbus-user-change'));
+      } catch {}
+
+      setOriginalName(updatedUser.name);
+      setSuccess('Profile updated');
+    } catch (err: any) {
+      if (err?.response?.status === 422) {
+        const msg = err?.response?.data?.errors?.name?.[0] || 'Invalid name';
+        setError(msg);
+      } else {
+        setError('Failed to update profile');
+      }
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSuccess(null), 3000);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-3">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ background: panelBg, border: `1px solid ${panelBorder}`, color: '#e2e8f0' }}
+        />
+        <button
+          onClick={handleSave}
+          disabled={!canSave()}
+          className="px-3 py-2 rounded-lg text-sm font-semibold"
+          style={{
+            background: canSave() ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : panelBg,
+            color: canSave() ? '#fff' : '#94a3b8',
+            border: `1px solid ${panelBorder}`,
+          }}
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      {error && <div className="text-xs text-red-400 mb-2">{error}</div>}
+      {success && <div className="text-xs text-green-400 mb-2">{success}</div>}
+    </div>
+  );
+}
+
 
 export function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
+
+  const [user, setUser] = useState<{ id?: number; name?: string; email?: string; role?: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem("nimbus_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [meLoadWarning, setMeLoadWarning] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let mounted = true;
+
+    const refreshAuthoritativeUser = async () => {
+      try {
+        const data: any = await authService.me();
+
+        const payload = data?.user ?? data;
+        if (!payload) return;
+
+        const normalized = {
+          id: payload.id,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+        };
+
+        if (!mounted) return;
+
+        setUser(normalized);
+
+        try {
+          window.localStorage.setItem("nimbus_user", JSON.stringify(normalized));
+        } catch {
+          // ignore localStorage write errors
+        }
+
+        try {
+          window.dispatchEvent(new CustomEvent("nimbus-user-change"));
+        } catch {
+          // ignore
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setMeLoadWarning(true);
+      }
+    };
+
+    // Call refresh but keep any cached user as immediate fallback
+    refreshAuthoritativeUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -278,14 +425,14 @@ export function Settings() {
                 className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
                 style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
               >
-                A
+                {user?.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
               <div>
                 <div className="text-sm font-semibold mb-0.5" style={{ color: settingsColors.title }}>
-                  Alex Johnson
+                  {user?.name ?? "User"}
                 </div>
                 <div className="text-xs mb-2" style={{ color: settingsColors.muted }}>
-                  alex@example.com
+                  {user?.email ?? ""}
                 </div>
                 <div
                   className="text-xs px-3 py-1.5 rounded-lg"
@@ -304,40 +451,16 @@ export function Settings() {
               className="rounded-xl p-5"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
             >
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                {[
-                  { label: "First Name", value: "Alex" },
-                  { label: "Last Name", value: "Johnson" },
-                  { label: "Email Address", value: "alex@example.com" },
-                  { label: "Username", value: "@alex_nimbus" },
-                ].map((f) => (
-                  <div key={f.label}>
-                    <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
-                      {f.label}
-                    </label>
-                    <input
-                      defaultValue={f.value}
-                      readOnly
-                      className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                      style={{
-                        background: settingsColors.panelBg,
-                        border: `1px solid ${settingsColors.panelBorder}`,
-                        color: settingsColors.muted,
-                        caretColor: accentColor,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
               <div className="mb-4">
                 <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
-                  Bio
+                  Display Name
                 </label>
-                <textarea
-                  defaultValue="Cloud enthusiast, self-hosting advocate."
-                  rows={3}
+                <input
+                  value={user?.name ?? ''}
+                  onChange={() => {}}
                   readOnly
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                  id="nimbus-profile-name-readonly"
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                   style={{
                     background: settingsColors.panelBg,
                     border: `1px solid ${settingsColors.panelBorder}`,
@@ -345,16 +468,16 @@ export function Settings() {
                     caretColor: accentColor,
                   }}
                 />
+                {meLoadWarning && (
+                  <div className="text-xs text-yellow-400 mt-2">Failed to refresh profile; using cached data.</div>
+                )}
               </div>
-              <div
-                className="text-xs px-3 py-1.5 rounded-lg"
-                style={{
-                  background: settingsColors.panelBg,
-                  color: settingsColors.muted,
-                  border: `1px solid ${settingsColors.panelBorder}`,
-                }}
-              >
-                Profile editing is not available yet
+              <div>
+                {/* Editable row */}
+                <label className="block text-xs mb-1.5" style={{ color: settingsColors.muted }}>
+                  Edit Display Name
+                </label>
+                <EditableNamePanel accentColor={accentColor} panelBg={settingsColors.panelBg} panelBorder={settingsColors.panelBorder} />
               </div>
             </div>
           </div>

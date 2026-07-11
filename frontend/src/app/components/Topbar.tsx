@@ -60,11 +60,43 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
 }
 
 export function Topbar({ activePage, onLogout }: TopbarProps) {
+  const [userName, setUserName] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement | null>(null);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const readUser = () => {
+      try {
+        const raw = window.localStorage.getItem('nimbus_user');
+        if (!raw) {
+          setUserName(null);
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        setUserName(parsed?.name ?? null);
+      } catch {
+        setUserName(null);
+      }
+    };
+
+    readUser();
+
+    const onUserChange = () => readUser();
+    window.addEventListener('nimbus-user-change', onUserChange as EventListener);
+    window.addEventListener('storage', onUserChange as EventListener);
+    window.addEventListener('focus', onUserChange as EventListener);
+
+    return () => {
+      window.removeEventListener('nimbus-user-change', onUserChange as EventListener);
+      window.removeEventListener('storage', onUserChange as EventListener);
+      window.removeEventListener('focus', onUserChange as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -355,10 +387,10 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
               style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
             >
-              A
+              {userName ? userName.charAt(0).toUpperCase() : "U"}
             </div>
             <span className="text-xs font-medium" style={{ color: topbarColors.userText }}>
-              Alex
+              {userName ?? "User"}
             </span>
             <ChevronDown size={12} style={{ color: topbarColors.icon }} />
           </button>
