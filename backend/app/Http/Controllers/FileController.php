@@ -190,6 +190,19 @@ class FileController extends Controller
             }
         }
 
+        $incomingSize = (int) ($uploaded->getSize() ?? 0);
+        $currentUsedBytes = (int) File::where('user_id', $user->id)->sum('size');
+        $quotaLimitBytes = 100 * 1024 * 1024 * 1024;
+
+        if ($currentUsedBytes + $incomingSize > $quotaLimitBytes) {
+            return response()->json([
+                'message' => 'Storage quota exceeded.',
+                'errors' => [
+                    'file' => ['Storage quota exceeded.'],
+                ],
+            ], 422);
+        }
+
         $extension = $uploaded->getClientOriginalExtension();
         $extension = $extension ? strtolower($extension) : 'bin';
 
