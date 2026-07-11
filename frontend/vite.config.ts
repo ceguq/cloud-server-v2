@@ -34,6 +34,8 @@ export default defineConfig({
   // Allow Vite dev server to serve index.html for all routes (client-side routing)
   // This ensures /share/{token} and other SPA routes work when accessed directly
   server: {
+    host: '0.0.0.0',
+    port: 5173,
     historyApiFallback: true,
   },
 
