@@ -133,7 +133,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | Public share | `GET /share/{token}`, `GET /share/{token}/download`, `POST /share/{token}/download` | Aktif | Tanpa auth, cache-control no-store |
 | Admin users | `GET /admin/users` | Aktif | Admin middleware |
 | Activity logs | `GET /activity-logs`, `GET /admin/activity-logs` | Aktif | User scope dan admin global |
-| Folders | `GET/POST/PATCH/DELETE /folders`, `PATCH /folders/{folder}/move` | Aktif, caveat multi-user | Folder belum punya `user_id` |
+| Folders | `GET/POST/PATCH/DELETE /folders`, `PATCH /folders/{folder}/move` | Aktif, caveat multi-user | Recursive delete/restore/force-delete ownership validation sekarang hardened untuk seluruh subtree dan diuji; folder belum punya `user_id` |
 | Files | `GET /files`, `POST /files/upload`, `GET /files/recent`, `PATCH/DELETE /files/{file}`, download, preview, move, cancel upload | Aktif | File di-scope ke user |
 | Duplicates | `GET /files/duplicates` | Aktif | Group by `original_name` + `size` |
 | Share links protected | `GET /share-links`, `POST /files/{file}/share`, `DELETE /share-links/{shareLink}` | Aktif | Password field belum aman/terpakai |
@@ -142,7 +142,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | Devices | `GET /devices`, `PATCH /devices/{device}`, `DELETE /devices/{device}`, `PATCH /devices/{device}/trusted` | Aktif | User-scoped; semua write route memerlukan device milik user yang sama dan device milik user lain mengembalikan 404; login sukses otomatis create/update device best-effort, repeat same-browser login update row yang sama, Chrome/Brave dibedakan, `trusted` existing dipertahankan |
 | Local trash files/folders | `GET`, `POST restore`, `DELETE force` | Aktif, caveat folder global | File scoped user, folder belum scoped user |
 | Google Drive accounts/files | OAuth connect/callback, list accounts/files, account files | Aktif | OAuth state encrypted, token encrypted |
-| Google Drive actions | download, trash, restore, visibility, rename, permanent delete, create folder, upload | Aktif, config-dependent | Scope `.env.example` masih readonly |
+| Google Drive actions | download, trash, restore, visibility, rename, permanent delete, create folder, upload | Aktif, config-dependent | Scope `.env.example` sekarang dokumentasikan broad Drive scope; insufficient-scope mutation gagal mengembalikan 403 terstruktur dengan reconnect contract, dan akun lama yang pernah di-authorize readonly bisa perlu reconnect/re-consent |
 
 ### 4.2 Controller dan Service
 
@@ -158,7 +158,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | `Admin/UserController.php` | Read-only user list | Aktif |
 | `DeviceController.php` | List devices, rename `display_name`, delete device record, trust/untrust, safe response serialization, ownership enforcement | Aktif; tidak expose `device_hash`/full `user_agent` |
 | `ServerMonitorController.php` | OS, CPU, memory, disk, network, service status | Aktif |
-| `GDriveController.php` | OAuth, accounts, list, trash, rename, visibility, download, upload | Aktif, besar |
+| `GDriveController.php` | OAuth, accounts, list, trash, rename, visibility, download, upload | Aktif, besar | Insufficient-scope mutation failures sekarang mengembalikan 403 terstruktur dengan reconnect contract untuk upload/rename/trash/restore/visibility/create-folder/permanent-delete |
 | `ActivityLogService.php` | Safe best-effort logging, metadata sanitization | Aktif |
 | `GoogleDriveService.php` | Token exchange/refresh, Drive list/download/export/upload/mutate | Aktif |
 
@@ -174,6 +174,8 @@ Semua API utama berada di `backend/routes/api.php`.
 | `devices` / `Device` | UUID, user/device/browser/ip/trusted/last_seen | Otomatis tercatat saat login sukses; fingerprint memakai user, normalized User-Agent, dan browser identity; update `last_seen_at`, IP, browser, platform, device info; `trusted` existing dipertahankan |
 | `gdrive_accounts` / `GDriveAccount` | UUID, user, email/account id, encrypted tokens, scopes, timestamps, revoked_at | Token terenkripsi via casts |
 
+Live SQLite ownership audit (2026-07-11): total folders 5; null-owned folders 0; invalid owner references 0; parent/child owner conflicts 0; mixed-owner folders 0; ambiguous folders 0; no backfill required now; non-null enforcement remains deferred as optional safety work.
+
 ### 4.4 Konfigurasi Backend
 
 | File | Catatan |
@@ -181,7 +183,7 @@ Semua API utama berada di `backend/routes/api.php`.
 | `backend/bootstrap/app.php` | API exception forced JSON, middleware alias `admin` |
 | `backend/config/cors.php` | Origin dibaca dari `CORS_ALLOWED_ORIGINS`; default `.env.example` untuk localhost |
 | `backend/config/services.php` | Google Drive OAuth config dan default scope full `drive` jika env kosong |
-| `backend/.env.example` | Google Drive scope masih `drive.readonly`, tidak cocok dengan fitur upload/delete/rename/share |
+| `backend/.env.example` | Google Drive scope sekarang mencatat `https://www.googleapis.com/auth/drive` yang sesuai dengan fitur mutasi; akun yang sebelumnya di-authorize dengan scope readonly bisa tetap perlu reconnect/re-consent |
 | `backend/phpunit.xml` | Test sqlite in-memory, suite Unit + Feature |
 
 ## 5. Frontend Audit
@@ -263,7 +265,7 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Login/logout/me | Selesai | Sanctum token auth aktif |
 | Role admin/user | Selesai | Backend middleware `admin`; frontend menyesuaikan menu dari localStorage |
 | Local file manager | Selesai dengan risiko maintainability | Fitur lengkap; `MyFiles.tsx` sudah modular sebagian tetapi masih sangat besar |
-| Folder nesting/move/trash | Partial | Logic aktif, tapi folder belum user-scoped |
+| Folder nesting/move/trash | Partial | Logic aktif dan recursive ownership hardening untuk delete/restore/force-delete sudah teruji; folder belum user-scoped, dan non-null enforcement/backfill tooling tetap deferred |
 | Preview file lokal | Selesai | Image/PDF/video/audio/text/code-like extension |
 | Share link publik | Partial | Token/expiry/download count aktif; protected downloads now validate passwords and support POST body downloads |
 | Storage usage/breakdown | Selesai/partial | Reporting real; 100 GB quota enforced pada upload lokal (exact-limit diizinkan, over-limit ditolak sebelum disk write, dan usage scoped ke user terautentikasi) |
@@ -273,10 +275,10 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 | Devices | Aktif | Device record management aktif; delete hanya menghapus record dari daftar, tidak revoke token atau log browser out; `trusted` hanya label/state NimbusDrive; login sukses berikutnya bisa membuat ulang device record yang dihapus |
 | Server monitor | Selesai/partial | Real current metrics, belum time-series history |
 | Google Drive connect/list | Selesai | OAuth, account list, file list, per-account navigation |
-| Google Drive mutations | Selesai secara kode, config-dependent | Upload/trash/restore/rename/share/delete/create folder butuh scope Drive yang sesuai |
+| Google Drive mutations | Selesai secara kode, config-dependent | Upload/trash/restore/rename/share/delete/create folder sekarang memanfaatkan scope Drive yang sesuai; insufficient-scope failures return 403 reconnect contract dan akun lama yang readonly bisa perlu reconnect/re-consent |
 | Settings | Partial | Theme/accent persist; banyak setting lain hardcoded/local UI |
 | Admin users | Partial | Read-only list aktif; bug render nama sudah diperbaiki |
-| Test coverage | Partial | Focused feature tests cover under quota, exact quota, over quota rejection, other-user usage not counted, dan no disk write pada rejected upload |
+| Test coverage | Partial | Focused feature tests cover recursive ownership (`RecursiveFolderOwnershipTest`: 11 tests, 52 assertions), Google Drive scope config (`GDriveScopeConfigTest`: 1 test, 3 assertions), reconnect handling (`GDriveReconnectTest`: 1 test, 5 assertions), dan frontend build passed |
 
 ### 5.6 Recent frontend cleanup notes
 
@@ -302,8 +304,8 @@ Catatan risiko: cancel saat upload sedang berjalan hanya bisa membersihkan file 
 2. Share link password tidak aman dan tidak dipakai.
    `ShareController::create()` menerima `password` lalu menyimpan langsung ke kolom `password`, tetapi public `show()` dan `download()` tidak meminta/memvalidasi password. Jika fitur password ingin dipertahankan, password harus di-hash dan public endpoint harus melakukan challenge/validation.
 
-3. Scope Google Drive di `.env.example` tidak cocok dengan fitur saat ini.
-   `.env.example` memakai `https://www.googleapis.com/auth/drive.readonly`, sedangkan kode melakukan upload, trash, restore, rename, visibility, create folder, dan permanent delete. Akun yang connect dengan scope readonly akan gagal pada mutation endpoint.
+3. Scope Google Drive di `.env.example` sekarang sudah disinkronkan dengan fitur mutasi.
+   `.env.example` kini memakai `https://www.googleapis.com/auth/drive`, tetapi akun yang sebelumnya di-authorize dengan scope readonly bisa tetap perlu reconnect/re-consent karena token lama tidak otomatis diperbarui.
 
 ### Medium
 
@@ -383,13 +385,14 @@ GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive
 
 1. Tambahkan `user_id` ke `folders`, migrasikan data, dan update semua folder query agar user-scoped.
 2. Putuskan fitur password share link: hapus field dari API/UI, atau implementasikan hash + validation public endpoint.
-3. Sinkronkan Google Drive scope docs/env dengan fitur mutasi dan tambahkan handling scope insufficient yang eksplisit.
+3. Sinkronkan Google Drive scope docs/env dengan fitur mutasi dan pertahankan handling scope insufficient yang eksplisit; akun lama yang pernah di-authorize readonly bisa tetap perlu reconnect/re-consent.
 4. Tambahkan tests backend untuk auth, ownership, folder recursion, share link, trash, storage quota, dan GDrive happy/error path dengan HTTP fake.
 5. Lanjutkan ekstraksi `MyFiles.tsx` dan `GDrive.tsx` ke hook/action modules untuk state, side effect, modal state, dan action handler; subfolder komponen/formatter sudah ada dan bisa menjadi pola.
 6. Pertahankan batasan device management saat ini: record device sudah aktif, tetapi revocation token/session dan authorization berbasis `trusted` belum diimplementasi.
 7. Hapus `authServices.ts` atau jadikan re-export dari `authService.ts`.
 8. Tambahkan fallback atau validasi startup untuk `VITE_API_BASE_URL`.
 9. Buat batas quota upload real sebelum file disimpan.
+10. Non-null enforcement pada folder ownership dan kemungkinan backfill tooling tetap deferred/opsional; tidak ada backfill live yang diperlakukan sebagai completed.
 
 ## 10. Catatan Workspace
 
