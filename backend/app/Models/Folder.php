@@ -50,5 +50,48 @@ class Folder extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function collectDescendantFolderIds(bool $includeTrashed = false): array
+    {
+        $folderIds = [];
+        $childrenQuery = $includeTrashed ? $this->childrenWithTrashed() : $this->children();
+
+        foreach ($childrenQuery->get() as $child) {
+            $folderIds[] = (string) $child->getKey();
+            $folderIds = array_merge($folderIds, $child->collectDescendantFolderIds($includeTrashed));
+        }
+
+        return $folderIds;
+    }
+
+    public function hasOwnershipConflictForUser(string|int $userId, bool $includeTrashed = false): bool
+    {
+        $folderIds = $this->collectDescendantFolderIds($includeTrashed);
+        $folderIds[] = (string) $this->getKey();
+
+        $folders = Folder::query()
+            ->when($includeTrashed, fn ($query) => $query->withTrashed())
+            ->whereIn('id', $folderIds)
+            ->get();
+
+        foreach ($folders as $folder) {
+            if ($folder->user_id === null || (string) $folder->user_id !== (string) $userId) {
+                return true;
+            }
+        }
+
+        $files = File::query()
+            ->when($includeTrashed, fn ($query) => $query->withTrashed())
+            ->whereIn('folder_id', $folderIds)
+            ->get();
+
+        foreach ($files as $file) {
+            if ($file->user_id === null || (string) $file->user_id !== (string) $userId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 }
 

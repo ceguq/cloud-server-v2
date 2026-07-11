@@ -172,6 +172,12 @@ class TrashController extends Controller
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);
         }
 
+        if ($folder->hasOwnershipConflictForUser($user->id, true)) {
+            return response()->json([
+                'message' => 'Subtree ini mengandung folder atau file yang bukan milik Anda',
+            ], 422);
+        }
+
         $oldName = $folder->name;
         $oldParentId = $folder->parent_id;
 
@@ -214,6 +220,12 @@ class TrashController extends Controller
 
         if (!$folder) {
             return response()->json(['message' => 'Folder tidak ditemukan.'], 404);
+        }
+
+        if ($folder->hasOwnershipConflictForUser($user->id, true)) {
+            return response()->json([
+                'message' => 'Subtree ini mengandung folder atau file yang bukan milik Anda',
+            ], 422);
         }
 
         $folderId = $folder->id;
