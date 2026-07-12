@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Eye,
   EyeOff,
@@ -32,6 +32,109 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regShowPassword, setRegShowPassword] = useState(false);
+
+  // Theme helpers for Login page
+  type AppearanceTheme = "dark" | "light" | "system";
+  type ResolvedTheme = "dark" | "light";
+
+  function safeReadAppearanceTheme(): AppearanceTheme {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const raw = window.localStorage.getItem("nimbus_appearance_theme");
+      if (raw === "dark" || raw === "light" || raw === "system") return raw;
+    } catch {
+      // ignore
+    }
+    return "dark";
+  }
+
+  function safeReadAccentColor(): string {
+    if (typeof window === "undefined") return "#3b82f6";
+    try {
+      const raw = window.localStorage.getItem("nimbus_accent_color");
+      if (typeof raw === "string" && raw.trim().length > 0) return raw;
+    } catch {
+      // ignore
+    }
+    return "#3b82f6";
+  }
+
+  function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+    if (theme === "dark" || theme === "light") return theme;
+    try {
+      const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+      return mq?.matches ? "dark" : "light";
+    } catch {
+      return "dark";
+    }
+  }
+
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
+  const [accentColor, setAccentColor] = useState<string>(() => safeReadAccentColor());
+
+  useEffect(() => {
+    const syncThemeFromStorage = () => {
+      const t = safeReadAppearanceTheme();
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(t));
+    };
+
+    syncThemeFromStorage();
+    if (typeof window === "undefined") return undefined;
+    window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+    window.addEventListener("storage", syncThemeFromStorage);
+    window.addEventListener("focus", syncThemeFromStorage);
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      mq?.addEventListener?.("change", syncThemeFromStorage);
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
+      window.removeEventListener("storage", syncThemeFromStorage);
+      window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
+    };
+  }, []);
+
+  const loginColors = useMemo(() => {
+    if (resolvedTheme === "light") {
+      return {
+        pageBg: "#f8fafc",
+        cardBg: "#ffffff",
+        panelBg: "#f1f5f9",
+        border: "#dbe3ef",
+        title: "#0f172a",
+        text: "#334155",
+        muted: "#64748b",
+        muted2: "#94a3b8",
+        inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        inputText: "#334155",
+        buttonSoftBg: "#f1f5f9",
+        rowHoverBg: "#f8fafc",
+      };
+    }
+
+    return {
+      pageBg: "#080d1a",
+      cardBg: "#0f1729",
+      panelBg: "#0d1829",
+      border: "#1a2540",
+      title: "#e2e8f0",
+      text: "#cbd5e1",
+      muted: "#64748b",
+      muted2: "#475569",
+      inputBg: "#0d1829",
+      inputBorder: "#1a2540",
+      inputText: "#94a3b8",
+      buttonSoftBg: "#1a2540",
+      rowHoverBg: "#111c2f",
+    };
+  }, [resolvedTheme]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -85,7 +188,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     return (
       <label className="relative block">
         <span className="sr-only">{label}</span>
-        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-blue-200/55">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2" style={{ color: loginColors.muted }}>
           {icon}
         </span>
         <input
@@ -95,7 +198,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           placeholder={placeholder}
           autoComplete={autoComplete}
           tabIndex={tabIndex}
-          className="h-11 w-full rounded-full border border-blue-300/10 bg-[#0d1829] px-11 text-sm text-white outline-none transition placeholder:text-blue-100/40 focus:border-blue-300/55 focus:bg-[#10213a]"
+          className="h-11 w-full rounded-full px-11 text-sm outline-none transition"
+          style={{
+            background: loginColors.inputBg,
+            border: `1px solid ${loginColors.inputBorder}`,
+            color: loginColors.inputText,
+            paddingLeft: 44,
+            caretColor: accentColor,
+          }}
         />
       </label>
     );
@@ -121,7 +231,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     return (
       <label className="relative block">
         <span className="sr-only">{label}</span>
-        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-blue-200/55">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2" style={{ color: loginColors.muted }}>
           <Lock size={16} />
         </span>
         <input
@@ -131,7 +241,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           placeholder="Password"
           autoComplete={autoComplete}
           tabIndex={tabIndex}
-          className="h-11 w-full rounded-full border border-blue-300/10 bg-[#0d1829] px-11 pr-12 text-sm text-white outline-none transition placeholder:text-blue-100/40 focus:border-blue-300/55 focus:bg-[#10213a]"
+          className="h-11 w-full rounded-full px-11 pr-12 text-sm outline-none transition"
+          style={{
+            background: loginColors.inputBg,
+            border: `1px solid ${loginColors.inputBorder}`,
+            color: loginColors.inputText,
+            paddingLeft: 44,
+            caretColor: accentColor,
+          }}
         />
         <button
           type="button"
@@ -139,7 +256,10 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           title={showValue ? "Sembunyikan password" : "Lihat password"}
           onClick={onToggle}
           tabIndex={tabIndex}
-          className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-blue-100/55 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/50"
+          className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus:outline-none"
+          style={{ color: loginColors.muted }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = accentColor)}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = loginColors.muted)}
         >
           {showValue ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
@@ -152,13 +272,13 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     return (
       <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[300px]">
-        <h1 className="text-center text-3xl font-semibold tracking-normal text-white">
+        <h1 className="text-center text-3xl font-semibold tracking-normal" style={{ color: loginColors.title }}>
           Login
         </h1>
         <div className="mt-5">
           <LoginSocialIcons />
         </div>
-        <p className="mt-4 text-center text-xs text-blue-100/55">
+        <p className="mt-4 text-center text-xs" style={{ color: loginColors.muted }}>
           or use your account
         </p>
 
@@ -188,8 +308,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         {error ? <LoginErrorMessage message={error} /> : null}
 
         <div
-          className="mx-auto mt-4 block text-xs text-blue-100/60"
-          style={{ opacity: 0.8 }}
+          className="mx-auto mt-4 block text-xs"
+          style={{ color: loginColors.muted, opacity: 0.9 }}
         >
           Password recovery is not available yet
         </div>
@@ -198,11 +318,16 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           type="submit"
           disabled={loading}
           tabIndex={tabIndex}
-          className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_12px_30px_rgba(59,130,246,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-65"
+          className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold uppercase tracking-wide shadow-[0_12px_30px_rgba(0,0,0,0.12)] transition"
+          style={{
+            background: loading ? loginColors.buttonSoftBg : `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+            color: loading ? loginColors.muted2 : "#fff",
+            boxShadow: loading ? undefined : `${accentColor}33 0 12px 30px`,
+          }}
         >
           {loading ? (
             <>
-              <LoadingSpinner size={14} color="#fff" />
+              <LoadingSpinner size={14} color={loading ? loginColors.muted2 : "#fff"} />
               Masuk...
             </>
           ) : (
@@ -306,8 +431,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden overflow-y-auto bg-[#111c2f] px-4 py-6 text-slate-100 sm:py-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(59,130,246,0.22),transparent_30%),radial-gradient(circle_at_78%_80%,rgba(34,211,238,0.14),transparent_35%),linear-gradient(145deg,#142033_0%,#182640_58%,#10213a_100%)]" />
+    <main className="relative min-h-screen overflow-x-hidden overflow-y-auto px-4 py-6 sm:py-8" style={{ background: loginColors.pageBg, color: loginColors.title }}>
+      <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle_at_18%_12%,${accentColor}22,transparent 30%),radial-gradient(circle_at_78%_80%,#22d3ee14,transparent 35%),linear-gradient(145deg,${loginColors.pageBg} 0%,${loginColors.pageBg} 100%)` }} />
 
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-[860px] flex-col items-center justify-center sm:min-h-[calc(100vh-4rem)]">
         <style>{`
@@ -355,29 +480,32 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         `}</style>
 
         <section
-          className="relative hidden h-[540px] w-full max-w-[820px] overflow-hidden rounded-3xl border border-[#1a2540] bg-[#0f1729] shadow-[0_26px_80px_rgba(0,0,0,0.48)] md:block"
+          className="relative hidden h-[540px] w-full max-w-[820px] overflow-hidden rounded-3xl md:block"
           aria-label="Authentication panel"
+          style={{ border: `1px solid ${loginColors.border}`, background: loginColors.cardBg, boxShadow: `0 26px 80px rgba(0,0,0,0.18)` }}
         >
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01))]" />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))` }} />
 
           <div
             aria-hidden={isRegisterMode}
-            className={`auth-form-panel absolute left-0 top-0 z-10 flex h-full w-1/2 items-center justify-center bg-[#0f1729] px-10 py-8 transform-gpu ${
+            className={`auth-form-panel absolute left-0 top-0 z-10 flex h-full w-1/2 items-center justify-center px-10 py-8 transform-gpu ${
               isRegisterMode
                 ? "pointer-events-none -translate-x-14 opacity-0"
                 : "pointer-events-auto translate-x-0 opacity-100"
             }`}
+            style={{ background: loginColors.cardBg }}
           >
             {renderLoginForm(!isRegisterMode)}
           </div>
 
           <div
             aria-hidden={!isRegisterMode}
-            className={`auth-form-panel absolute right-0 top-0 z-10 flex h-full w-1/2 items-center justify-center bg-[#0f1729] px-10 py-8 transform-gpu ${
+            className={`auth-form-panel absolute right-0 top-0 z-10 flex h-full w-1/2 items-center justify-center px-10 py-8 transform-gpu ${
               isRegisterMode
                 ? "pointer-events-auto translate-x-0 opacity-100"
                 : "pointer-events-none translate-x-14 opacity-0"
             }`}
+            style={{ background: loginColors.cardBg }}
           >
             {renderRegisterForm(isRegisterMode)}
           </div>
@@ -386,16 +514,18 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             className={`auth-overlay-panel absolute left-0 top-0 z-20 h-full w-1/2 overflow-hidden transform-gpu ${
               isRegisterMode ? "translate-x-0" : "translate-x-full"
             }`}
+            style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)` }}
           >
             {renderWelcomePanel(isRegisterMode ? "login" : "register")}
           </div>
         </section>
 
         <section
-          className="w-full max-w-[420px] overflow-hidden rounded-3xl border border-[#1a2540] bg-[#0f1729] shadow-[0_22px_70px_rgba(0,0,0,0.42)] md:hidden"
+          className="w-full max-w-[420px] overflow-hidden rounded-3xl md:hidden"
           aria-label="Authentication panel"
+          style={{ border: `1px solid ${loginColors.border}`, background: loginColors.cardBg, boxShadow: `0 22px 70px rgba(0,0,0,0.18)` }}
         >
-          <div className="bg-[linear-gradient(135deg,#2563eb_0%,#3b82f6_52%,#22d3ee_100%)] px-6 py-6 text-center text-white">
+          <div className="px-6 py-6 text-center" style={{ background: `linear-gradient(135deg, ${accentColor} 0%, ${loginColors.cardBg} 52%, #22d3ee 100%)`, color: '#fff' }}>
             <div className="mb-5">
               <LoginBrandLogo />
             </div>

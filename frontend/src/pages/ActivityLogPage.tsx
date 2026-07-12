@@ -400,6 +400,42 @@ export default function ActivityLogPage() {
     };
   }, []);
 
+  const activityLogColors = useMemo(() => {
+    if (resolvedTheme === "light") {
+      return {
+        pageBg: "#f8fafc",
+        cardBg: "#ffffff",
+        panelBg: "#f1f5f9",
+        border: "#dbe3ef",
+        title: "#0f172a",
+        text: "#334155",
+        muted: "#64748b",
+        muted2: "#94a3b8",
+        inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        inputText: "#334155",
+        buttonSoftBg: "#f1f5f9",
+        rowHoverBg: "#f8fafc",
+      };
+    }
+
+    return {
+      pageBg: "#080d1a",
+      cardBg: "#0f1729",
+      panelBg: "#0d1829",
+      border: "#1a2540",
+      title: "#e2e8f0",
+      text: "#cbd5e1",
+      muted: "#64748b",
+      muted2: "#475569",
+      inputBg: "#0d1829",
+      inputBorder: "#1a2540",
+      inputText: "#94a3b8",
+      buttonSoftBg: "#1a2540",
+      rowHoverBg: "#111c2f",
+    };
+  }, [resolvedTheme]);
+
   const isActivityLogDark = resolvedTheme === "dark";
 
   const activityLogShellColors = useMemo(() => {

@@ -45,9 +45,9 @@ function safeReadAppearanceTheme(): AppearanceTheme {
 function safeReadAccentColor(): string {
   try {
     const raw = localStorage.getItem("nimbus_accent_color");
-    return raw ? String(raw) : "#a78bfa";
+    return raw ? String(raw) : "#3b82f6";
   } catch {
-    return "#a78bfa";
+    return "#3b82f6";
   }
 }
 
@@ -59,7 +59,7 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
       ? "dark"
       : "light";
   } catch {
-      return "light";
+      return "dark";
   }
 }
 
@@ -151,7 +151,6 @@ export function Activity() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(() => safeReadAppearanceTheme());
   const [accentColor, setAccentColor] = useState<string>(() => safeReadAccentColor());
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
 
@@ -268,51 +267,43 @@ export function Activity() {
 
 
   useEffect(() => {
-    const handler = () => {
+    const syncThemeFromStorage = () => {
       const nextAppearance = safeReadAppearanceTheme();
-      setAppearanceTheme(nextAppearance);
       setAccentColor(safeReadAccentColor());
       setResolvedTheme(resolveAppearanceTheme(nextAppearance));
     };
 
-    // nimbus-appearance-change custom event
-    const maybeNimbus = () => {
-      try {
-        window.dispatchEvent(new Event("nimbus-appearance-change"));
-      } catch {
-        // ignore
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === "nimbus_appearance_theme" || e.key === "nimbus_accent_color") {
+        syncThemeFromStorage();
       }
     };
 
+    const onMqlChange = () => syncThemeFromStorage();
+
     try {
-      window.addEventListener("nimbus-appearance-change", handler as EventListener);
+      window.addEventListener("nimbus-appearance-change", syncThemeFromStorage as EventListener);
     } catch {
       // ignore
     }
 
-    // storage changes (e.g., switching theme in another tab)
     try {
-      window.addEventListener("storage", (e) => {
-        if (!e.key) return;
-        if (e.key === "nimbus_appearance_theme" || e.key === "nimbus_accent_color") handler();
-      });
+      window.addEventListener("storage", onStorage);
     } catch {
       // ignore
     }
 
-    // focus (covers some SPA theme toggles)
     try {
-      window.addEventListener("focus", handler);
+      window.addEventListener("focus", syncThemeFromStorage);
     } catch {
       // ignore
     }
 
-    // prefers-color-scheme changes (system theme)
     let mql: MediaQueryList | null = null;
     try {
       mql = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
       if (mql) {
-        const onMqlChange = () => handler();
         if ("addEventListener" in mql) {
           mql.addEventListener("change", onMqlChange);
         } else {
@@ -323,26 +314,29 @@ export function Activity() {
       // ignore
     }
 
-    // initial sync
-    handler();
+    syncThemeFromStorage();
 
     return () => {
       try {
-        window.removeEventListener("nimbus-appearance-change", handler as EventListener);
+        window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage as EventListener);
       } catch {
         // ignore
       }
 
       try {
-        window.removeEventListener("focus", handler);
+        window.removeEventListener("storage", onStorage);
+      } catch {
+        // ignore
+      }
+
+      try {
+        window.removeEventListener("focus", syncThemeFromStorage);
       } catch {
         // ignore
       }
 
       try {
         if (mql) {
-          const onMqlChange = () => handler();
-          // Best-effort cleanup (browser support varies)
           if ("removeEventListener" in mql) {
             mql.removeEventListener("change", onMqlChange);
           } else {
@@ -362,13 +356,16 @@ export function Activity() {
         cardBg: "#ffffff",
         panelBg: "#f1f5f9",
         inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        inputText: "#334155",
+        buttonSoftBg: "#f1f5f9",
         border: "#dbe3ef",
         borderSoft: "#e5eaf1",
         title: "#0f172a",
         text: "#334155",
         muted: "#64748b",
         muted2: "#94a3b8",
-        rowHover: "#f8fafc",
+        rowHoverBg: "#f8fafc",
         selectedBg: "rgba(168, 85, 247, 0.08)",
         modalBg: "#ffffff",
         overlay: "rgba(15, 23, 42, 0.45)",
@@ -376,17 +373,20 @@ export function Activity() {
     }
 
     return {
-      pageBg: "#111c2f",
+      pageBg: "#080d1a",
       cardBg: "#0f1729",
       panelBg: "#0d1829",
       inputBg: "#0d1829",
+      inputBorder: "#1a2540",
+      inputText: "#94a3b8",
+      buttonSoftBg: "#1a2540",
       border: "#1a2540",
       borderSoft: "#0a1020",
       title: "#e2e8f0",
-      text: "#94a3b8",
+      text: "#cbd5e1",
       muted: "#64748b",
       muted2: "#475569",
-      rowHover: "#0d1829",
+      rowHoverBg: "#111c2f",
       selectedBg: "rgba(168, 85, 247, 0.08)",
       modalBg: "#0f1729",
       overlay: "rgba(0, 0, 0, 0.70)",
@@ -599,7 +599,7 @@ export function Activity() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: activityColors.title }}>Activity</h1>
-          <p className="text-xs mt-0.5" style={{ color: activityColors.muted2 }}>Complete audit log of all file activity</p>
+          <p className="text-xs mt-0.5" style={{ color: activityColors.muted }}>Complete audit log of all file activity</p>
 
         </div>
         <button
@@ -609,10 +609,10 @@ export function Activity() {
           aria-label="Export visible activity rows as CSV"
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
           style={{
-            background: activityColors.panelBg,
-            border: `1px solid ${activityColors.border}`,
-            color: activityColors.text,
-            opacity: filteredActivities.length === 0 ? 0.5 : 1,
+            background: accentColor,
+            border: `1px solid ${accentColor}33`,
+            color: "#ffffff",
+            opacity: filteredActivities.length === 0 ? 0.65 : 1,
             cursor: filteredActivities.length === 0 ? "not-allowed" : "pointer",
           }}
         >
@@ -657,7 +657,13 @@ export function Activity() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search activity..."
             className="pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
-            style={{ background: activityColors.inputBg, border: `1px solid ${activityColors.border}`, color: activityColors.text, width: "200px" }}
+            style={{
+              background: activityColors.inputBg,
+              border: `1px solid ${activityColors.inputBorder}`,
+              color: activityColors.inputText,
+              caretColor: accentColor,
+              width: "200px",
+            }}
           />
         </div>
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}>
@@ -667,8 +673,9 @@ export function Activity() {
               onClick={() => setActiveFilter(f)}
               className="px-3 py-1 rounded-md text-xs transition-all"
               style={{
-                background: activeFilter === f ? activityColors.border : "transparent",
-                color: activeFilter === f ? activityColors.title : activityColors.muted,
+                background: activeFilter === f ? accentColor : activityColors.buttonSoftBg,
+                border: `1px solid ${activityColors.border}`,
+                color: activeFilter === f ? "#ffffff" : activityColors.text,
               }}
             >
               {f}
@@ -716,7 +723,7 @@ export function Activity() {
                 }
               }}
               className="h-4 w-4 rounded"
-              style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor: "#ef4444" }}
+              style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor }}
               aria-label="Pilih semua activity"
             />
             <span>
@@ -875,9 +882,9 @@ export function Activity() {
                   disabled={bulkDeleteLoading}
                   className="rounded-xl px-3 py-2 text-xs font-medium"
                   style={{
-                    background: "#0d1829",
-                    border: "1px solid #1a2540",
-                    color: "#94a3b8",
+                    background: activityColors.panelBg,
+                    border: `1px solid ${activityColors.border}`,
+                    color: activityColors.text,
                     opacity: bulkDeleteLoading ? 0.6 : 1,
                   }}
                 >
@@ -913,7 +920,7 @@ export function Activity() {
           mutedColor={activityColors.muted}
           backgroundColor={activityColors.cardBg}
           borderColor={activityColors.border}
-          accentColor="rgba(168, 85, 247, 0.4)"
+          accentColor={accentColor}
         />
       )}
 
@@ -948,7 +955,7 @@ export function Activity() {
                     }}
                     onMouseEnter={(e) => {
                       if (!selectedActivityIds.has(item.id)) {
-                        e.currentTarget.style.backgroundColor = activityColors.rowHover;
+                        e.currentTarget.style.backgroundColor = activityColors.rowHoverBg;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -969,14 +976,14 @@ export function Activity() {
                         });
                       }}
                       className="h-4 w-4 rounded shrink-0"
-                      style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor: "#ef4444" }}
+                      style={{ borderColor: activityColors.border, backgroundColor: activityColors.inputBg, accentColor }}
                       aria-label={`Pilih activity ${item.action} ${item.file}`}
                     />
 
                     {/* Action Icon */}
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: `${item.color}18`, border: `1px solid ${item.color}22` }}
+                      style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}
                     >
                       <ActionIcon size={14} style={{ color: item.color }} />
                     </div>
@@ -984,7 +991,7 @@ export function Activity() {
                     {/* File Icon */}
                     <div
                       className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-                      style={{ background: `${item.fileColor}18` }}
+                      style={{ background: activityColors.panelBg, border: `1px solid ${activityColors.border}` }}
                     >
                       <FileIcon size={13} style={{ color: item.fileColor }} />
                     </div>
@@ -992,7 +999,7 @@ export function Activity() {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium" style={{ color: item.color }}>{item.action}</span>
+                        <span className="text-xs font-medium" style={{ color: activityColors.title }}>{item.action}</span>
                         <span className="text-xs" style={{ color: activityColors.text }}>
                           {item.file}
                         </span>

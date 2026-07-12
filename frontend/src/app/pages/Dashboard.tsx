@@ -154,18 +154,34 @@ const statCards = [
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length) {
+    // Theme-aware tooltip styles (avoid importing Dashboard tokens here)
+    const _theme = resolveAppearanceTheme(safeReadAppearanceTheme());
+    const _accent = safeReadAccentColor();
+    const _dashboardColors =
+      _theme === "light"
+        ? {
+            cardBg: "#ffffff",
+            border: "#dbe3ef",
+            muted2: "#94a3b8",
+          }
+        : {
+            cardBg: "#0f1729",
+            border: "#1a2540",
+            muted2: "#94a3b8",
+          };
+
     return (
       <div
         className="rounded-lg px-3 py-2 text-xs"
         style={{
-          background: "#0f1729",
-          border: "1px solid #1a2540",
-          color: "#94a3b8",
+          background: _dashboardColors.cardBg,
+          border: `1px solid ${_dashboardColors.border}`,
+          color: _dashboardColors.muted2,
         }}
       >
         {payload.map((p: any, i: number) => (
           <div key={i}>
-            {p.name}:{" "}
+            {p.name}: {" "}
             <span style={{ color: p.color }}>{Math.round(p.value)}%</span>
           </div>
         ))}
@@ -552,6 +568,7 @@ export function Dashboard() {
           muted2: "#94a3b8",
           iconBg: `${accentColor}12`,
           iconBorder: `${accentColor}33`,
+          buttonSoftBg: "#f1f5f9",
         }
       : {
           pageBg: "#111c2f",
@@ -564,6 +581,7 @@ export function Dashboard() {
           muted2: "#475569",
           iconBg: "rgba(59,130,246,0.12)",
           iconBorder: "rgba(59,130,246,0.25)",
+          buttonSoftBg: "#1a2540",
         };
 
   // theme-aware small surface colors used by Server Status / Recent Activity / table borders
@@ -1243,7 +1261,7 @@ export function Dashboard() {
                 />
               )}
             </div>
-            <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+            <span className="text-sm font-medium" style={{ color: dashboardColors.title }}>
               {activeDevicesLoading
                 ? "Checking devices"
                 : activeDevicesError
@@ -1252,7 +1270,7 @@ export function Dashboard() {
                     ? "No devices connected"
                     : `${devices.length} device(s) connected`}
             </span>
-            <span className="text-xs mt-0.5" style={{ color: "#475569" }}>
+            <span className="text-xs mt-0.5" style={{ color: dashboardColors.muted2 }}>
               {activeDevicesLoading
                 ? "Loading device status..."
                 : activeDevicesError

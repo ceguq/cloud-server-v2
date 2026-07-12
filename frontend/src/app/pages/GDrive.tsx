@@ -281,13 +281,16 @@ function getFileVisual(mime: string): {
   };
 }
 
-function renderFileIcon(file: GDriveFileUI) {
+function renderFileIcon(file: GDriveFileUI, colorsParam?: { panelBg?: string; border?: string }) {
   const { Icon, color, bg, border } = getFileVisual(file.mime);
+
+  const wrapperBg = colorsParam?.panelBg ?? bg;
+  const wrapperBorder = colorsParam?.border ?? border;
 
   return (
     <div
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-      style={{ background: bg, border: `1px solid ${border}` }}
+      style={{ background: wrapperBg, border: `1px solid ${wrapperBorder}` }}
     >
       <Icon size={15} strokeWidth={2} style={{ color }} />
     </div>
@@ -347,11 +350,14 @@ export function GDrive() {
   const colors = useMemo(() => {
     if (resolvedTheme === "light") {
       return {
+        pageBg: "#f8fafc",
         shellBg: "#f8fafc",
         sidebarBg: "#ffffff",
         surfaceBg: "#ffffff",
+        cardBg: "#ffffff",
         panelBg: "#f8fafc",
         softBg: "#f1f5f9",
+        buttonSoftBg: "#f1f5f9",
         border: "#edf2f7",
         borderStrong: "#dbeafe",
         title: "#111827",
@@ -362,15 +368,21 @@ export function GDrive() {
         rowHover: "#f8fbff",
         shadow: "0 18px 45px rgba(15, 23, 42, 0.04)",
         inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        menuBg: "#ffffff",
+        menuHoverBg: "#f8fafc",
       };
     }
 
     return {
+      pageBg: "#0b1121",
       shellBg: "#111827",
       sidebarBg: "#0f172a",
       surfaceBg: "#111c2f",
+      cardBg: "#0f1729",
       panelBg: "#0b1324",
       softBg: "#1f2937",
+      buttonSoftBg: "#1a2540",
       border: "#1f2a44",
       borderStrong: "rgba(96,165,250,0.45)",
       title: "#e5e7eb",
@@ -381,6 +393,9 @@ export function GDrive() {
       rowHover: "#162238",
       shadow: "0 22px 60px rgba(0, 0, 0, 0.28)",
       inputBg: "#0b1324",
+      inputBorder: "#1a2540",
+      menuBg: "#0f1729",
+      menuHoverBg: "#111c2f",
     };
   }, [resolvedTheme]);
 
@@ -1464,11 +1479,11 @@ export function GDrive() {
     const cardBg =
       resolvedTheme === "light"
         ? isActive
-          ? "#f8fbff"
-          : "#ffffff"
+          ? "#eff6ff"
+          : colors.cardBg
         : isActive
           ? "rgba(37,99,235,0.10)"
-          : colors.panelBg;
+          : colors.cardBg;
 
     return (
       <div
@@ -1575,10 +1590,11 @@ export function GDrive() {
                   event.stopPropagation();
                   void handleReconnectAccount();
                 }}
-                className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+                className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
                 style={{
                   color: accentColor,
-                  background: "transparent",
+                  background: colors.buttonSoftBg,
+                  borderColor: colors.border,
                   opacity: connectingAccount ? 0.55 : 1,
                 }}
               >
@@ -1591,10 +1607,11 @@ export function GDrive() {
                   event.stopPropagation();
                   void handleDisconnectAccount(account.id);
                 }}
-                className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+                className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
                 style={{
                   color: "#ef4444",
-                  background: "transparent",
+                  background: colors.buttonSoftBg,
+                  borderColor: colors.border,
                   opacity: disconnectingAccountId === account.id ? 0.55 : 1,
                 }}
               >
@@ -2239,8 +2256,10 @@ const renderFileActions = (file: GDriveFileUI) => {
       marginTop: 4,
       opacity: disabled ? 0.45 : 1,
       cursor: disabled ? "not-allowed" : "pointer",
-      color: danger ? "#ef4444" : colors.text,
+      color: disabled ? colors.muted2 : danger ? "#ef4444" : colors.text,
       background: "transparent",
+      display: "block",
+      textAlign: "left",
     });
 
     const renderMenuItem = ({
@@ -2272,10 +2291,16 @@ const renderFileActions = (file: GDriveFileUI) => {
           if (disabled) return;
           event.currentTarget.style.background = danger
             ? "rgba(239,68,68,0.12)"
-            : `${accentColor}10`;
+            : colors.menuHoverBg ?? colors.rowHover;
+          event.currentTarget.style.color = colors.title;
         }}
         onMouseLeave={(event) => {
           event.currentTarget.style.background = "transparent";
+          event.currentTarget.style.color = disabled
+            ? colors.muted2
+            : danger
+            ? "#ef4444"
+            : colors.text;
         }}
         onClick={(event) => {
           event.preventDefault();
@@ -2285,8 +2310,16 @@ const renderFileActions = (file: GDriveFileUI) => {
         }}
       >
         <div className="flex items-center gap-2">
-          {icon}
-          <span>{label}</span>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              color: disabled ? colors.muted2 : danger ? "#ef4444" : ([("Open"), ("Download"), ("Copy"), ("Restore"), ("Preview")].includes(label) ? accentColor : colors.muted),
+            }}
+          >
+            {icon}
+          </span>
+          <span style={{ color: disabled ? colors.muted2 : undefined }}>{label}</span>
         </div>
       </button>
     );
@@ -2352,11 +2385,11 @@ const renderFileActions = (file: GDriveFileUI) => {
               left: actionMenuPosition?.left,
               width: ACTION_MENU_WIDTH,
               zIndex: 9999,
-              background: colors.panelBg,
+              background: colors.menuBg ?? colors.cardBg,
               border: `1px solid ${colors.border}`,
               borderRadius: 10,
               padding: 6,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              boxShadow: colors.shadow,
             }}
           >
 
@@ -2634,7 +2667,7 @@ const renderFileActions = (file: GDriveFileUI) => {
   };
 
   return (
-    <div className="flex-1 overflow-hidden" style={{ background: colors.shellBg }}>
+    <div className="flex-1 overflow-hidden" style={{ background: colors.pageBg }}>
 
       {/* Hidden file input for Upload */}
 
@@ -3617,7 +3650,7 @@ const renderFileActions = (file: GDriveFileUI) => {
           className="min-h-0 overflow-y-auto border-r p-3 nimbus-scrollbar"
           style={{ background: colors.sidebarBg, borderColor: colors.border }}
         >
-          <div className="mb-3 flex items-center justify-between px-1">
+          <div className="mb-3 flex items-center justify-between rounded-2xl border px-3 py-3" style={{ background: colors.cardBg, borderColor: colors.border }}>
             <div className="min-w-0">
               <div className="text-sm font-semibold" style={{ color: colors.title }}>
                 Google Drive
@@ -3636,8 +3669,8 @@ const renderFileActions = (file: GDriveFileUI) => {
               onClick={handleConnectAccount}
               className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity"
               style={{
-                background: `${accentColor}12`,
-                border: `1px solid ${accentColor}33`,
+                background: connectingAccount ? `${accentColor}12` : colors.buttonSoftBg,
+                border: `1px solid ${colors.border}`,
                 color: accentColor,
                 cursor: connectingAccount ? "not-allowed" : "pointer",
                 opacity: connectingAccount ? 0.65 : 1,
@@ -3705,7 +3738,7 @@ const renderFileActions = (file: GDriveFileUI) => {
 
             <div
               className="flex w-full shrink-0 flex-col gap-3 border-b px-5 py-3"
-              style={{ background: colors.surfaceBg, borderColor: colors.border }}
+              style={{ background: colors.cardBg, borderColor: colors.border }}
             >
               {/* Row 1: search + controls (icon toggle, files/trash, refresh, upload, item count) */}
               <div className="flex w-full min-w-0 items-center gap-3">
@@ -3727,8 +3760,9 @@ const renderFileActions = (file: GDriveFileUI) => {
                       className="h-9 w-full rounded-full pl-8 pr-3 text-xs outline-none"
                       style={{
                         background: colors.inputBg,
-                        border: `1px solid ${colors.border}`,
+                        border: `1px solid ${colors.inputBorder}`,
                         color: colors.text,
+                        caretColor: accentColor,
                       }}
                     />
                   </div>
@@ -4119,7 +4153,7 @@ const renderFileActions = (file: GDriveFileUI) => {
               <div
                 className="overflow-hidden rounded-2xl border"
                 style={{
-                  background: colors.surfaceBg,
+                  background: colors.cardBg,
                   borderColor: colors.border,
                   boxShadow: colors.shadow,
                 }}
@@ -4169,7 +4203,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 className="px-3 py-2 text-xs font-semibold"
                                 style={{
                                   color: colors.header,
-                                  background: colors.rowHover,
+                                  background: colors.panelBg,
                                   borderBottom: `1px solid ${colors.border}`,
                                 }}
                               >
@@ -4181,7 +4215,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 style={{
                                   gridTemplateColumns: effectiveTableGridTemplate,
                                   color: colors.header,
-                                  background: colors.rowHover,
+                                  background: colors.panelBg,
                                   borderBottom: `1px solid ${colors.border}`,
                                 }}
                               >
@@ -4222,12 +4256,12 @@ const renderFileActions = (file: GDriveFileUI) => {
                                   tabIndex={0}
                                   className="group grid items-center px-3 py-2 transition-colors"
                                   style={{
-                                    gridTemplateColumns: effectiveTableGridTemplate,
-                                    background: colors.surfaceBg,
-                                    borderBottom: `1px solid ${colors.border}`,
-                                    color: colors.text,
-                                    cursor: "pointer",
-                                  }}
+                                      gridTemplateColumns: effectiveTableGridTemplate,
+                                      background: colors.cardBg,
+                                      borderBottom: `1px solid ${colors.border}`,
+                                      color: colors.text,
+                                      cursor: "pointer",
+                                    }}
                                   onContextMenu={(event) => handleFileContextMenu(event, file)}
                                   onClick={(event) => {
                                     if (isGDriveInteractiveClickTarget(event.target)) return;
@@ -4243,7 +4277,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                     event.currentTarget.style.background = colors.rowHover;
                                   }}
                                   onMouseLeave={(event) => {
-                                    event.currentTarget.style.background = colors.surfaceBg;
+                                    event.currentTarget.style.background = colors.cardBg;
                                   }}
                                 >
                                   {isChecklistMode ? (
@@ -4263,7 +4297,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                     </div>
                                   ) : null}
                                   <div className="flex min-w-0 items-center gap-3">
-                                    {renderFileIcon(file)}
+                                    {renderFileIcon(file, colors)}
                                     <div className="min-w-0">
                                       <div className="flex min-w-0 items-center gap-2">
                                         <span
@@ -4330,23 +4364,23 @@ const renderFileActions = (file: GDriveFileUI) => {
 
                           {regularFileItems.length > 0 ? (
                             <div>
-                              <div
-                                className="px-3 py-2 text-xs font-semibold"
-                                style={{
-                                  color: colors.header,
-                                  background: colors.rowHover,
-                                  borderBottom: `1px solid ${colors.border}`,
-                                }}
-                              >
-                                Files
-                              </div>
+                                <div
+                                  className="px-3 py-2 text-xs font-semibold"
+                                  style={{
+                                    color: colors.header,
+                                    background: colors.panelBg,
+                                    borderBottom: `1px solid ${colors.border}`,
+                                  }}
+                                >
+                                  Files
+                                </div>
 
                               <div
                                 className="grid items-center px-3 py-2 text-[11px] font-semibold"
                                 style={{
                                   gridTemplateColumns: effectiveTableGridTemplate,
                                   color: colors.header,
-                                  background: colors.rowHover,
+                                  background: colors.panelBg,
                                   borderBottom: `1px solid ${colors.border}`,
                                 }}
                               >
@@ -4386,7 +4420,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                   className="group grid items-center px-3 py-2 transition-colors"
                                   style={{
                                     gridTemplateColumns: effectiveTableGridTemplate,
-                                    background: colors.surfaceBg,
+                                    background: colors.cardBg,
                                     borderBottom: `1px solid ${colors.border}`,
                                     color: colors.text,
                                   }}
@@ -4395,7 +4429,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                     event.currentTarget.style.background = colors.rowHover;
                                   }}
                                   onMouseLeave={(event) => {
-                                    event.currentTarget.style.background = colors.surfaceBg;
+                                    event.currentTarget.style.background = colors.cardBg;
                                   }}
                                 >
                                   {isChecklistMode ? (
@@ -4415,7 +4449,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                     </div>
                                   ) : null}
                                   <div className="flex min-w-0 items-center gap-3">
-                                    {renderFileIcon(file)}
+                                    {renderFileIcon(file, colors)}
                                     <div className="min-w-0">
                                       <div className="flex min-w-0 items-center gap-2">
                                         <span
@@ -4490,7 +4524,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                             className="px-3 py-2 text-xs font-semibold"
                             style={{
                               color: colors.header,
-                              background: colors.rowHover,
+                              background: colors.panelBg,
                               borderBottom: `1px solid ${colors.border}`,
                             }}
                           >
@@ -4513,7 +4547,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 tabIndex={0}
                                 className="group relative rounded-xl border"
                                 style={{
-                                  background: colors.surfaceBg,
+                                  background: colors.cardBg,
                                   borderColor: colors.border,
                                   padding: 12,
                                   color: colors.text,
@@ -4549,7 +4583,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 ) : null}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
-                                    {renderFileIcon(file)}
+                                    {renderFileIcon(file, colors)}
                                     <div className="min-w-0">
                                       <div
                                         className="flex min-w-0 items-center gap-2"
@@ -4609,7 +4643,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                             className="px-3 py-2 text-xs font-semibold"
                             style={{
                               color: colors.header,
-                              background: colors.rowHover,
+                              background: colors.panelBg,
                               borderBottom: `1px solid ${colors.border}`,
                             }}
                           >
@@ -4630,7 +4664,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 key={file.rowKey}
                                 className="group relative rounded-xl border"
                                 style={{
-                                  background: colors.surfaceBg,
+                                  background: colors.cardBg,
                                   borderColor: colors.border,
                                   padding: 12,
                                   color: colors.text,
@@ -4655,7 +4689,7 @@ const renderFileActions = (file: GDriveFileUI) => {
                                 ) : null}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
-                                    {renderFileIcon(file)}
+                                    {renderFileIcon(file, colors)}
                                     <div className="min-w-0">
                                       <div
                                         className="flex min-w-0 items-center gap-2"
@@ -4725,8 +4759,8 @@ const renderFileActions = (file: GDriveFileUI) => {
                       disabled={isLoadingMore}
                       className="rounded-full border px-4 py-2 text-sm font-semibold"
                       style={{
-                        background: isLoadingMore ? colors.rowHover : colors.surfaceBg,
-                        color: colors.title,
+                        background: isLoadingMore ? colors.rowHover : colors.buttonSoftBg,
+                        color: colors.text,
                         borderColor: colors.border,
                       }}
                     >

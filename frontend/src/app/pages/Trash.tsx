@@ -29,20 +29,19 @@ type ResolvedTheme = "dark" | "light";
 function safeReadAppearanceTheme(): AppearanceTheme {
   try {
     const raw = localStorage.getItem("nimbus_appearance_theme");
-    if (!raw) return "system";
     if (raw === "dark" || raw === "light" || raw === "system") return raw;
-    return "system";
+    return "dark";
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
 function safeReadAccentColor(): string {
   try {
     const raw = localStorage.getItem("nimbus_accent_color");
-    return raw ? String(raw) : "#a78bfa";
+    return raw ? String(raw) : "#3b82f6";
   } catch {
-    return "#a78bfa";
+    return "#3b82f6";
   }
 }
 
@@ -52,9 +51,9 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   try {
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
-      : "light";
+      : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -86,6 +85,8 @@ export function Trash({
         cardBg: "#ffffff",
         panelBg: "#f1f5f9",
         inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        inputText: "#334155",
         border: "#dbe3ef",
         borderSoft: "#e5eaf1",
         title: "#0f172a",
@@ -93,7 +94,10 @@ export function Trash({
         muted: "#64748b",
         muted2: "#94a3b8",
         rowHover: "#f8fafc",
+        rowHoverBg: "#f8fafc",
+        buttonSoftBg: "#f1f5f9",
         selectedBg: "rgba(168, 85, 247, 0.08)",
+        selectedBorder: "rgba(168, 85, 247, 0.3)",
         modalBg: "#ffffff",
         overlay: "rgba(15, 23, 42, 0.45)",
       };
@@ -104,6 +108,8 @@ export function Trash({
       cardBg: "#0f1729",
       panelBg: "#0d1829",
       inputBg: "#0d1829",
+      inputBorder: "#1a2540",
+      inputText: "#94a3b8",
       border: "#1a2540",
       borderSoft: "#0a1020",
       title: "#e2e8f0",
@@ -111,7 +117,10 @@ export function Trash({
       muted: "#64748b",
       muted2: "#475569",
       rowHover: "#0d1829",
+      rowHoverBg: "#111c2f",
+      buttonSoftBg: "#1a2540",
       selectedBg: "rgba(168, 85, 247, 0.08)",
+      selectedBorder: "rgba(168, 85, 247, 0.3)",
       modalBg: "#0f1729",
       overlay: "rgba(0, 0, 0, 0.70)",
     };
@@ -629,7 +638,7 @@ export function Trash({
               <Search
                 size={13}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: trashColors.muted }}
+                    style={{ color: trashColors.muted }}
               />
               <input
                 value={search}
@@ -638,8 +647,9 @@ export function Trash({
                 className="pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
                 style={{
                   background: trashColors.inputBg,
-                  border: `1px solid ${trashColors.border}`,
-                  color: trashColors.text,
+                      border: `1px solid ${trashColors.inputBorder}`,
+                      color: trashColors.inputText,
+                      caretColor: accentColor,
                   width: "200px",
                 }}
               />
@@ -673,7 +683,7 @@ export function Trash({
                 className="grid px-4 py-2.5 items-center"
                 style={{
                   gridTemplateColumns: "28px 1fr 120px 150px 130px 170px",
-                  borderBottom: "1px solid #1a2540",
+                  borderBottom: `1px solid ${trashColors.border}`,
                 }}
               >
                 {/* Select all */}
@@ -712,40 +722,25 @@ export function Trash({
                           });
                         }
                       }}
-                      style={{ width: 14, height: 14, accentColor: "#ef4444" }}
+                      style={{ width: 14, height: 14, accentColor: accentColor, background: trashColors.inputBg, border: `1px solid ${trashColors.border}` }}
                     />
                   );
                 })()}
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  Name
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  Type
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  Size
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  Deleted At
-                </span>
-                <span
-                  className="text-[11px] font-medium uppercase tracking-wider"
-                  style={{ color: "#334155" }}
-                >
-                  Actions
-                </span>
+                {[
+                  ["Name", 1],
+                  ["Type", 2],
+                  ["Size", 3],
+                  ["Deleted At", 4],
+                  ["Actions", 5],
+                ].map(([label]) => (
+                  <span
+                    key={String(label)}
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: trashColors.muted }}
+                  >
+                    {label}
+                  </span>
+                ))}
               </div>
             )}
 
@@ -789,16 +784,16 @@ export function Trash({
                         return next;
                       });
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
+                    style={{ width: 14, height: 14, accentColor: accentColor, background: trashColors.inputBg, border: `1px solid ${trashColors.border}` }}
                   />
                 </div>
 
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className="w-7 h-7 rounded-md flex items-center justify-center opacity-60"
-                    style={{ background: trashColors.border }}
+                    style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
                   >
-                    <FileText size={14} style={{ color: trashColors.muted }} />
+                    <FileText size={14} style={{ color: accentColor }} />
                   </div>
                   <span
                     className="text-sm text-ellipsis overflow-hidden whitespace-nowrap"
@@ -825,7 +820,7 @@ export function Trash({
                     aria-label={`Restore ${item.original_name}`}
                     disabled={restoreLoadingId === item.id}
                     onClick={() => handleRestore(item.id)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] hover:bg-[#1a2540] transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors"
                     style={{
                       color: "#34d399",
                       border: "1px solid rgba(52,211,153,0.2)",
@@ -845,7 +840,7 @@ export function Trash({
                   <button
                     aria-label={`Delete Permanently ${item.original_name}`}
                     onClick={() => openForceDeleteModal(item)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] hover:bg-[#1a2540] transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors"
                     style={{
                       color: "#ef4444",
                       border: "1px solid rgba(239,68,68,0.2)",
@@ -868,10 +863,10 @@ export function Trash({
           {selectedFolderIds.size > 0 && (
             <div
               className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-xl"
-              style={{ background: "#0f1729", border: "1px solid #1a2540" }}
+              style={{ background: trashColors.cardBg, border: `1px solid ${trashColors.border}` }}
             >
-              <div className="text-xs" style={{ color: "#94a3b8" }}>
-                <span style={{ color: "#e2e8f0", fontWeight: 700 }}>
+              <div className="text-xs" style={{ color: trashColors.muted }}>
+                <span style={{ color: trashColors.title, fontWeight: 700 }}>
                   {selectedFolderIds.size}
                 </span>{" "}
                 folder dipilih
@@ -989,7 +984,7 @@ export function Trash({
                         });
                       }
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
+                    style={{ width: 14, height: 14, accentColor: accentColor, background: trashColors.inputBg, border: `1px solid ${trashColors.border}` }}
                   />
                 );
               })()}
@@ -1018,17 +1013,13 @@ export function Trash({
               <div
                 key={folder.id}
                 className="grid px-4 py-3 items-center transition-colors"
-                style={{
-                  gridTemplateColumns: "28px 1fr 130px 170px",
-                  borderBottom: `1px solid ${trashColors.borderSoft}`,
-                  background: selectedFolderIds.has(folder.id)
-                    ? "rgba(168, 85, 247, 0.08)"
-                    : "transparent",
-                  borderLeft: selectedFolderIds.has(folder.id)
-                    ? "3px solid rgba(168, 85, 247, 0.3)"
-                    : "3px solid transparent",
-                  paddingLeft: selectedFolderIds.has(folder.id) ? "calc(1rem - 3px)" : "1rem",
-                }}
+                  style={{
+                    gridTemplateColumns: "28px 1fr 130px 170px",
+                    borderBottom: `1px solid ${trashColors.borderSoft}`,
+                    background: selectedFolderIds.has(folder.id) ? trashColors.selectedBg : "transparent",
+                    borderLeft: selectedFolderIds.has(folder.id) ? `3px solid ${trashColors.selectedBorder}` : "3px solid transparent",
+                    paddingLeft: selectedFolderIds.has(folder.id) ? "calc(1rem - 3px)" : "1rem",
+                  }}
                 onMouseEnter={(e) => {
                   if (!selectedFolderIds.has(folder.id)) {
                     e.currentTarget.style.backgroundColor = trashColors.rowHover;
@@ -1054,16 +1045,16 @@ export function Trash({
                         return next;
                       });
                     }}
-                    style={{ width: 14, height: 14, accentColor: "#ef4444" }}
+                    style={{ width: 14, height: 14, accentColor: accentColor, background: trashColors.inputBg, border: `1px solid ${trashColors.border}` }}
                   />
                 </div>
 
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className="w-7 h-7 rounded-md flex items-center justify-center opacity-60"
-                    style={{ background: "#1a2540" }}
+                    style={{ background: trashColors.panelBg, border: `1px solid ${trashColors.border}` }}
                   >
-                    <FileText size={14} style={{ color: trashColors.muted }} />
+                    <FileText size={14} style={{ color: accentColor }} />
                   </div>
                   <span
                     className="text-sm text-ellipsis overflow-hidden whitespace-nowrap"
@@ -1131,7 +1122,7 @@ export function Trash({
                       setForceDeleteFolderError("");
                       setIsFolderForceDeleteModalOpen(true);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] hover:bg-[#1a2540] transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors"
                     style={{
                       color: "#ef4444",
                       border: "1px solid rgba(239,68,68,0.2)",

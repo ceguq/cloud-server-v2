@@ -44,43 +44,6 @@ const sections = [
   { id: "appearance", label: "Appearance", icon: Palette },
 ];
 
-function Toggle({
-  on,
-  accentColor,
-  offBg,
-  knobBg,
-}: {
-  on: boolean;
-  accentColor?: string;
-  offBg?: string;
-  knobBg?: string;
-}) {
-  const [checked, setChecked] = useState(on);
-  const resolvedAccent = accentColor ?? "#3b82f6";
-  const resolvedOffBg = offBg ?? "#1e2d45";
-  const resolvedKnobBg = knobBg ?? "#fff";
-
-  return (
-    <button
-      onClick={() => setChecked(!checked)}
-      className="relative w-10 h-5 rounded-full transition-all"
-      style={{
-        background: checked
-          ? `linear-gradient(135deg, ${resolvedAccent}, #22d3ee)`
-          : resolvedOffBg,
-      }}
-    >
-      <span
-        className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
-        style={{
-          background: resolvedKnobBg,
-          left: checked ? "calc(100% - 18px)" : "2px",
-        }}
-      />
-    </button>
-  );
-}
-
 function EditableNamePanel({
   initialName,
   accentColor,
@@ -609,7 +572,7 @@ export function Settings() {
             >
               <SettingRow
                 label="Two-Factor Authentication"
-                desc="Require 2FA for sign-in"
+                desc="Two-factor sign-in protection is not available yet"
                 labelColor={settingsColors.text}
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
@@ -627,7 +590,7 @@ export function Settings() {
               </SettingRow>
               <SettingRow
                 label="Login Notifications"
-                desc="Email on new device login"
+                desc="New-device login email alerts are not available yet"
                 labelColor={settingsColors.text}
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
@@ -645,7 +608,7 @@ export function Settings() {
               </SettingRow>
               <SettingRow
                 label="Session Timeout"
-                desc="Auto-logout after 24h of inactivity"
+                desc="Inactivity-based automatic logout is not available yet"
                 labelColor={settingsColors.text}
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
@@ -663,7 +626,7 @@ export function Settings() {
               </SettingRow>
               <SettingRow
                 label="End-to-End Encryption"
-                desc="Encrypt files before upload"
+                desc="Client-side file encryption is not available yet"
                 labelColor={settingsColors.text}
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
@@ -726,12 +689,16 @@ export function Settings() {
                 descColor={settingsColors.muted}
                 borderColor={settingsColors.border}
               >
-                <Toggle
-                  on={true}
-                  accentColor={accentColor}
-                  offBg={settingsColors.panelBg}
-                  knobBg={resolvedSettingsTheme === "light" ? "#ffffff" : "#fff"}
-                />
+                <div
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: settingsColors.panelBg,
+                    color: settingsColors.muted,
+                    border: `1px solid ${settingsColors.panelBorder}`,
+                  }}
+                >
+                  Coming soon
+                </div>
               </SettingRow>
               <SettingRow
                 label="Duplicate Detection"

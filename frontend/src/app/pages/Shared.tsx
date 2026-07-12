@@ -441,7 +441,7 @@ export function Shared() {
           borderColor={sharedColors.border}
           textColor={sharedColors.muted}
           mutedColor={sharedColors.muted2}
-          accentColor="#3b82f6"
+          accentColor={accentColor}
         />
       )}
 
@@ -679,7 +679,7 @@ export function Shared() {
                 }}
                 className="h-4 w-4 rounded"
                 style={{
-                  accentColor: "#ef4444",
+                  accentColor: accentColor,
                   background: sharedColors.checkboxBg,
                   border: `1px solid ${sharedColors.border}`,
                 }}
@@ -763,7 +763,7 @@ export function Shared() {
                     }}
                     className="h-4 w-4 rounded"
                     style={{
-                      accentColor: "#ef4444",
+                      accentColor: accentColor,
                       background: sharedColors.checkboxBg,
                       border: `1px solid ${sharedColors.border}`,
                     }}
@@ -775,9 +775,9 @@ export function Shared() {
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${color}18` }}
+                    style={{ background: sharedColors.panelBg, border: `1px solid ${sharedColors.border}` }}
                   >
-                    <Icon size={14} style={{ color }} />
+                    <Icon size={14} style={{ color: accentColor }} />
                   </div>
                   <div className="min-w-0">
                     <div
@@ -854,17 +854,17 @@ export function Shared() {
                         ? "rgba(52,211,153,0.1)"
                         : isCopyFail
                           ? "rgba(248,113,113,0.1)"
-                          : "rgba(59,130,246,0.1)",
+                          : `${accentColor}14`,
                       border: isCopied
                         ? "1px solid rgba(52,211,153,0.25)"
                         : isCopyFail
                           ? "1px solid rgba(248,113,113,0.25)"
-                          : "1px solid rgba(59,130,246,0.2)",
+                          : `1px solid ${accentColor}22`,
                       color: isCopied
                         ? "#34d399"
                         : isCopyFail
                           ? "#f87171"
-                          : "#60a5fa",
+                          : accentColor,
                       minWidth: 54,
                       justifyContent: "center",
                     }}
@@ -883,9 +883,9 @@ export function Shared() {
                     aria-label={`Open link for ${share.file?.original_name}`}
                     className="flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:opacity-80"
                     style={{
-                      background: "rgba(34,211,238,0.08)",
-                      border: "1px solid rgba(34,211,238,0.15)",
-                      color: "#22d3ee",
+                      background: `${accentColor}14`,
+                      border: `1px solid ${accentColor}22`,
+                      color: accentColor,
                     }}
                   >
                     <ExternalLink size={11} />

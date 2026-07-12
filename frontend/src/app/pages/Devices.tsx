@@ -61,7 +61,6 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
   }
 }
 
-
 export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,20 +78,15 @@ export function Devices() {
   const [savingTrustDeviceId, setSavingTrustDeviceId] = useState<string | null>(null);
   const [trustError, setTrustError] = useState<string | null>(null);
 
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>(
-    safeReadAppearanceTheme,
-  );
+  // Only keep resolvedTheme + accentColor as requested
   const [accentColor, setAccentColor] = useState<string>(safeReadAccentColor);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(
     resolveAppearanceTheme(safeReadAppearanceTheme()),
   );
 
-
-
   const syncThemeFromStorage = () => {
     const nextTheme = safeReadAppearanceTheme();
     const nextAccent = safeReadAccentColor();
-    setAppearanceTheme(nextTheme);
     setAccentColor(nextAccent);
     setResolvedTheme(resolveAppearanceTheme(nextTheme));
   };
@@ -323,60 +317,66 @@ export function Devices() {
   const trustedCount = useMemo(() => devices.filter((d) => d.trusted).length, [devices]);
   const offlineCount = Math.max(0, devices.length - onlineCount);
 
-  const deviceColors =
+  const devicesColors =
     resolvedTheme === "light"
       ? {
           pageBg: "#f8fafc",
           cardBg: "#ffffff",
           panelBg: "#f1f5f9",
           border: "#dbe3ef",
-          borderSoft: "#e5eaf1",
           title: "#0f172a",
           text: "#334155",
           muted: "#64748b",
           muted2: "#94a3b8",
+          inputBg: "#ffffff",
+          inputBorder: "#dbe3ef",
+          inputText: "#334155",
+          buttonSoftBg: "#f1f5f9",
+          rowHoverBg: "#f8fafc",
           iconMuted: "#64748b",
-          buttonBg: "#f8fafc",
         }
       : {
-          pageBg: "#111c2f",
+          pageBg: "#080d1a",
           cardBg: "#0f1729",
           panelBg: "#0d1829",
           border: "#1a2540",
-          borderSoft: "#0a1020",
           title: "#e2e8f0",
-          text: "#94a3b8",
+          text: "#cbd5e1",
           muted: "#64748b",
           muted2: "#475569",
+          inputBg: "#0d1829",
+          inputBorder: "#1a2540",
+          inputText: "#94a3b8",
+          buttonSoftBg: "#1a2540",
+          rowHoverBg: "#111c2f",
           iconMuted: "#475569",
-          buttonBg: "#0d1829",
         };
 
   return (
     <div
       className="flex-1 overflow-y-auto p-6"
-      style={{ background: deviceColors.pageBg }}
+      style={{ background: devicesColors.pageBg }}
     >
       <div className="flex items-center justify-between mb-5">
         <div>
 
-          <h1 className="text-xl font-semibold" style={{ color: deviceColors.title }}>
+          <h1 className="text-xl font-semibold" style={{ color: devicesColors.title }}>
             Devices
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: deviceColors.muted }}>
+          <p className="text-xs mt-0.5" style={{ color: devicesColors.muted }}>
 
             {devices.length} devices registered · {onlineCount} online
           </p>
-        </div>
+            </div>
         <div className="flex items-center gap-2">
           <button
             onClick={loadDevices}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
             style={{
-              borderColor: deviceColors.border,
-              color: deviceColors.text,
-              background: deviceColors.cardBg,
+              borderColor: devicesColors.border,
+              color: devicesColors.text,
+              background: devicesColors.cardBg,
             }}
             type="button"
           >
@@ -386,9 +386,9 @@ export function Devices() {
           <div
             className="rounded-full border px-3 py-2 text-xs font-semibold"
             style={{
-              borderColor: deviceColors.border,
-              color: deviceColors.muted,
-              background: deviceColors.cardBg,
+              borderColor: devicesColors.border,
+              color: devicesColors.muted,
+              background: devicesColors.cardBg,
             }}
           >
             Devices are detected automatically
@@ -401,7 +401,7 @@ export function Devices() {
       {loading && (
         <DevicesLoadingState
           title="Loading devices..."
-          textColor={deviceColors.muted}
+          textColor={devicesColors.muted}
           className="text-xs"
         />
       )}
@@ -414,9 +414,9 @@ export function Devices() {
             onClick={loadDevices}
             className="mt-2 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold"
             style={{
-              borderColor: deviceColors.border,
-              color: deviceColors.text,
-              background: deviceColors.cardBg,
+              borderColor: devicesColors.border,
+              color: devicesColors.text,
+              background: devicesColors.cardBg,
             }}
             type="button"
           >
@@ -430,10 +430,10 @@ export function Devices() {
         <DevicesEmptyState
           title="No devices found yet."
           description="Devices will appear here after device tracking is available."
-          textColor={deviceColors.title}
-          mutedColor={deviceColors.muted}
-          backgroundColor={deviceColors.cardBg}
-          borderColor={deviceColors.border}
+          textColor={devicesColors.title}
+          mutedColor={devicesColors.muted}
+          backgroundColor={devicesColors.cardBg}
+          borderColor={devicesColors.border}
           className="rounded-xl p-6"
         />
       )}
@@ -453,8 +453,8 @@ export function Devices() {
                   key={s.label}
                   className="rounded-xl p-4"
                   style={{
-                    background: deviceColors.cardBg,
-                    border: `1px solid ${deviceColors.border}`,
+                    background: devicesColors.cardBg,
+                    border: `1px solid ${devicesColors.border}`,
                   }}
                 >
 
@@ -466,10 +466,10 @@ export function Devices() {
                       <Icon size={14} style={{ color: s.color }} />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold" style={{ color: deviceColors.title }}>
+                  <div className="text-2xl font-bold" style={{ color: devicesColors.title }}>
                     {s.value}
                   </div>
-                  <div className="text-xs" style={{ color: deviceColors.muted }}>
+                  <div className="text-xs" style={{ color: devicesColors.muted }}>
                     {s.label}
                   </div>
 
@@ -498,9 +498,9 @@ export function Devices() {
                   key={device.id}
                   className="rounded-xl p-4"
                   style={{
-                    background: deviceColors.cardBg,
+                    background: devicesColors.cardBg,
                     border: `1px solid ${
-                      status === "online" ? "rgba(52,211,153,0.2)" : deviceColors.border
+                      status === "online" ? "rgba(52,211,153,0.2)" : devicesColors.border
                     }`,
                   }}
                 >
@@ -510,16 +510,16 @@ export function Devices() {
                       className="w-12 h-12 rounded-xl flex items-center justify-center"
                       style={{
                         background:
-                          status === "online" ? "rgba(52,211,153,0.1)" : `${deviceColors.muted}1A`,
+                          status === "online" ? "rgba(52,211,153,0.1)" : `${devicesColors.muted}1A`,
                         border: `1px solid ${
-                          status === "online" ? "rgba(52,211,153,0.2)" : deviceColors.border
+                          status === "online" ? "rgba(52,211,153,0.2)" : devicesColors.border
                         }`,
                       }}
                     >
                       <Icon
                         size={22}
                         style={{
-                          color: status === "online" ? "#34d399" : deviceColors.iconMuted,
+                          color: status === "online" ? "#34d399" : devicesColors.iconMuted,
                         }}
                       />
                     </div>
@@ -546,17 +546,17 @@ export function Devices() {
                           value={editingName}
                           className="h-8 w-full rounded-lg border px-2 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60"
                           style={{
-                            background: deviceColors.panelBg,
-                            borderColor: deviceColors.border,
-                            color: deviceColors.title,
+                            background: devicesColors.panelBg,
+                            borderColor: devicesColors.border,
+                            color: devicesColors.title,
                           }}
                         />
                       ) : (
-                        <div className="truncate text-sm font-semibold" style={{ color: deviceColors.title }}>
+                        <div className="truncate text-sm font-semibold" style={{ color: devicesColors.title }}>
                           {displayName}
                         </div>
                       )}
-                      <div className="text-xs mt-0.5" style={{ color: deviceColors.muted }}>
+                      <div className="text-xs mt-0.5" style={{ color: devicesColors.muted }}>
 
                         {device.device_type ?? "Unknown type"} · {device.platform ?? "Unknown platform"}
                       </div>
@@ -565,7 +565,7 @@ export function Devices() {
                           className="w-1.5 h-1.5 rounded-full"
                           style={{
                             background:
-                              status === "online" ? "#34d399" : deviceColors.iconMuted,
+                              status === "online" ? "#34d399" : devicesColors.iconMuted,
                           }}
                         />
 
@@ -573,12 +573,12 @@ export function Devices() {
                         <span
 
                           className="text-[10px] capitalize"
-                          style={{ color: status === "online" ? "#34d399" : deviceColors.iconMuted }}
+                          style={{ color: status === "online" ? "#34d399" : devicesColors.iconMuted }}
                         >
                           {status}
                         </span>
 
-                        {device.trusted && <CheckCircle size={10} style={{ color: "#3b82f6" }} />}
+                        {device.trusted && <CheckCircle size={10} style={{ color: accentColor }} />}
                       </div>
                       {isEditing && renameError && (
                         <div className="mt-1 text-[10px]" style={{ color: "#f87171" }}>
@@ -588,13 +588,13 @@ export function Devices() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-3" style={{ borderTop: `1px solid ${deviceColors.border}` }}>
+                  <div className="space-y-2 pt-3" style={{ borderTop: `1px solid ${devicesColors.border}` }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <Clock size={11} style={{ color: deviceColors.iconMuted }} />
-                        <span className="text-xs" style={{ color: deviceColors.muted }}>Last seen</span>
+                        <Clock size={11} style={{ color: devicesColors.iconMuted }} />
+                        <span className="text-xs" style={{ color: devicesColors.muted }}>Last seen</span>
                       </div>
-                      <span className="text-xs" style={{ color: deviceColors.muted2 }}>
+                      <span className="text-xs" style={{ color: devicesColors.muted2 }}>
 
                         {formatLastSeen(device.last_seen_at)}
                       </span>
@@ -602,20 +602,20 @@ export function Devices() {
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <HardDrive size={11} style={{ color: deviceColors.iconMuted }} />
-                        <span className="text-xs" style={{ color: deviceColors.muted }}>Browser</span>
+                        <HardDrive size={11} style={{ color: devicesColors.iconMuted }} />
+                        <span className="text-xs" style={{ color: devicesColors.muted }}>Browser</span>
                       </div>
-                      <span className="text-xs" style={{ color: deviceColors.muted2 }}>
+                      <span className="text-xs" style={{ color: devicesColors.muted2 }}>
                         {device.browser ?? "Unknown"}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <Wifi size={11} style={{ color: deviceColors.iconMuted }} />
-                        <span className="text-xs" style={{ color: deviceColors.muted }}>IP Address</span>
+                        <Wifi size={11} style={{ color: devicesColors.iconMuted }} />
+                        <span className="text-xs" style={{ color: devicesColors.muted }}>IP Address</span>
                       </div>
-                      <span className="text-xs font-mono" style={{ color: deviceColors.muted }}>
+                      <span className="text-xs font-mono" style={{ color: devicesColors.muted }}>
 
                         {device.ip_address ?? "Unknown IP"}
                       </span>
@@ -629,8 +629,8 @@ export function Devices() {
                         disabled={isRenaming || isDeleting || isSavingTrust || editingName.trim().length === 0}
                         onClick={() => saveRename(device.id)}
                         style={{
-                          background: deviceColors.panelBg,
-                          borderColor: deviceColors.border,
+                          background: devicesColors.panelBg,
+                          borderColor: devicesColors.border,
                           color: "#34d399",
                         }}
                         type="button"
@@ -643,9 +643,9 @@ export function Devices() {
                         disabled={isRenaming || isDeleting || isSavingTrust}
                         onClick={cancelRename}
                         style={{
-                          background: deviceColors.panelBg,
-                          borderColor: deviceColors.border,
-                          color: deviceColors.muted,
+                          background: devicesColors.panelBg,
+                          borderColor: devicesColors.border,
+                          color: devicesColors.muted,
                         }}
                         type="button"
                       >
@@ -657,14 +657,14 @@ export function Devices() {
                     <div
                       className="mt-3 rounded-lg border p-3"
                       style={{
-                        background: deviceColors.panelBg,
-                        borderColor: deviceColors.border,
+                        background: devicesColors.panelBg,
+                        borderColor: devicesColors.border,
                       }}
                     >
-                      <div className="text-xs font-semibold" style={{ color: deviceColors.title }}>
+                      <div className="text-xs font-semibold" style={{ color: devicesColors.title }}>
                         {trustActionLabel} {displayName}?
                       </div>
-                      <p className="mt-1 text-[10px]" style={{ color: deviceColors.muted }}>
+                      <p className="mt-1 text-[10px]" style={{ color: devicesColors.muted }}>
                         This only changes the trusted label in NimbusDrive. It does not log this browser out, revoke tokens, or block future login.
                       </p>
                       {trustError && (
@@ -678,8 +678,8 @@ export function Devices() {
                           disabled={isSavingTrust}
                           onClick={() => confirmTrustChange(device.id, targetTrusted)}
                           style={{
-                            background: deviceColors.panelBg,
-                            borderColor: deviceColors.border,
+                            background: devicesColors.panelBg,
+                            borderColor: devicesColors.border,
                             color: targetTrusted ? "#34d399" : "#f59e0b",
                           }}
                           type="button"
@@ -692,9 +692,9 @@ export function Devices() {
                           disabled={isSavingTrust}
                           onClick={cancelTrustChange}
                           style={{
-                            background: deviceColors.panelBg,
-                            borderColor: deviceColors.border,
-                            color: deviceColors.muted,
+                            background: devicesColors.panelBg,
+                            borderColor: devicesColors.border,
+                            color: devicesColors.muted,
                           }}
                           type="button"
                         >
@@ -707,14 +707,14 @@ export function Devices() {
                     <div
                       className="mt-3 rounded-lg border p-3"
                       style={{
-                        background: deviceColors.panelBg,
-                        borderColor: deviceColors.border,
+                        background: devicesColors.panelBg,
+                        borderColor: devicesColors.border,
                       }}
                     >
-                      <div className="text-xs font-semibold" style={{ color: deviceColors.title }}>
+                      <div className="text-xs font-semibold" style={{ color: devicesColors.title }}>
                         Delete {displayName}?
                       </div>
-                      <p className="mt-1 text-[10px]" style={{ color: deviceColors.muted }}>
+                      <p className="mt-1 text-[10px]" style={{ color: devicesColors.muted }}>
                         This removes the record from this list only. It can appear again after the next successful login.
                       </p>
                       {deleteError && (
@@ -728,7 +728,7 @@ export function Devices() {
                           disabled={isDeleting || isSavingTrust}
                           onClick={() => confirmDelete(device.id)}
                           style={{
-                            background: deviceColors.panelBg,
+                            background: devicesColors.panelBg,
                             borderColor: "rgba(248,113,113,0.35)",
                             color: "#f87171",
                           }}
@@ -742,9 +742,9 @@ export function Devices() {
                           disabled={isDeleting || isSavingTrust}
                           onClick={cancelDelete}
                           style={{
-                            background: deviceColors.panelBg,
-                            borderColor: deviceColors.border,
-                            color: deviceColors.muted,
+                            background: devicesColors.panelBg,
+                            borderColor: devicesColors.border,
+                            color: devicesColors.muted,
                           }}
                           type="button"
                         >
@@ -760,9 +760,9 @@ export function Devices() {
                         disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
                         onClick={() => startRename(device)}
                         style={{
-                          background: deviceColors.panelBg,
-                          borderColor: deviceColors.border,
-                          color: deviceColors.muted,
+                          background: devicesColors.panelBg,
+                          borderColor: devicesColors.border,
+                          color: devicesColors.muted,
                         }}
                         type="button"
                       >
@@ -774,8 +774,8 @@ export function Devices() {
                         disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
                         onClick={() => startTrustChange(device)}
                         style={{
-                          background: deviceColors.panelBg,
-                          borderColor: deviceColors.border,
+                          background: devicesColors.panelBg,
+                          borderColor: devicesColors.border,
                           color: device.trusted ? "#f59e0b" : "#34d399",
                         }}
                         type="button"
@@ -788,7 +788,7 @@ export function Devices() {
                         disabled={renamingDeviceId !== null || deletingDeviceId !== null || savingTrustDeviceId !== null}
                         onClick={() => startDelete(device)}
                         style={{
-                          background: deviceColors.panelBg,
+                          background: devicesColors.panelBg,
                           borderColor: "rgba(248,113,113,0.35)",
                           color: "#f87171",
                         }}

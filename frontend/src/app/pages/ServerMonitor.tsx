@@ -188,9 +188,13 @@ export function ServerMonitor() {
   const colors = useMemo(() => {
     if (isDark) {
       return {
-        pageBg: "#111c2f",
-        panelBg: "#0f1729",
+        pageBg: "#080d1a",
+        cardBg: "#0f1729",
+        panelBg: "#0d1829",
         panelSoftBg: "#0d1829",
+        buttonSoftBg: "#1a2540",
+        rowHoverBg: "#111c2f",
+        progressTrack: "#1a2540",
         tileBg: "#1e2d45",
         border: "#1a2540",
         borderSoft: "#0a1020",
@@ -198,6 +202,7 @@ export function ServerMonitor() {
         text: "#94a3b8",
         textStrong: "#cbd5e1",
         muted: "#64748b",
+        muted2: "#475569",
         mutedSoft: "#475569",
         mutedFaint: "#334155",
         grid: "rgba(148,163,184,0.10)",
@@ -205,6 +210,9 @@ export function ServerMonitor() {
         accent: accentColor,
         accentSoftBg: withAlpha(accentColor, "1f"),
         accentBorder: withAlpha(accentColor, "59"),
+        inputBg: "#0d1829",
+        inputBorder: "#1a2540",
+        inputText: "#94a3b8",
         blue: "#3b82f6",
         blueSoft: "rgba(59,130,246,0.10)",
         success: "#34d399",
@@ -222,8 +230,12 @@ export function ServerMonitor() {
 
     return {
       pageBg: "#f8fafc",
+      cardBg: "#ffffff",
       panelBg: "#ffffff",
-      panelSoftBg: "#f8fafc",
+      panelSoftBg: "#f1f5f9",
+      buttonSoftBg: "#f1f5f9",
+      rowHoverBg: "#f8fafc",
+      progressTrack: "#e2e8f0",
       tileBg: "#f1f5f9",
       border: "#dbe3ef",
       borderSoft: "#e5eaf1",
@@ -231,6 +243,7 @@ export function ServerMonitor() {
       text: "#334155",
       textStrong: "#1e293b",
       muted: "#64748b",
+      muted2: "#94a3b8",
       mutedSoft: "#94a3b8",
       mutedFaint: "#cbd5e1",
       grid: "rgba(100,116,139,0.16)",
@@ -238,6 +251,9 @@ export function ServerMonitor() {
       accent: accentColor,
       accentSoftBg: withAlpha(accentColor, "12"),
       accentBorder: withAlpha(accentColor, "4d"),
+      inputBg: "#ffffff",
+      inputBorder: "#dbe3ef",
+      inputText: "#334155",
       blue: "#2563eb",
       blueSoft: "rgba(37,99,235,0.10)",
       success: "#059669",
@@ -378,7 +394,7 @@ export function ServerMonitor() {
           disabled={loading || refreshing}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
           style={{
-            background: colors.panelSoftBg,
+            background: colors.buttonSoftBg,
             border: `1px solid ${colors.border}`,
             color: colors.text,
           }}
@@ -575,7 +591,7 @@ export function ServerMonitor() {
               key={m.label}
               className="rounded-xl p-4"
               style={{
-                background: colors.panelBg,
+                background: colors.cardBg,
                 border: `1px solid ${colors.border}`,
                 boxShadow: colors.shadow,
               }}
@@ -593,7 +609,7 @@ export function ServerMonitor() {
                   style={{ width: `${m.progress}%`, background: `linear-gradient(90deg, ${m.color}99, ${m.color})` }}
                 />
               </div>
-              <div className="text-[10px]" style={{ color: colors.mutedSoft }}>{m.sub}</div>
+              <div className="text-[10px]" style={{ color: colors.muted2 }}>{m.sub}</div>
             </div>
           );
         })}
@@ -626,7 +642,7 @@ export function ServerMonitor() {
                 />
                 <YAxis stroke={colors.muted} style={{ fontSize: "12px" }} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  contentStyle={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
                   labelStyle={{ color: colors.text }}
                   formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
                 />
@@ -669,7 +685,7 @@ export function ServerMonitor() {
                 />
                 <YAxis stroke={colors.muted} style={{ fontSize: "12px" }} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  contentStyle={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
                   labelStyle={{ color: colors.text }}
                   formatter={(value) => typeof value === "number" ? `${value.toFixed(1)}%` : value}
                 />
@@ -754,7 +770,7 @@ export function ServerMonitor() {
                   <Cell fill={colors.cyanSoft} />
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: colors.panelSoftBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
+                  contentStyle={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "8px" }}
                   labelStyle={{ color: colors.text }}
                   formatter={(value) => `${value}%`}
                 />

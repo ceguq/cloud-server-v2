@@ -280,6 +280,109 @@ export function PublicSharePage() {
 
   // ── render ────────────────────────────────────────────────────────────────
 
+  // Theme helpers + local tokens for this page
+  type AppearanceTheme = "dark" | "light" | "system";
+  type ResolvedTheme = "dark" | "light";
+
+  function safeReadAppearanceTheme(): AppearanceTheme {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const raw = window.localStorage.getItem("nimbus_appearance_theme");
+      if (raw === "dark" || raw === "light" || raw === "system") return raw;
+    } catch {
+      // ignore
+    }
+    return "dark";
+  }
+
+  function safeReadAccentColor(): string {
+    if (typeof window === "undefined") return "#3b82f6";
+    try {
+      const raw = window.localStorage.getItem("nimbus_accent_color");
+      if (typeof raw === "string" && raw.trim().length > 0) return raw;
+    } catch {
+      // ignore
+    }
+    return "#3b82f6";
+  }
+
+  function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
+    if (theme === "dark" || theme === "light") return theme;
+    try {
+      const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+      return mq?.matches ? "dark" : "light";
+    } catch {
+      return "dark";
+    }
+  }
+
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveAppearanceTheme(safeReadAppearanceTheme()));
+  const [accentColor, setAccentColor] = useState<string>(() => safeReadAccentColor());
+
+  useEffect(() => {
+    const syncThemeFromStorage = () => {
+      const t = safeReadAppearanceTheme();
+      setAccentColor(safeReadAccentColor());
+      setResolvedTheme(resolveAppearanceTheme(t));
+    };
+
+    syncThemeFromStorage();
+    if (typeof window === "undefined") return undefined;
+    window.addEventListener("nimbus-appearance-change", syncThemeFromStorage);
+    window.addEventListener("storage", syncThemeFromStorage);
+    window.addEventListener("focus", syncThemeFromStorage);
+    let mq: MediaQueryList | null = null;
+    try {
+      mq = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
+      mq?.addEventListener?.("change", syncThemeFromStorage);
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      window.removeEventListener("nimbus-appearance-change", syncThemeFromStorage);
+      window.removeEventListener("storage", syncThemeFromStorage);
+      window.removeEventListener("focus", syncThemeFromStorage);
+      mq?.removeEventListener?.("change", syncThemeFromStorage);
+    };
+  }, []);
+
+  const publicShareColors = useMemo(() => {
+    if (resolvedTheme === "light") {
+      return {
+        pageBg: "#f8fafc",
+        cardBg: "#ffffff",
+        panelBg: "#f1f5f9",
+        border: "#dbe3ef",
+        title: "#0f172a",
+        text: "#334155",
+        muted: "#64748b",
+        muted2: "#94a3b8",
+        inputBg: "#ffffff",
+        inputBorder: "#dbe3ef",
+        inputText: "#334155",
+        buttonSoftBg: "#f1f5f9",
+        rowHoverBg: "#f8fafc",
+      };
+    }
+
+    return {
+      pageBg: "#080d1a",
+      cardBg: "#0f1729",
+      panelBg: "#0d1829",
+      border: "#1a2540",
+      title: "#e2e8f0",
+      text: "#cbd5e1",
+      muted: "#64748b",
+      muted2: "#475569",
+      inputBg: "#0d1829",
+      inputBorder: "#1a2540",
+      inputText: "#94a3b8",
+      buttonSoftBg: "#1a2540",
+      rowHoverBg: "#111c2f",
+    };
+  }, [resolvedTheme]);
+
   const isInvalid = !loading && !!errorMessage && !passwordRequired && !share?.file;
 
   return (
@@ -290,7 +393,7 @@ export function PublicSharePage() {
         alignItems: "center",
         justifyContent: "center",
         padding: "24px",
-        background: "linear-gradient(135deg, #142033 0%, #182640 60%, #10213a 100%)",
+        background: publicShareColors.pageBg,
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
       }}
     >
@@ -300,8 +403,7 @@ export function PublicSharePage() {
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
-          background:
-            "radial-gradient(ellipse 70% 50% at 50% 0%, rgba(59,130,246,0.07) 0%, transparent 70%)",
+          background: `radial-gradient(ellipse 70% 50% at 50% 0%, ${accentColor}14 0%, transparent 70%)`,
         }}
       />
 
@@ -310,10 +412,10 @@ export function PublicSharePage() {
           width: "100%",
           maxWidth: 480,
           borderRadius: 20,
-          border: "1px solid #1a2540",
-          background: "#0f1729",
+          border: `1px solid ${publicShareColors.border}`,
+          background: publicShareColors.cardBg,
           padding: "32px",
-          boxShadow: "0 25px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(59,130,246,0.05)",
+          boxShadow: "0 25px 80px rgba(0,0,0,0.35)",
           position: "relative",
         }}
       >
@@ -326,26 +428,26 @@ export function PublicSharePage() {
             marginBottom: 28,
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, #3b82f6, #22d3ee)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              boxShadow: "0 4px 16px rgba(59,130,246,0.3)",
-            }}
-          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+                boxShadow: `0 4px 16px ${accentColor}33`,
+              }}
+            >
             ☁️
           </div>
           <div>
-            <div style={{ color: "#e2e8f0", fontSize: 14, fontWeight: 700 }}>
+            <div style={{ color: publicShareColors.title, fontSize: 14, fontWeight: 700 }}>
               NimbusDrive
             </div>
-            <div style={{ color: "#475569", fontSize: 11 }}>
+            <div style={{ color: publicShareColors.muted, fontSize: 11 }}>
               Shared File
             </div>
           </div>
@@ -376,15 +478,15 @@ export function PublicSharePage() {
           <div
             style={{
               borderRadius: 14,
-              border: "1px solid rgba(59,130,246,0.2)",
-              background: "rgba(59,130,246,0.08)",
+              border: `1px solid ${publicShareColors.border}`,
+              background: publicShareColors.panelBg,
               padding: "20px",
             }}
           >
-            <div style={{ color: "#e2e8f0", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+            <div style={{ color: publicShareColors.title, fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
               Tautan ini dilindungi password
             </div>
-            <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ color: publicShareColors.muted, fontSize: 12, lineHeight: 1.5, marginBottom: 14 }}>
               Masukkan password untuk melihat file dan mengunduhnya.
             </div>
             <form onSubmit={handleSubmitPassword}>
@@ -400,12 +502,13 @@ export function PublicSharePage() {
                 style={{
                   width: "100%",
                   borderRadius: 10,
-                  border: "1px solid #1a2540",
-                  background: "#0d1829",
-                  color: "#e2e8f0",
+                  border: `1px solid ${publicShareColors.inputBorder}`,
+                  background: publicShareColors.inputBg,
+                  color: publicShareColors.inputText,
                   padding: "10px 12px",
                   marginBottom: 10,
                   fontSize: 13,
+                  caretColor: accentColor,
                 }}
               />
               <button
@@ -414,7 +517,7 @@ export function PublicSharePage() {
                 style={{
                   width: "100%",
                   borderRadius: 10,
-                  background: passwordLoading ? "rgba(59,130,246,0.45)" : "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                  background: passwordLoading ? `${accentColor}66` : `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
                   color: "#fff",
                   border: "none",
                   padding: "10px 12px",
@@ -437,16 +540,16 @@ export function PublicSharePage() {
         {/* ── Success state — file info card ────────────────────────────── */}
         {!loading && !isInvalid && share?.file && (
           <div>
-            {/* File card */}
-            <div
-              style={{
-                borderRadius: 14,
-                border: "1px solid #1a2540",
-                background: "#0d1829",
-                padding: "20px",
-                marginBottom: 20,
-              }}
-            >
+              {/* File card */}
+              <div
+                style={{
+                  borderRadius: 14,
+                  border: `1px solid ${publicShareColors.border}`,
+                  background: publicShareColors.panelBg,
+                  padding: "20px",
+                  marginBottom: 20,
+                }}
+              >
               {/* File icon + name */}
               <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
                 <div
@@ -454,8 +557,8 @@ export function PublicSharePage() {
                     width: 52,
                     height: 52,
                     borderRadius: 12,
-                    background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(34,211,238,0.1))",
-                    border: "1px solid rgba(59,130,246,0.2)",
+                    background: publicShareColors.panelBg,
+                    border: `1px solid ${publicShareColors.border}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -463,12 +566,12 @@ export function PublicSharePage() {
                     flexShrink: 0,
                   }}
                 >
-                  {getFileIcon(share.file.mime_type)}
+                  <span style={{ color: accentColor }}>{getFileIcon(share.file.mime_type)}</span>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      color: "#e2e8f0",
+                      color: publicShareColors.title,
                       fontSize: 14,
                       fontWeight: 600,
                       wordBreak: "break-word",
@@ -477,7 +580,7 @@ export function PublicSharePage() {
                   >
                     {share.file.original_name ?? "Shared file"}
                   </div>
-                  <div style={{ color: "#475569", fontSize: 11, marginTop: 4 }}>
+                  <div style={{ color: publicShareColors.muted, fontSize: 11, marginTop: 4 }}>
                     {share.file.mime_type ?? "Unknown type"}
                   </div>
                 </div>
@@ -492,11 +595,12 @@ export function PublicSharePage() {
                     alignItems: "center",
                     padding: "8px 12px",
                     borderRadius: 8,
-                    background: "rgba(255,255,255,0.02)",
+                    background: publicShareColors.cardBg,
+                    border: `1px solid ${publicShareColors.border}`,
                   }}
                 >
-                  <span style={{ color: "#475569", fontSize: 11 }}>Size</span>
-                  <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+                  <span style={{ color: publicShareColors.muted, fontSize: 11 }}>Size</span>
+                  <span style={{ color: publicShareColors.muted2, fontSize: 12, fontWeight: 500 }}>
                     {formatBytes(share.file.size ?? 0)}
                   </span>
                 </div>
@@ -508,11 +612,12 @@ export function PublicSharePage() {
                     alignItems: "center",
                     padding: "8px 12px",
                     borderRadius: 8,
-                    background: "rgba(255,255,255,0.02)",
+                    background: publicShareColors.cardBg,
+                    border: `1px solid ${publicShareColors.border}`,
                   }}
                 >
-                  <span style={{ color: "#475569", fontSize: 11 }}>Downloads</span>
-                  <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+                  <span style={{ color: publicShareColors.muted, fontSize: 11 }}>Downloads</span>
+                  <span style={{ color: publicShareColors.muted2, fontSize: 12, fontWeight: 500 }}>
                     {share.download_count ?? 0}
                   </span>
                 </div>
@@ -557,15 +662,15 @@ export function PublicSharePage() {
                 padding: "13px 20px",
                 borderRadius: 12,
                 background: downloadLoading
-                  ? "rgba(59,130,246,0.4)"
-                  : "linear-gradient(135deg, #3b82f6, #22d3ee)",
+                  ? publicShareColors.buttonSoftBg
+                  : `linear-gradient(135deg, ${accentColor}, #22d3ee)`,
                 color: "#fff",
                 fontSize: 13,
                 fontWeight: 700,
                 border: "none",
                 boxShadow: downloadLoading
                   ? "none"
-                  : "0 4px 20px rgba(59,130,246,0.35)",
+                  : `${accentColor}33 0 4px 20px`,
                 cursor: downloadLoading ? "not-allowed" : "pointer",
                 transition: "opacity 0.2s, transform 0.15s, background 0.2s",
                 opacity: downloadLoading ? 0.75 : 1,
@@ -603,7 +708,7 @@ export function PublicSharePage() {
             <p
               style={{
                 textAlign: "center",
-                color: "#334155",
+                color: publicShareColors.muted,
                 fontSize: 11,
                 marginTop: 14,
               }}
