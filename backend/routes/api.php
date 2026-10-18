@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountDeleteController;
 use App\Http\Controllers\AccountDeleteReauthController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ConnectedAccountsController;
 use App\Http\Controllers\OAuthExchangeController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\FolderController;
@@ -41,6 +42,10 @@ Route::post('/share/{token}/download', [ShareController::class, 'download']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/oauth/{provider}/link', [ConnectedAccountsController::class, 'start'])
+        ->whereIn('provider', ['google', 'github']);
+    Route::delete('/auth/oauth/{provider}/link', [ConnectedAccountsController::class, 'unlink'])
+        ->whereIn('provider', ['google', 'github']);
     Route::patch('/profile', [AuthController::class, 'updateProfile']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);

@@ -10,6 +10,30 @@ export type LoginResponse = {
   };
 };
 
+export type ConnectedProvider = "google" | "github";
+
+export type ProviderLinkResponse = {
+  authorization_url: string;
+};
+
+export type AuthMeUser = {
+  id: string | number;
+  name: string;
+  email: string;
+  role?: string;
+  has_local_password: boolean;
+  connected_providers: ConnectedProvider[];
+};
+
+export type AuthMeResponse = {
+  user: AuthMeUser;
+};
+
+export type UnlinkProviderResponse = {
+  message: string;
+  user: Pick<AuthMeUser, "has_local_password" | "connected_providers">;
+};
+
 type ClientBrowser = "Brave";
 
 export type AccountDeleteReauthProvider = "google" | "github";
@@ -110,8 +134,24 @@ export const authService = {
     return response.data;
   },
 
-  async me() {
-    const response = await api.get("/auth/me");
+  async me(): Promise<AuthMeResponse> {
+    const response = await api.get<AuthMeResponse>("/auth/me");
+    return response.data;
+  },
+
+  async startProviderLink(provider: ConnectedProvider): Promise<ProviderLinkResponse> {
+    const response = await api.post<ProviderLinkResponse>(
+      `/auth/oauth/${provider}/link`,
+    );
+
+    return response.data;
+  },
+
+  async unlinkProvider(provider: ConnectedProvider): Promise<UnlinkProviderResponse> {
+    const response = await api.delete<UnlinkProviderResponse>(
+      `/auth/oauth/${provider}/link`,
+    );
+
     return response.data;
   },
 

@@ -123,6 +123,139 @@ class OAuthAccountService
         });
     }
 
+    public function linkIdentity(
+        User $user,
+        string $provider,
+        string $providerUserId,
+        string $email,
+        bool $emailVerified,
+        ?string $avatarUrl = null,
+    ): void {
+        $provider = strtolower(trim($provider));
+
+        if (! in_array($provider, self::ALLOWED_PROVIDERS, true)) {
+            throw new InvalidArgumentException('Unsupported OAuth provider.');
+        }
+
+        $providerUserId = trim($providerUserId);
+
+        if ($providerUserId === '') {
+            throw new InvalidArgumentException('Invalid OAuth provider user identifier.');
+        }
+
+        if (! $emailVerified) {
+            throw new InvalidArgumentException('Email must be verified.');
+        }
+
+        $email = strtolower(trim($email));
+
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw new InvalidArgumentException('Invalid email.');
+        }
+
+        $normalizedAvatarUrl = $this->normalizeAvatarUrl($avatarUrl);
+
+        DB::transaction(function () use (
+            $user,
+            $provider,
+            $providerUserId,
+            $email,
+            $normalizedAvatarUrl,
+        ): void {
+            $lockedUser = User::query()
+                ->whereKey($user->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedUser === null) {
+                throw new RuntimeException('The account to link no longer exists.');
+            }
+
+            $identity = OAuthIdentity::query()
+                ->where('provider', $provider)
+                ->where('provider_user_id', $providerUserId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($identity !== null) {
+                if ((string) $identity->user_id !== (string) $lockedUser->getKey()) {
+                    throw new DomainException('This OAuth identity is linked to another account.');
+                }
+
+                $this->updateIdentityMetadata($identity, $email, $normalizedAvatarUrl);
+
+                return;
+            }
+
+            $existingProviderIdentity = OAuthIdentity::query()
+                ->where('user_id', $lockedUser->getKey())
+                ->where('provider', $provider)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingProviderIdentity !== null) {
+                throw new DomainException('A different account for this provider is already linked.');
+            }
+
+            $lockedUser->oauthIdentities()->create([
+                'provider' => $provider,
+                'provider_user_id' => $providerUserId,
+                'provider_email' => $email,
+                'avatar_url' => $normalizedAvatarUrl,
+            ]);
+        });
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function unlinkProvider(User $user, string $provider): array
+    {
+        $provider = strtolower(trim($provider));
+
+        if (! in_array($provider, self::ALLOWED_PROVIDERS, true)) {
+            throw new InvalidArgumentException('Unsupported OAuth provider.');
+        }
+
+        return DB::transaction(function () use ($user, $provider): array {
+            $lockedUser = User::query()
+                ->whereKey($user->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedUser === null) {
+                throw new RuntimeException('The account to update no longer exists.');
+            }
+
+            $identities = $lockedUser->oauthIdentities()
+                ->whereIn('provider', self::ALLOWED_PROVIDERS)
+                ->lockForUpdate()
+                ->get();
+
+            $identityToRemove = $identities->firstWhere('provider', $provider);
+
+            if ($identityToRemove !== null) {
+                $hasAnotherOAuthProvider = $identities->contains(
+                    fn (OAuthIdentity $identity): bool => $identity->provider !== $provider,
+                );
+
+                if (! filled($lockedUser->password) && ! $hasAnotherOAuthProvider) {
+                    throw new DomainException(
+                        'Cannot disconnect the last login method. Add a local password or another connected provider first.',
+                    );
+                }
+
+                $identityToRemove->delete();
+            }
+
+            return $lockedUser->oauthIdentities()
+                ->whereIn('provider', self::ALLOWED_PROVIDERS)
+                ->orderBy('provider')
+                ->pluck('provider')
+                ->all();
+        });
+    }
+
     private function updateIdentityMetadata(
         OAuthIdentity $identity,
         string $email,

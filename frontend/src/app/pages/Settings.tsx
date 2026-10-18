@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { isAxiosError } from "axios";
-import { authService } from "../../services/authService";
+import { authService, type AuthMeUser } from "../../services/authService";
 import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
 import { SettingRow } from "./settings/components/SettingRow";
 import { SessionsManagementPanel } from "./settings/components/SessionsManagementPanel";
+import { ConnectedAccountsPanel } from "./settings/components/ConnectedAccountsPanel";
 import { withAlpha } from "./settings/settingsColorUtils";
 import {
   User,
@@ -168,6 +169,24 @@ export function Settings() {
       return null;
     }
   });
+
+  const handleConnectedAccountUserUpdated = useCallback(
+    (updatedUser: Partial<AuthMeUser>) => {
+      setUser((currentUser) => {
+        const nextUser = { ...currentUser, ...updatedUser };
+
+        try {
+          window.localStorage.setItem("nimbus_user", JSON.stringify(nextUser));
+        } catch {
+          // Keep the API response authoritative if storage is unavailable.
+        }
+
+        window.dispatchEvent(new CustomEvent("nimbus-user-change"));
+        return nextUser;
+      });
+    },
+    [],
+  );
 
   const [meLoadWarning, setMeLoadWarning] = useState(false);
 
@@ -1004,6 +1023,16 @@ role: updatedUser.role,
                 Password updates are not available yet.
               </div>
             </div>
+
+            <ConnectedAccountsPanel
+              user={user}
+              textColor={settingsColors.text}
+              mutedColor={settingsColors.muted}
+              panelBg={settingsColors.panelBg}
+              panelBorder={settingsColors.panelBorder}
+              onUserUpdated={handleConnectedAccountUserUpdated}
+            />
+
 
             <SessionsManagementPanel
               cardBg={settingsColors.cardBg}

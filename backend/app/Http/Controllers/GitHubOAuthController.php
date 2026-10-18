@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\OAuthAccountService;
 use App\Services\OAuthExchangeService;
+use App\Services\OAuthLinkStateService;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,7 @@ class GitHubOAuthController extends Controller
     public function __construct(
         private readonly OAuthAccountService $oauthAccountService,
         private readonly OAuthExchangeService $oauthExchangeService,
+        private readonly OAuthLinkStateService $oauthLinkStateService,
     ) {}
 
     public function redirect(): RedirectResponse
@@ -30,7 +33,13 @@ class GitHubOAuthController extends Controller
 
     public function callback(Request $request): RedirectResponse
     {
-if ($request->filled('error')) {
+        $state = $request->query('state');
+
+        if ($this->oauthLinkStateService->isLinkState($state)) {
+            return $this->linkCallback($request, $state);
+        }
+
+        if ($request->filled('error')) {
             return $this->frontendRedirect([
                 'error' => 'oauth_cancelled',
             ]);
@@ -106,6 +115,60 @@ if ($request->filled('error')) {
             return $this->frontendRedirect([
                 'error' => 'oauth_failed',
             ]);
+        }
+    }
+
+    private function linkCallback(Request $request, string $state): RedirectResponse
+    {
+        try {
+            $intent = $this->oauthLinkStateService->consume($state, 'github');
+
+            if ($intent === null) {
+                return $this->settingsRedirect('oauth_state_invalid');
+            }
+
+            if ($request->filled('error')) {
+                return $this->settingsRedirect('oauth_cancelled');
+            }
+
+            $githubUser = Socialite::driver('github')->stateless()->user();
+            $rawProviderUserId = $githubUser->getId();
+            $providerUserId = is_string($rawProviderUserId) || is_int($rawProviderUserId)
+                ? trim((string) $rawProviderUserId)
+                : '';
+            $email = $this->resolveVerifiedEmail($githubUser);
+            $avatarUrl = $githubUser->getAvatar();
+
+            if ($providerUserId === '' || $email === null) {
+                throw new InvalidArgumentException('GitHub account data is incomplete.');
+            }
+
+            $user = User::query()->find($intent['user_id']);
+
+            if ($user === null) {
+                return $this->settingsRedirect('oauth_state_invalid');
+            }
+
+            $this->oauthAccountService->linkIdentity(
+                user: $user,
+                provider: 'github',
+                providerUserId: $providerUserId,
+                email: $email,
+                emailVerified: true,
+                avatarUrl: is_string($avatarUrl) && trim($avatarUrl) !== ''
+                    ? trim($avatarUrl)
+                    : null,
+            );
+
+            return $this->settingsRedirect(null, 'github');
+        } catch (DomainException) {
+            return $this->settingsRedirect('oauth_link_conflict');
+        } catch (InvalidArgumentException) {
+            return $this->settingsRedirect('oauth_email_unavailable');
+        } catch (RuntimeException) {
+            return $this->settingsRedirect('oauth_temporarily_unavailable');
+        } catch (Throwable) {
+            return $this->settingsRedirect('oauth_link_failed');
         }
     }
 
@@ -228,4 +291,27 @@ if ($request->filled('error')) {
         return redirect()->away($url);
     }
 
+    private function settingsRedirect(?string $error, ?string $provider = null): RedirectResponse
+    {
+        $frontendUrl = config('app.frontend_url');
+
+        if (! is_string($frontendUrl) || trim($frontendUrl) === '') {
+            throw new RuntimeException(
+                'Frontend URL is not configured.',
+            );
+        }
+
+        $query = $error === null
+            ? ['oauth_link' => 'success', 'provider' => $provider]
+            : ['oauth_link' => 'failed', 'reason' => $error];
+
+        return redirect()->away(
+            rtrim($frontendUrl, '/').'/settings?'.http_build_query(
+                $query,
+                '',
+                '&',
+                PHP_QUERY_RFC3986,
+            ),
+        );
+    }
 }
