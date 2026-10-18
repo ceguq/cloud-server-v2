@@ -19,6 +19,7 @@ import { ServerMonitor } from "./pages/ServerMonitor";
 import { Settings } from "./pages/Settings";
 import LoginPage from "./pages/LoginPage";
 import { PublicSharePage } from "./pages/PublicSharePage";
+import { OAuthCallbackPage } from "./pages/OAuthCallbackPage";
 import ActivityLogPage from "../pages/ActivityLogPage";
 
 import { authService } from "../services/authService";
@@ -171,6 +172,10 @@ export default function App() {
 
   if (pathname.startsWith("/share/")) {
     return <PublicSharePage />;
+  }
+
+  if (pathname === "/auth/oauth/callback") {
+    return <OAuthCallbackPage onLoginSuccess={handleLoginSuccess} />;
   }
 
   function handleNavigate(page: string, path?: string) {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountDeleteController;
 use App\Http\Controllers\AccountDeleteReauthController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\OAuthExchangeController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\FolderController;
 use App\Http\Controllers\SessionController;
@@ -30,6 +31,8 @@ Route::get('/ping', function () {
 });
 
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/oauth/exchange', [OAuthExchangeController::class, 'exchange'])
+    ->middleware('throttle:10,1');
 
 // Public share link endpoints (NOT using auth:sanctum)
 Route::get('/share/{token}', [ShareController::class, 'show']);

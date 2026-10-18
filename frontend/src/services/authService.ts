@@ -97,6 +97,14 @@ export const authService = {
     return response.data;
   },
 
+  async exchangeOAuthCode(code: string) {
+    const response = await api.post<LoginResponse>("/auth/oauth/exchange", {
+      code,
+    });
+
+    return response.data;
+  },
+
   async logout() {
     const response = await api.post("/auth/logout");
     return response.data;
