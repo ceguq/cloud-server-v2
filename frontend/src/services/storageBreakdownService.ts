@@ -14,6 +14,8 @@ export type StorageBreakdownInfo = {
   used_human: string;
   limit_bytes: number;
   limit_human: string;
+  free_bytes: number | null;
+  free_human: string | null;
   usage_percent: number;
   categories: StorageBreakdownCategory[];
 };
@@ -49,4 +51,3 @@ export async function getStorageBreakdown(): Promise<StorageBreakdownInfo> {
 export default {
   getStorageBreakdown,
 };
-

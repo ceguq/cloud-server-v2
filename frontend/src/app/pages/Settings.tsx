@@ -5,6 +5,7 @@ import { SettingsSectionHeader } from "./settings/components/SettingsSectionHead
 import { SettingRow } from "./settings/components/SettingRow";
 import { SessionsManagementPanel } from "./settings/components/SessionsManagementPanel";
 import { ConnectedAccountsPanel } from "./settings/components/ConnectedAccountsPanel";
+import { StorageUsageSummary } from "./settings/StorageUsageSummary";
 import { withAlpha } from "./settings/settingsColorUtils";
 import {
   User,
@@ -1133,29 +1134,13 @@ role: updatedUser.role,
             />
 
 
-            <div
-              className="rounded-xl px-5 py-3 mb-4 text-xs"
-              style={{
-                background: settingsColors.cardBg,
-                border: `1px solid ${settingsColors.border}`,
-                color: settingsColors.muted,
-              }}
-            >
-              Storage settings are not available yet.
-            </div>
-
-            <div
-              className="rounded-xl p-5 mb-4"
-              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
-            >
-              <div className="text-sm font-medium" style={{ color: settingsColors.title }}>
-                Storage usage
-              </div>
-              <div className="mt-2 text-xs" style={{ color: settingsColors.muted }}>
-                Live storage usage is available from the Dashboard.
-              </div>
-            </div>
-
+            <StorageUsageSummary
+              cardBg={settingsColors.cardBg}
+              panelBg={settingsColors.panelBg}
+              borderColor={settingsColors.border}
+              textColor={settingsColors.text}
+              mutedColor={settingsColors.muted}
+            />
 
             <div className="rounded-xl px-5" style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}>
               <SettingRow
