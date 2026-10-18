@@ -11,8 +11,9 @@ return new class extends Migration
         Schema::create('devices', function (Blueprint $table) {
             $table->uuid('id')->primary();
 
-
-            $table->uuid('user_id');
+            $table->foreignId('user_id')
+                ->constrained('users')
+                ->cascadeOnDelete();
             $table->string('display_name')->nullable();
             $table->string('device_type')->nullable();
             $table->string('platform')->nullable();
@@ -25,11 +26,6 @@ return new class extends Migration
             $table->timestamp('last_seen_at')->nullable();
 
             $table->timestamps();
-
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->cascadeOnDelete();
         });
     }
 
@@ -38,4 +34,3 @@ return new class extends Migration
         Schema::dropIfExists('devices');
     }
 };
-

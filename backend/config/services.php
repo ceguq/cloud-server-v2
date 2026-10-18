@@ -35,6 +35,18 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_LOGIN_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_LOGIN_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_LOGIN_REDIRECT_URI'),
+    ],
+
+    'github' => [
+        'client_id' => env('GITHUB_LOGIN_CLIENT_ID'),
+        'client_secret' => env('GITHUB_LOGIN_CLIENT_SECRET'),
+        'redirect' => env('GITHUB_LOGIN_REDIRECT_URI'),
+    ],
+
     'google_drive' => [
         'client_id' => env('GOOGLE_DRIVE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
@@ -45,4 +57,3 @@ return [
     ],
 
 ];
-
