@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { isAxiosError } from "axios";
 import { authService } from "../../services/authService";
 import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
 import { SettingRow } from "./settings/components/SettingRow";
@@ -13,6 +14,15 @@ import {
 } from "lucide-react";
 
 type AppearanceTheme = "dark" | "light" | "system";
+
+type SettingsUser = {
+  id?: string | number;
+  name?: string;
+  email?: string;
+  role?: string;
+  has_local_password?: boolean;
+  connected_providers?: ("google" | "github")[];
+};
 
 function safeReadAppearanceTheme(): AppearanceTheme {
   if (typeof window === "undefined") return "dark";
@@ -148,7 +158,7 @@ function EditableNamePanel({
 export function Settings() {
   const [activeSection, setActiveSection] = useState("profile");
 
-  const [user, setUser] = useState<{ id?: string | number; name?: string; email?: string; role?: string } | null>(() => {
+  const [user, setUser] = useState<SettingsUser | null>(() => {
     if (typeof window === "undefined") return null;
     try {
       const raw = window.localStorage.getItem("nimbus_user");
@@ -177,6 +187,8 @@ export function Settings() {
           name: payload.name,
           email: payload.email,
           role: payload.role,
+          has_local_password: payload.has_local_password,
+          connected_providers: payload.connected_providers,
         };
 
         if (!mounted) return;
@@ -284,6 +296,224 @@ export function Settings() {
       applyDark(true);
     }
   }, [appearanceTheme, accentColor]);
+
+  const [deleteReauthLoading, setDeleteReauthLoading] = useState<
+    "google" | "github" | null
+  >(null);
+
+  const [deleteReauthError, setDeleteReauthError] = useState<string | null>(
+    null,
+  );
+
+  const [deleteReauthCallbackProcessing, setDeleteReauthCallbackProcessing] = useState(false);
+  const [deleteReauthVerified, setDeleteReauthVerified] = useState(false);
+  const [deleteReauthChallenge, setDeleteReauthChallenge] = useState<string | null>(null);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [deleteAccountEmailConfirmation, setDeleteAccountEmailConfirmation] = useState("");
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [deleteAccountPending, setDeleteAccountPending] = useState(false);
+
+  const deleteReauthCallbackHandledRef = useRef(false);
+
+
+  const safeConnectedProviders = user?.connected_providers ?? [];
+  const isGoogleConnected = safeConnectedProviders.includes("google");
+  const isGitHubConnected = safeConnectedProviders.includes("github");
+  const canSubmitAccountDeletion = Boolean(
+    user?.email &&
+      deleteAccountEmailConfirmation.trim().toLowerCase() ===
+        user.email.trim().toLowerCase() &&
+      (user.has_local_password === true
+        ? deleteAccountPassword.length > 0
+        : user.has_local_password === false &&
+          deleteReauthVerified &&
+          deleteReauthChallenge),
+  );
+
+  const handleStartDeleteReauth = async (provider: "google" | "github") => {
+    setDeleteReauthError(null);
+
+    if (!user?.email || user?.has_local_password) return;
+
+
+    const isConnected = provider === "google" ? isGoogleConnected : isGitHubConnected;
+    if (!isConnected) return;
+
+    setDeleteReauthLoading(provider);
+
+    try {
+      const response = await authService.startAccountDeleteReauth({
+        email: user.email,
+        provider,
+      });
+
+
+      const challenge = response?.challenge;
+      const authorizationUrl = response?.authorization_url;
+
+      if (typeof challenge !== "string" || challenge.trim().length === 0) {
+        throw new Error("Missing challenge");
+      }
+      if (typeof authorizationUrl !== "string" || authorizationUrl.trim().length === 0) {
+        throw new Error("Missing authorization_url");
+      }
+
+      window.sessionStorage.setItem(
+        "nimbusdrive.accountDeleteReauth.challenge",
+        challenge,
+      );
+
+      window.location.assign(authorizationUrl);
+    } catch {
+      try {
+        window.sessionStorage.removeItem(
+          "nimbusdrive.accountDeleteReauth.challenge",
+        );
+      } catch {}
+
+      setDeleteReauthError("Unable to start secure reauthentication. Please try again.");
+    } finally {
+      setDeleteReauthLoading(null);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const deleteReauthCallbackProcess = async () => {
+      const url = new URL(window.location.href);
+      const callbackResult = url.searchParams.get("delete_reauth");
+
+      if (callbackResult !== "success" && callbackResult !== "failed") return;
+      if (deleteReauthCallbackHandledRef.current) return;
+      deleteReauthCallbackHandledRef.current = true;
+
+      url.searchParams.delete("delete_reauth");
+      const cleanedUrl = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState(window.history.state, "", cleanedUrl);
+
+      const challengeStorageKey = "nimbusdrive.accountDeleteReauth.challenge";
+      const challenge = window.sessionStorage.getItem(challengeStorageKey);
+
+      if (callbackResult === "failed") {
+        try {
+          window.sessionStorage.removeItem(challengeStorageKey);
+        } catch {}
+        setDeleteReauthCallbackProcessing(false);
+        setDeleteReauthVerified(false);
+        setDeleteReauthError("Secure reauthentication failed. Please try again.");
+        return;
+      }
+
+      if (!challenge || challenge.trim().length === 0) {
+        try {
+          window.sessionStorage.removeItem(challengeStorageKey);
+        } catch {}
+        setDeleteReauthCallbackProcessing(false);
+        setDeleteReauthVerified(false);
+        setDeleteReauthError("Secure reauthentication could not be verified. Please try again.");
+        return;
+      }
+
+      setDeleteReauthError(null);
+      setDeleteReauthCallbackProcessing(true);
+      setDeleteReauthVerified(false);
+
+      try {
+        const response = await authService.getAccountDeleteReauthStatus(challenge);
+        if (response?.status === "verified") {
+          setDeleteReauthVerified(true);
+          setDeleteReauthChallenge(challenge);
+          setDeleteReauthError(null);
+        } else {
+          setDeleteReauthVerified(false);
+          setDeleteReauthChallenge(null);
+          setDeleteReauthError("Secure reauthentication could not be verified. Please try again.");
+        }
+      } catch {
+        setDeleteReauthVerified(false);
+        setDeleteReauthChallenge(null);
+        setDeleteReauthError("Secure reauthentication could not be verified. Please try again.");
+      } finally {
+        try {
+          window.sessionStorage.removeItem(challengeStorageKey);
+        } catch {}
+        setDeleteReauthCallbackProcessing(false);
+      }
+    };
+
+    deleteReauthCallbackProcess();
+  }, []);
+
+  const handleDeleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setDeleteAccountError(null);
+    setDeleteAccountPending(false);
+
+    if (!user?.email || deleteAccountEmailConfirmation.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      setDeleteAccountError("Enter your account email to confirm deletion.");
+      return;
+    }
+
+    if (user.has_local_password === true && !deleteAccountPassword) {
+      setDeleteAccountError("Enter your current password to confirm deletion.");
+      return;
+    }
+
+    if (
+      user.has_local_password !== true &&
+      (!deleteReauthVerified || !deleteReauthChallenge)
+    ) {
+      setDeleteAccountError("Reauthenticate with a connected provider before deleting your account.");
+      return;
+    }
+
+    setDeleteAccountLoading(true);
+
+    try {
+      const response = await authService.deleteAccount({
+        email: user.email,
+        confirm_delete: true,
+        ...(user.has_local_password === true
+          ? { current_password: deleteAccountPassword }
+          : { challenge_id: deleteReauthChallenge ?? undefined }),
+      });
+
+      if (response.status === 202) {
+        setDeleteAccountPending(true);
+        setDeleteReauthVerified(false);
+        setDeleteReauthChallenge(null);
+        setDeleteAccountPassword("");
+        setDeleteAccountError(
+          "Account cleanup is still pending. Your account has not been confirmed deleted; retry later with fresh confirmation.",
+        );
+        return;
+      }
+
+      if (response.status !== 200) {
+        throw new Error("Unexpected account deletion response.");
+      }
+
+      window.localStorage.removeItem("nimbus_token");
+      window.localStorage.removeItem("nimbus_user");
+      window.sessionStorage.removeItem(
+        "nimbusdrive.accountDeleteReauth.challenge",
+      );
+      window.dispatchEvent(new CustomEvent("nimbus-user-change"));
+      window.location.assign("/");
+    } catch (error) {
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+
+      setDeleteAccountError(
+        status === 422
+          ? "The confirmation was rejected. Check your password, email, or reauthentication and try again."
+          : "Account deletion could not be completed. Please try again.",
+      );
+    } finally {
+      setDeleteAccountLoading(false);
+    }
+  };
 
   const resolvedSettingsTheme: "dark" | "light" = (() => {
     try {
@@ -464,7 +694,9 @@ export function Settings() {
                       id: updatedUser.id,
                       name: updatedUser.name,
                       email: updatedUser.email,
-                      role: updatedUser.role,
+role: updatedUser.role,
+                      has_local_password: user?.has_local_password,
+                      connected_providers: user?.connected_providers,
                     };
                     try {
                       window.localStorage.setItem('nimbus_user', JSON.stringify(normalized));
@@ -491,6 +723,212 @@ export function Settings() {
               mutedColor={settingsColors.muted}
               className="mb-5"
             />
+            <div
+              className="rounded-xl p-5"
+              style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
+            >
+                <h3 className="text-sm font-semibold mb-2" style={{ color: settingsColors.title }}>
+                  Danger Zone
+                </h3>
+              <div className="text-xs mb-4" style={{ color: settingsColors.muted }}>
+                <span className="font-medium" style={{ color: settingsColors.text }}>
+                  Delete Account
+                </span>
+                <div className="mt-1">
+                  Deleting your account permanently removes your NimbusDrive account and all associated data. This action cannot be undone.
+                </div>
+              </div>
+
+              <div className="text-xs" style={{ color: settingsColors.muted }}>
+                Account: <span style={{ color: settingsColors.text }}>{user?.email ?? ""}</span>
+              </div>
+
+              {user?.has_local_password ? (
+                <div className="text-xs mt-2" style={{ color: settingsColors.muted }}>
+                  Password confirmation will be required before deletion.
+                </div>
+              ) : (
+                <div className="text-xs mt-2" style={{ color: settingsColors.muted }}>
+                  Reauthentication via a connected Google or GitHub account will be required.
+                </div>
+              )}
+
+              {!user?.has_local_password && (
+                <div className="text-xs mt-2" style={{ color: settingsColors.muted }}>
+                  Connected providers:
+                  <div className="mt-1">
+                    {(user?.connected_providers ?? [])
+                      .filter((p) => p === "google" || p === "github")
+                      .map((p) => (p === "google" ? "Google" : "GitHub"))
+                      .join(", ") || "None"}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                {user?.has_local_password === true ? (
+                  <div>
+                    <label
+                      htmlFor="delete-account-current-password"
+                      className="block text-xs mb-1.5"
+                      style={{ color: settingsColors.muted }}
+                    >
+                      Current password
+                    </label>
+                    <input
+                      id="delete-account-current-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={deleteAccountPassword}
+                      onChange={(event) => setDeleteAccountPassword(event.target.value)}
+                      disabled={deleteAccountLoading}
+                      className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                      style={{
+                        background: settingsColors.panelBg,
+                        border: `1px solid ${settingsColors.panelBorder}`,
+                        color: settingsColors.text,
+                      }}
+                    />
+                  </div>
+                ) : user?.has_local_password === false ? (
+                  <>
+                    <div className="text-xs px-3 py-1.5 rounded-lg" style={{ background: settingsColors.panelBg, color: settingsColors.muted, border: `1px solid ${settingsColors.panelBorder}` }}>
+                      Reauthentication only verifies your identity. Your account will not be deleted automatically.
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {isGoogleConnected && (
+                        <button
+                          type="button"
+                          disabled={deleteReauthLoading !== null}
+                          onClick={() => handleStartDeleteReauth("google")}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold"
+                          style={{
+                            background: deleteReauthLoading === "google" ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : settingsColors.panelBg,
+                            color: deleteReauthLoading === "google" ? "#fff" : settingsColors.muted,
+                            border: `1px solid ${settingsColors.panelBorder}`,
+                            opacity: deleteReauthLoading !== null ? 0.6 : 1,
+                            cursor: deleteReauthLoading !== null ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {deleteReauthLoading === "google" ? "Redirecting..." : "Continue with Google"}
+                        </button>
+                      )}
+
+                      {isGitHubConnected && (
+                        <button
+                          type="button"
+                          disabled={deleteReauthLoading !== null}
+                          onClick={() => handleStartDeleteReauth("github")}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold"
+                          style={{
+                            background: deleteReauthLoading === "github" ? `linear-gradient(135deg, ${accentColor}, #22d3ee)` : settingsColors.panelBg,
+                            color: deleteReauthLoading === "github" ? "#fff" : settingsColors.muted,
+                            border: `1px solid ${settingsColors.panelBorder}`,
+                            opacity: deleteReauthLoading !== null ? 0.6 : 1,
+                            cursor: deleteReauthLoading !== null ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {deleteReauthLoading === "github" ? "Redirecting..." : "Continue with GitHub"}
+                        </button>
+                      )}
+                    </div>
+
+                    {!isGoogleConnected && !isGitHubConnected && (
+                      <div className="text-xs mt-2" style={{ color: settingsColors.muted }}>
+                        Connect a Google or GitHub account before starting secure reauthentication.
+                      </div>
+                    )}
+
+                    {deleteReauthCallbackProcessing && (
+                      <div className="text-xs mt-3" style={{ color: settingsColors.muted }}>
+                        Verifying your identity...
+                      </div>
+                    )}
+
+                    {deleteReauthVerified && (
+                      <div className="text-xs mt-3 text-green-500">
+                        Identity verified. Confirm your account email below to continue.
+                      </div>
+                    )}
+
+                    {deleteReauthError && (
+                      <div className="text-xs text-red-400 mt-2">{deleteReauthError}</div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-xs" style={{ color: settingsColors.muted }}>
+                    Loading account confirmation options...
+                  </div>
+                )}
+
+                {user?.has_local_password !== undefined && (
+                  <form onSubmit={handleDeleteAccount} className="mt-4">
+                    <label
+                      htmlFor="delete-account-email-confirmation"
+                      className="block text-xs mb-1.5"
+                      style={{ color: settingsColors.muted }}
+                    >
+                      Type your account email to confirm
+                    </label>
+                    <input
+                      id="delete-account-email-confirmation"
+                      type="email"
+                      autoComplete="email"
+                      value={deleteAccountEmailConfirmation}
+                      onChange={(event) =>
+                        setDeleteAccountEmailConfirmation(event.target.value)
+                      }
+                      disabled={deleteAccountLoading}
+                      className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                      style={{
+                        background: settingsColors.panelBg,
+                        border: `1px solid ${settingsColors.panelBorder}`,
+                        color: settingsColors.text,
+                      }}
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!canSubmitAccountDeletion || deleteAccountLoading}
+                      className="w-full px-3 py-2 mt-3 rounded-lg text-sm font-semibold"
+                      style={{
+                        background: "#dc2626",
+                        color: "#fff",
+                        border: "1px solid #dc2626",
+                        opacity:
+                          canSubmitAccountDeletion && !deleteAccountLoading
+                            ? 1
+                            : 0.5,
+                        cursor:
+                          canSubmitAccountDeletion && !deleteAccountLoading
+                            ? "pointer"
+                            : "not-allowed",
+                      }}
+                    >
+                      {deleteAccountLoading ? "Deleting account..." : "Permanently Delete Account"}
+                    </button>
+                  </form>
+                )}
+
+                {deleteAccountPending && (
+                  <div
+                    role="status"
+                    className="text-xs mt-3"
+                    style={{ color: settingsColors.muted }}
+                  >
+                    Deletion is pending cleanup. You remain signed in; retry with fresh confirmation later.
+                  </div>
+                )}
+
+                {deleteAccountError && (
+                  <div role="alert" className="text-xs text-red-400 mt-2">
+                    {deleteAccountError}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div
               className="rounded-xl px-5"
               style={{ background: settingsColors.cardBg, border: `1px solid ${settingsColors.border}` }}
