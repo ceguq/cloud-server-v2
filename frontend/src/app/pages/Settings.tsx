@@ -3,6 +3,7 @@ import { isAxiosError } from "axios";
 import { authService } from "../../services/authService";
 import { SettingsSectionHeader } from "./settings/components/SettingsSectionHeader";
 import { SettingRow } from "./settings/components/SettingRow";
+import { SessionsManagementPanel } from "./settings/components/SessionsManagementPanel";
 import { withAlpha } from "./settings/settingsColorUtils";
 import {
   User,
@@ -989,7 +990,7 @@ role: updatedUser.role,
                 color: settingsColors.muted,
               }}
             >
-              Security settings are not available yet.
+              Some security settings are not available yet.
             </div>
 
             <div
@@ -1003,6 +1004,14 @@ role: updatedUser.role,
                 Password updates are not available yet.
               </div>
             </div>
+
+            <SessionsManagementPanel
+              cardBg={settingsColors.cardBg}
+              panelBg={settingsColors.panelBg}
+              borderColor={settingsColors.border}
+              textColor={settingsColors.text}
+              mutedColor={settingsColors.muted}
+            />
 
             <div
               className="rounded-xl px-5"

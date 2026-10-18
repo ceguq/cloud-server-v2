@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountDeleteReauthController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\FolderController;
+use App\Http\Controllers\SessionController;
 use App\Http\Controllers\ShareController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\TrashController;
@@ -40,6 +41,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/profile', [AuthController::class, 'updateProfile']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    Route::get('/sessions', [SessionController::class, 'index']);
+    Route::delete('/sessions', [SessionController::class, 'destroyOtherSessions']);
+    Route::delete('/sessions/{session}', [SessionController::class, 'destroy'])
+        ->whereNumber('session');
 
     Route::middleware('admin')->get('/admin/users', [AdminUserController::class, 'index']);
     Route::post(
