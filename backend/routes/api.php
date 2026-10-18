@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AccountDeleteController;
+use App\Http\Controllers\AccountDeleteReauthController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\FolderController;
@@ -40,12 +42,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     Route::middleware('admin')->get('/admin/users', [AdminUserController::class, 'index']);
+    Route::post(
+        '/account/delete-reauth',
+        [AccountDeleteReauthController::class, 'start'],
+    );
 
+    Route::get(
+        '/account/delete-reauth/{challenge}/status',
+        [AccountDeleteReauthController::class, 'status'],
+    );
 
 
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 
     Route::middleware('admin')->get('/admin/activity-logs', [ActivityLogController::class, 'adminIndex']);
+    Route::delete('/account', [
+        AccountDeleteController::class,
+        'destroy',
+    ]);
 
 
     Route::get('/folders', [FolderController::class, 'index']);

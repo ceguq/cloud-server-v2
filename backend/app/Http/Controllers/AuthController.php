@@ -55,8 +55,25 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        $connectedProviders = $user->oauthIdentities()
+            ->pluck('provider')
+            ->map(fn ($provider) => strtolower(trim((string) $provider)))
+            ->filter(fn ($provider) => in_array($provider, ['google', 'github'], true))
+            ->unique()
+            ->values()
+            ->all();
+
         return response()->json([
-            'user' => $request->user(),
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'has_local_password' => filled($user->password),
+                'connected_providers' => $connectedProviders,
+            ],
         ]);
     }
 
