@@ -58,6 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ->whereNumber('session');
 
     Route::middleware('admin')->get('/admin/users', [AdminUserController::class, 'index']);
+    Route::middleware('admin')->post('/admin/users', [AdminUserController::class, 'store']);
     Route::post(
         '/account/delete-reauth',
         [AccountDeleteReauthController::class, 'start'],

@@ -1,7 +1,23 @@
 import React, { useEffect, useState, useMemo } from "react";
+import axios from "axios";
+import { Plus } from "lucide-react";
 
 import { AdminUsersStateMessage } from "./admin-users/components/AdminUsersStateMessage";
-import { getAdminUsers, type AdminUser } from "../../services/adminUserService";
+import {
+  createAdminUser,
+  getAdminUsers,
+  type AdminUser,
+} from "../../services/adminUserService";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 function formatDate(value?: string): string {
   if (!value) return "—";
@@ -14,6 +30,18 @@ export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [canManageUsers, setCanManageUsers] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    password_confirmation: "",
+  });
 
   // Theme state for AdminUsers (light/dark + accent)
   type AppearanceTheme = "dark" | "light" | "system";
@@ -141,6 +169,7 @@ export function AdminUsers() {
 
     const role = storedUser?.role;
     const isAdmin = role === "admin" || role === "owner";
+    setCanManageUsers(isAdmin);
 
     if (!isAdmin) {
       setLoading(false);
@@ -175,6 +204,59 @@ export function AdminUsers() {
     };
   }, []);
 
+  const resetCreateForm = () => {
+    setForm({ name: "", email: "", password: "", password_confirmation: "" });
+    setFieldErrors({});
+    setCreateError(null);
+  };
+
+  const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+    setFieldErrors({});
+    setSuccessMessage(null);
+
+    try {
+      await createAdminUser(form);
+    } catch (createRequestError) {
+      if (axios.isAxiosError(createRequestError)) {
+        const response = createRequestError.response?.data as
+          | { message?: string; errors?: Record<string, string[]> }
+          | undefined;
+        const nextFieldErrors = Object.fromEntries(
+          Object.entries(response?.errors ?? {}).map(([field, messages]) => [
+            field,
+            messages[0] ?? "Please check this field.",
+          ]),
+        );
+        setFieldErrors(nextFieldErrors);
+        setCreateError(
+          Object.keys(nextFieldErrors).length > 0
+            ? "Please correct the highlighted fields."
+            : response?.message ?? "Unable to create the user.",
+        );
+      } else {
+        setCreateError("Unable to create the user. Please try again.");
+      }
+      setCreating(false);
+      return;
+    }
+
+    setCreateDialogOpen(false);
+    resetCreateForm();
+    setSuccessMessage("User created successfully.");
+    setCreating(false);
+
+    try {
+      const refreshedUsers = await getAdminUsers();
+      setUsers(refreshedUsers);
+      setError(null);
+    } catch {
+      setError("User was created, but the list could not be refreshed.");
+    }
+  };
+
   const totalUsers = users.length;
   const totalAdmins = users.filter((u) => u.role === "admin" || u.role === "owner").length;
   const totalRegularUsers = totalUsers - totalAdmins;
@@ -204,15 +286,44 @@ export function AdminUsers() {
       className="flex-1 overflow-y-auto p-6"
       style={{ background: adminUsersColors.pageBg }}
     >
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold" style={{ color: adminUsersColors.title }}>
-          Admin Users
-        </h1>
-        <p className="text-xs mt-1" style={{ color: adminUsersColors.muted }}>
-          Kelola dan pantau akun yang memiliki akses ke NimbusDrive.
-        </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: adminUsersColors.title }}>
+            Admin Users
+          </h1>
+          <p className="text-xs mt-1" style={{ color: adminUsersColors.muted }}>
+            Kelola dan pantau akun yang memiliki akses ke NimbusDrive.
+          </p>
+        </div>
+        {canManageUsers && (
+          <button
+            type="button"
+            onClick={() => {
+              resetCreateForm();
+              setCreateDialogOpen(true);
+            }}
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{ background: accentColor, color: "#fff" }}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Create User
+          </button>
+        )}
       </div>
 
+      {successMessage && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border px-3 py-2 text-sm"
+          style={{
+            background: "rgba(34, 197, 94, 0.10)",
+            borderColor: "rgba(34, 197, 94, 0.30)",
+            color: resolvedTheme === "light" ? "#166534" : "#86efac",
+          }}
+        >
+          {successMessage}
+        </div>
+      )}
 
       <div
         className="rounded-xl mb-5 p-4"
@@ -278,6 +389,128 @@ export function AdminUsers() {
           ariaLive="polite"
         />
       )}
+
+      <Dialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          if (!creating) {
+            setCreateDialogOpen(open);
+            if (!open) resetCreateForm();
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          style={{
+            background: adminUsersColors.cardBg,
+            borderColor: adminUsersColors.border,
+            color: adminUsersColors.text,
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ color: adminUsersColors.title }}>
+              Create User
+            </DialogTitle>
+            <DialogDescription style={{ color: adminUsersColors.muted }}>
+              Create a local account with standard user access.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            {(["name", "email", "password", "password_confirmation"] as const).map(
+              (field) => {
+                const labels = {
+                  name: "Name",
+                  email: "Email",
+                  password: "Password",
+                  password_confirmation: "Confirm Password",
+                };
+                const error = fieldErrors[field];
+
+                return (
+                  <div key={field} className="space-y-1.5">
+                    <Label
+                      htmlFor={`create-user-${field}`}
+                      style={{ color: adminUsersColors.text }}
+                    >
+                      {labels[field]}
+                    </Label>
+                    <Input
+                      id={`create-user-${field}`}
+                      name={field}
+                      type={field === "password" || field === "password_confirmation" ? "password" : field === "email" ? "email" : "text"}
+                      autoComplete={
+                        field === "name"
+                          ? "name"
+                          : field === "email"
+                            ? "email"
+                            : field === "password"
+                              ? "new-password"
+                              : "new-password"
+                      }
+                      required
+                      minLength={field === "password" || field === "password_confirmation" ? 8 : field === "name" ? 2 : undefined}
+                      maxLength={field === "email" ? 255 : undefined}
+                      value={form[field]}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={error ? `create-user-${field}-error` : undefined}
+                      disabled={creating}
+                      onChange={(event) => {
+                        setForm((current) => ({
+                          ...current,
+                          [field]: event.target.value,
+                        }));
+                      }}
+                      style={{
+                        background: adminUsersColors.inputBg,
+                        borderColor: error
+                          ? "#ef4444"
+                          : adminUsersColors.inputBorder,
+                        color: adminUsersColors.title,
+                      }}
+                    />
+                    {error && (
+                      <p
+                        id={`create-user-${field}-error`}
+                        className="text-xs text-red-500"
+                      >
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                );
+              },
+            )}
+            {createError && (
+              <p role="alert" className="text-sm text-red-500">
+                {createError}
+              </p>
+            )}
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setCreateDialogOpen(false)}
+                disabled={creating}
+                className="h-9 rounded-lg border px-3 text-sm font-medium disabled:opacity-50"
+                style={{
+                  background: adminUsersColors.buttonSoftBg,
+                  borderColor: adminUsersColors.border,
+                  color: adminUsersColors.text,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creating}
+                className="h-9 rounded-lg px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: accentColor, color: "#fff" }}
+              >
+                {creating ? "Creating..." : "Create User"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {!loading && error && (
         <AdminUsersStateMessage
