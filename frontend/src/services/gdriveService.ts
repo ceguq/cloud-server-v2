@@ -190,6 +190,17 @@ export async function getGDriveConnectUrl(): Promise<string> {
   return url;
 }
 
+export async function getGDriveReconnectUrl(accountId: string): Promise<string> {
+  const res = await api.post(`/gdrive/accounts/${accountId}/reconnect`);
+  const url = res.data?.url;
+
+  if (typeof url !== "string" || url.trim() === "") {
+    throw new Error("Invalid OAuth reconnect URL from backend.");
+  }
+
+  return url;
+}
+
 function getFileNameFromContentDisposition(
   contentDisposition: string | undefined,
 ): string | undefined {

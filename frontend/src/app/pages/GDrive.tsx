@@ -63,6 +63,7 @@ import {
   disconnectGDriveAccount,
   downloadGDriveFile,
   getGDriveAccountFiles,
+  getGDriveReconnectUrl,
   getGDriveAccounts,
   getGDriveConnectUrl,
   getGDriveFileBlob,
@@ -416,6 +417,7 @@ export function GDrive() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreErrorMessage, setLoadMoreErrorMessage] = useState<string>("");
   const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
+  const [reconnectingAccountId, setReconnectingAccountId] = useState<string>("");
   const [connectingAccount, setConnectingAccount] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState<string>("");
@@ -951,8 +953,18 @@ export function GDrive() {
     }
   };
 
-  const handleReconnectAccount = async () => {
-    await handleConnectAccount();
+  const handleReconnectAccount = async (accountId: string) => {
+    if (!accountId || reconnectingAccountId) return;
+
+    setReconnectingAccountId(accountId);
+    try {
+      const url = await getGDriveReconnectUrl(accountId);
+      window.location.href = url;
+    } catch {
+      window.alert("Failed to start Google Drive reconnect.");
+    } finally {
+      setReconnectingAccountId("");
+    }
   };
 
   const handleConfirmDisconnectAccount = async () => {
@@ -1542,6 +1554,31 @@ export function GDrive() {
               <span className="text-[10px]" style={{ color: colors.muted }}>
                 {account.is_connected ? "Connected" : "Revoked"}
               </span>
+              {!account.is_connected ? (
+                <button
+                  type="button"
+                  disabled={Boolean(reconnectingAccountId)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleReconnectAccount(accountId);
+                  }}
+                  className="rounded-md border px-2 py-1 text-[10px] font-semibold disabled:cursor-wait disabled:opacity-60"
+                  style={{
+                    color: accentColor,
+                    background: colors.buttonSoftBg,
+                    borderColor: colors.border,
+                  }}
+                >
+                  {reconnectingAccountId === accountId ? (
+                    <span className="flex items-center gap-1">
+                      <LoadingSpinner size={10} color={accentColor} />
+                      Reconnecting
+                    </span>
+                  ) : (
+                    "Reconnect"
+                  )}
+                </button>
+              ) : null}
             </div>
 
             <div
@@ -1596,20 +1633,20 @@ export function GDrive() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                disabled={connectingAccount}
+                disabled={Boolean(reconnectingAccountId)}
                 onClick={(event) => {
                   event.stopPropagation();
-                  void handleReconnectAccount();
+                  void handleReconnectAccount(accountId);
                 }}
                 className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
                 style={{
                   color: accentColor,
                   background: colors.buttonSoftBg,
                   borderColor: colors.border,
-                  opacity: connectingAccount ? 0.55 : 1,
+                  opacity: reconnectingAccountId === accountId ? 0.55 : 1,
                 }}
               >
-                {connectingAccount ? "Connecting" : "Reconnect"}
+                {reconnectingAccountId === accountId ? "Reconnecting" : "Reconnect"}
               </button>
               <button
                 type="button"

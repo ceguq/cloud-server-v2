@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GDriveAccount;
 use App\Models\User;
+use App\Services\GDriveReconnectStateService;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Client\RequestException;
 
@@ -161,16 +162,6 @@ class GDriveController extends Controller
 
     public function connect(Request $request): RedirectResponse|JsonResponse
     {
-        $clientId = config('services.google_drive.client_id');
-        $redirectUri = config('services.google_drive.redirect_uri');
-        $scopes = config('services.google_drive.scopes', []);
-
-        if (empty($clientId) || empty($redirectUri)) {
-            return response()->json([
-                'message' => 'Google Drive OAuth config missing (client_id and/or redirect_uri).',
-            ], 422);
-        }
-
         $statePayload = [
             'user_id' => $request->user()->id,
             'nonce' => Str::random(40),
@@ -178,21 +169,13 @@ class GDriveController extends Controller
         ];
 
         $state = Crypt::encryptString(json_encode($statePayload));
+        $url = $this->googleDriveOAuthAuthorizationUrl($state);
 
-        $query = http_build_query([
-            'client_id' => $clientId,
-            'redirect_uri' => $redirectUri,
-            'response_type' => 'code',
-            // Keep the OAuth consent request aligned with the configured Drive scope.
-            'scope' => implode(' ', $scopes),
-            'access_type' => 'offline',
-            'prompt' => 'consent',
-            'include_granted_scopes' => 'true',
-            'state' => $state,
-        ]);
-
-
-        $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . $query;
+        if ($url === null) {
+            return response()->json([
+                'message' => 'Google Drive OAuth config missing (client_id and/or redirect_uri).',
+            ], 422);
+        }
 
         if ($request->expectsJson()) {
             return response()->json(['url' => $url]);
@@ -201,17 +184,66 @@ class GDriveController extends Controller
         return redirect()->away($url);
     }
 
-    public function callback(Request $request, GoogleDriveService $googleDriveService): JsonResponse|RedirectResponse
+    private function googleDriveOAuthAuthorizationUrl(string $state): ?string
+    {
+        $clientId = config('services.google_drive.client_id');
+        $redirectUri = config('services.google_drive.redirect_uri');
+
+        if (empty($clientId) || empty($redirectUri)) {
+            return null;
+        }
+
+        $query = http_build_query([
+            'client_id' => $clientId,
+            'redirect_uri' => $redirectUri,
+            'response_type' => 'code',
+            'scope' => implode(' ', config('services.google_drive.scopes', [])),
+            'access_type' => 'offline',
+            'prompt' => 'consent',
+            'include_granted_scopes' => 'true',
+            'state' => $state,
+        ]);
+
+        return 'https://accounts.google.com/o/oauth2/v2/auth?'.$query;
+    }
+
+    public function reconnect(
+        Request $request,
+        GDriveAccount $account,
+        GDriveReconnectStateService $stateService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user || (string) $account->user_id !== (string) $user->id) {
+            return response()->json(['message' => 'Google Drive account not found.'], 404);
+        }
+
+        if (empty($account->google_account_id)) {
+            return response()->json([
+                'message' => 'This account cannot be safely reconnected. Remove it and add it again.',
+            ], 422);
+        }
+
+        $state = $stateService->issue($user, $account);
+        $url = $this->googleDriveOAuthAuthorizationUrl($state);
+
+        if ($url === null) {
+            return response()->json([
+                'message' => 'Google Drive OAuth config missing (client_id and/or redirect_uri).',
+            ], 422);
+        }
+
+        return response()->json(['url' => $url]);
+    }
+
+    public function callback(
+        Request $request,
+        GoogleDriveService $googleDriveService,
+        GDriveReconnectStateService $stateService,
+    ): JsonResponse|RedirectResponse
     {
         $code = $request->input('code');
         $state = $request->input('state');
         $error = $request->input('error');
-
-        if ($error) {
-            return response()->json([
-                'message' => 'Google Drive OAuth callback error received: ' . $error,
-            ], 400);
-        }
 
         if (empty($state)) {
             return response()->json([
@@ -219,16 +251,20 @@ class GDriveController extends Controller
             ], 422);
         }
 
-        if (empty($code)) {
-            return response()->json([
-                'message' => 'Missing OAuth code.',
-            ], 422);
-        }
+        $reconnectPayload = null;
+        if ($stateService->isReconnectState($state)) {
+            $reconnectPayload = $stateService->consume($state);
+            if ($reconnectPayload === null) {
+                return response()->json(['message' => 'Invalid or already used Google Drive reconnect state.'], 400);
+            }
 
-        try {
-            $statePayload = json_decode(Crypt::decryptString($state), true);
-        } catch (Throwable $e) {
-            return response()->json(['message' => 'Invalid Google Drive OAuth state.'], 400);
+            $statePayload = $reconnectPayload;
+        } else {
+            try {
+                $statePayload = json_decode(Crypt::decryptString($state), true);
+            } catch (Throwable $e) {
+                return response()->json(['message' => 'Invalid Google Drive OAuth state.'], 400);
+            }
         }
 
         if (empty($statePayload['user_id']) || empty($statePayload['created_at'])) {
@@ -238,6 +274,18 @@ class GDriveController extends Controller
         $createdAt = (int) ($statePayload['created_at'] ?? 0);
         if ($createdAt < now()->subMinutes(10)->timestamp) {
             return response()->json(['message' => 'Expired OAuth state.'], 400);
+        }
+
+        if ($error) {
+            return response()->json([
+                'message' => 'Google Drive OAuth callback error received: '.$error,
+            ], 400);
+        }
+
+        if (empty($code)) {
+            return response()->json([
+                'message' => 'Missing OAuth code.',
+            ], 422);
         }
 
         try {
@@ -269,23 +317,49 @@ class GDriveController extends Controller
                 return response()->json(['message' => 'OAuth user not found.'], 404);
             }
 
-            $account = null;
-            if (!empty($permissionId)) {
+            if ($reconnectPayload !== null) {
                 $account = GDriveAccount::query()
+                    ->where('id', $reconnectPayload['account_id'])
                     ->where('user_id', $user->id)
-                    ->where('google_account_id', $permissionId)
                     ->first();
-            }
 
-            if (!$account) {
-                $account = GDriveAccount::query()
-                    ->where('user_id', $user->id)
-                    ->where('email', $email)
-                    ->first();
-            }
+                if (! $account) {
+                    return response()->json(['message' => 'Google Drive account not found.'], 404);
+                }
 
-            if (!$account) {
-                $account = new GDriveAccount();
+                if (
+                    empty($permissionId)
+                    || ! hash_equals((string) $account->google_account_id, (string) $permissionId)
+                ) {
+                    return response()->json([
+                        'message' => 'Google authorized a different Google Drive account. Reconnect was cancelled.',
+                    ], 409);
+                }
+
+                if (empty($tokenResponse['refresh_token'])) {
+                    return response()->json([
+                        'message' => 'Google did not return a new refresh token. The connection was not changed.',
+                    ], 422);
+                }
+            } else {
+                $account = null;
+                if (! empty($permissionId)) {
+                    $account = GDriveAccount::query()
+                        ->where('user_id', $user->id)
+                        ->where('google_account_id', $permissionId)
+                        ->first();
+                }
+
+                if (! $account) {
+                    $account = GDriveAccount::query()
+                        ->where('user_id', $user->id)
+                        ->where('email', $email)
+                        ->first();
+                }
+
+                if (! $account) {
+                    $account = new GDriveAccount();
+                }
             }
 
             $incomingRefreshToken = $tokenResponse['refresh_token'] ?? null;
