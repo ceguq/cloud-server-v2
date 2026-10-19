@@ -3595,7 +3595,7 @@ const renderFileActions = (file: GDriveFileUI) => {
 
       <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside
-          className="min-h-0 overflow-y-auto border-r p-3 nimbus-scrollbar"
+          className="min-h-0 overflow-y-auto border-r p-3 gdrive-no-scrollbar"
           style={{ background: colors.sidebarBg, borderColor: colors.border }}
         >
           <div className="mb-3 flex items-center justify-between rounded-2xl border px-3 py-3" style={{ background: colors.cardBg, borderColor: colors.border }}>
@@ -4097,7 +4097,7 @@ const renderFileActions = (file: GDriveFileUI) => {
 
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 nimbus-scrollbar">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 gdrive-no-scrollbar">
               <div
                 className="overflow-hidden rounded-2xl border"
                 style={{
