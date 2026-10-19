@@ -4,62 +4,64 @@ namespace App\Http\Controllers;
 
 use App\Models\File;
 use App\Models\Folder;
+use App\Services\StorageFilesystemUsageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StorageController extends Controller
 {
-    public function info(Request $request): JsonResponse
+    public function info(Request $request, StorageFilesystemUsageService $filesystemUsage): JsonResponse
     {
         $user = $request->user();
 
         // If auth is required (auth:sanctum), $user should never be null.
         // Keeping it defensive to avoid unexpected 500 errors.
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'data' => null,
                 'message' => 'Unauthenticated.',
             ], 401);
         }
 
-        $usedBytes = (int) File::where('user_id', $user->id)->sum('size');
-
         $fileCount = (int) File::where('user_id', $user->id)->count();
 
         $folderCount = (int) Folder::where('user_id', $user->id)->count();
 
-        $limitBytes = 100 * 1024 * 1024 * 1024; // 100 GB
-        $usagePercent = $limitBytes > 0
-            ? round(($usedBytes / $limitBytes) * 100, 2)
-            : 0;
+        // Storage Used represents CenimBox-managed file data.
+        // Include trashed files because they still occupy physical storage.
+        $managedUsedBytes = (int) File::withTrashed()->sum('size');
 
         return response()->json([
             'data' => [
-                'used_bytes' => $usedBytes,
-                'used_human' => $this->formatBytes($usedBytes),
-                'limit_bytes' => $limitBytes,
-                'limit_human' => $this->formatBytes($limitBytes),
-                'usage_percent' => $usagePercent,
+                ...$filesystemUsage->getUsage($managedUsedBytes),
                 'file_count' => $fileCount,
                 'folder_count' => $folderCount,
             ],
         ]);
     }
 
-
-
     public function breakdown(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'data' => null,
                 'message' => 'Unauthenticated.',
             ], 401);
         }
 
-        $limitBytes = 100 * 1024 * 1024 * 1024; // 100 GB
+        // Determine storage path and totals. Prefer application storage path, fallback to base path.
+        $path = storage_path('app');
+        if (! is_dir($path)) {
+            $path = base_path();
+        }
+
+        $diskTotal = @disk_total_space($path);
+        $diskFree = @disk_free_space($path);
+
+        $limitBytes = $diskTotal !== false && $diskTotal !== null ? (int) $diskTotal : 0;
+        $freeBytes = $diskFree !== false && $diskFree !== null ? (int) $diskFree : null;
 
         $files = File::where('user_id', $user->id)->get(['original_name', 'mime_type', 'size']);
 
@@ -82,7 +84,7 @@ class StorageController extends Controller
                 $file->original_name ? (string) $file->original_name : null,
             );
 
-            if (!isset($categoryBytes[$categoryKey])) {
+            if (! isset($categoryBytes[$categoryKey])) {
                 $categoryKey = 'others';
             }
 
@@ -128,7 +130,9 @@ class StorageController extends Controller
                 'used_bytes' => (int) $usedBytes,
                 'used_human' => $this->formatBytes((int) $usedBytes),
                 'limit_bytes' => $limitBytes,
-                'limit_human' => $this->formatBytes($limitBytes),
+                'limit_human' => $limitBytes > 0 ? $this->formatBytes($limitBytes) : null,
+                'free_bytes' => $freeBytes,
+                'free_human' => $freeBytes !== null ? $this->formatBytes($freeBytes) : null,
                 'usage_percent' => $usagePercent,
                 'categories' => $dataCategories,
             ],
@@ -156,7 +160,6 @@ class StorageController extends Controller
         if (str_starts_with($mimeType, 'audio/') || in_array($ext, $musicExt, true)) {
             return 'music';
         }
-
 
         $docExt = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'md', 'json'];
         $docMime = $mimeType;
@@ -207,7 +210,6 @@ class StorageController extends Controller
 
         $precision = $value >= 10 ? 1 : 2;
 
-        return sprintf('%.' . $precision . 'f %s', $value, $units[$i]);
+        return sprintf('%.'.$precision.'f %s', $value, $units[$i]);
     }
 }
-
