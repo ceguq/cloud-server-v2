@@ -61,6 +61,7 @@ function resolveAppearanceTheme(theme: AppearanceTheme): ResolvedTheme {
 
 export function Topbar({ activePage, onLogout }: TopbarProps) {
   const [userName, setUserName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,18 +76,26 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
         const raw = window.localStorage.getItem('nimbus_user');
         if (!raw) {
           setUserName(null);
+          setAvatarUrl(null);
           return;
         }
         const parsed = JSON.parse(raw);
         const candidate = parsed?.name;
+        const candidateAvatar = parsed?.avatar_url;
         if (typeof candidate === 'string') {
           const trimmed = candidate.trim();
           setUserName(trimmed.length > 0 ? trimmed : null);
         } else {
           setUserName(null);
         }
+        setAvatarUrl(
+          typeof candidateAvatar === 'string' && candidateAvatar.trim().length > 0
+            ? candidateAvatar.trim()
+            : null,
+        );
       } catch {
         setUserName(null);
+        setAvatarUrl(null);
       }
     };
 
@@ -389,12 +398,21 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
               e.currentTarget.style.background = topbarColors.buttonBg;
             }}
           >
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-              style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
-            >
-              {userName ? userName.charAt(0).toUpperCase() : "U"}
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                onError={() => setAvatarUrl(null)}
+              />
+            ) : (
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ background: `linear-gradient(135deg, ${accentColor}, #22d3ee)`, color: "#fff" }}
+              >
+                {userName ? userName.charAt(0).toUpperCase() : "U"}
+              </div>
+            )}
             <span className="text-xs font-medium" style={{ color: topbarColors.userText }}>
               {userName ?? "User"}
             </span>
@@ -485,4 +503,3 @@ export function Topbar({ activePage, onLogout }: TopbarProps) {
     </header>
   );
 }
-
