@@ -4,6 +4,7 @@ import { CheckCircle2, HardDrive, LoaderCircle, Trash2, XCircle } from "lucide-r
 import {
   disconnectGDriveAccount,
   getGDriveAccounts,
+  getGDriveReconnectUrl,
   removeRevokedGDriveAccount,
   type GDriveAccount,
 } from "../../../services/gdriveService";
@@ -49,6 +50,7 @@ export function GoogleDriveIntegrationsPanel({
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingAccount, setPendingAccount] = useState<GDriveAccount | null>(null);
   const [workingAccountId, setWorkingAccountId] = useState<string | null>(null);
+  const [reconnectingAccountId, setReconnectingAccountId] = useState<string | null>(null);
 
   const refreshAccounts = useCallback(async () => {
     const response = await getGDriveAccounts();
@@ -81,6 +83,22 @@ export function GoogleDriveIntegrationsPanel({
     if (workingAccountId) return;
     setPendingAccount(null);
     setRequestError(null);
+  };
+
+  const handleReconnect = async (accountId: string) => {
+    if (workingAccountId || reconnectingAccountId) return;
+
+    setReconnectingAccountId(accountId);
+    setRequestError(null);
+    setSuccess(null);
+
+    try {
+      const url = await getGDriveReconnectUrl(accountId);
+      window.location.href = url;
+    } catch (error: unknown) {
+      setRequestError(getRequestError(error));
+      setReconnectingAccountId(null);
+    }
   };
 
   const handleConfirmRemove = async () => {
@@ -131,7 +149,7 @@ export function GoogleDriveIntegrationsPanel({
   };
 
   const headingDescription =
-    "Manage existing Google Drive connections. To connect or reconnect an account, use the Google Drive page.";
+    "Manage existing Google Drive connections. Add new accounts from the Google Drive page.";
 
   return (
     <div>
@@ -224,24 +242,44 @@ export function GoogleDriveIntegrationsPanel({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={workingAccountId !== null}
-                  onClick={() => {
-                    setRequestError(null);
-                    setSuccess(null);
-                    setPendingAccount(account);
-                  }}
-                  className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
-                  style={{
-                    background: panelBg,
-                    borderColor: panelBorder,
-                    color: "#ef4444",
-                  }}
-                >
-                  {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  {pending ? "Removing..." : "Remove connection"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!connected ? (
+                    <button
+                      type="button"
+                      disabled={workingAccountId !== null || reconnectingAccountId !== null}
+                      onClick={() => void handleReconnect(account.id)}
+                      className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
+                      style={{
+                        background: panelBg,
+                        borderColor: panelBorder,
+                        color: accentColor,
+                      }}
+                    >
+                      {reconnectingAccountId === account.id ? (
+                        <LoaderCircle size={13} className="animate-spin" />
+                      ) : null}
+                      {reconnectingAccountId === account.id ? "Reconnecting..." : "Reconnect"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={workingAccountId !== null || reconnectingAccountId !== null}
+                    onClick={() => {
+                      setRequestError(null);
+                      setSuccess(null);
+                      setPendingAccount(account);
+                    }}
+                    className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
+                    style={{
+                      background: panelBg,
+                      borderColor: panelBorder,
+                      color: "#ef4444",
+                    }}
+                  >
+                    {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    {pending ? "Removing..." : "Remove connection"}
+                  </button>
+                </div>
               </div>
             );
           })}

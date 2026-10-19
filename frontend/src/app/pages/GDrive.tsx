@@ -12,6 +12,7 @@ import {
 import {
   Archive,
   CheckCircle2,
+  ChevronRight,
   Copy,
   Database,
   Download,
@@ -37,6 +38,7 @@ import {
   Trash2,
   Users,
   X,
+  XCircle,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -60,10 +62,8 @@ import {
   parseByteValue,
 } from "./gdrive/gDriveFormatters";
 import {
-  disconnectGDriveAccount,
   downloadGDriveFile,
   getGDriveAccountFiles,
-  getGDriveReconnectUrl,
   getGDriveAccounts,
   getGDriveConnectUrl,
   getGDriveFileBlob,
@@ -406,8 +406,6 @@ export function GDrive() {
   const [accountsError, setAccountsError] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string>("");
   const [gdriveFolderPath, setGdriveFolderPath] = useState<GDriveFolderCrumb[]>([]);
-  const [pendingDisconnectAccountId, setPendingDisconnectAccountId] = useState("");
-  const [disconnectAccountError, setDisconnectAccountError] = useState("");
 
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -416,8 +414,6 @@ export function GDrive() {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreErrorMessage, setLoadMoreErrorMessage] = useState<string>("");
-  const [disconnectingAccountId, setDisconnectingAccountId] = useState<string>("");
-  const [reconnectingAccountId, setReconnectingAccountId] = useState<string>("");
   const [connectingAccount, setConnectingAccount] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState<string>("");
@@ -953,63 +949,6 @@ export function GDrive() {
     }
   };
 
-  const handleReconnectAccount = async (accountId: string) => {
-    if (!accountId || reconnectingAccountId) return;
-
-    setReconnectingAccountId(accountId);
-    try {
-      const url = await getGDriveReconnectUrl(accountId);
-      window.location.href = url;
-    } catch {
-      window.alert("Failed to start Google Drive reconnect.");
-    } finally {
-      setReconnectingAccountId("");
-    }
-  };
-
-  const handleConfirmDisconnectAccount = async () => {
-    const accountId = pendingDisconnectAccountId;
-    if (!accountId || disconnectingAccountId) return;
-
-    setDisconnectAccountError("");
-    setDisconnectingAccountId(accountId);
-
-    try {
-      await disconnectGDriveAccount(accountId);
-
-      const res = await getGDriveAccounts();
-      const list = res?.data ?? [];
-      setGdriveAccounts(list);
-      setActiveAccountId((prev) => {
-        if (prev && prev !== accountId) return prev;
-        return normalizeAccountId(list.find((account) => account.is_connected)?.id);
-      });
-
-      if (activeAccountId === accountId) {
-        setGdriveFolderPath([]);
-        setGdriveFiles([]);
-      }
-
-      setFilesError(false);
-      setFilesErrorMessage("");
-      setPendingDisconnectAccountId("");
-      setConnectSuccessMessage("Google Drive connection disconnected from CenimBox.");
-    } catch {
-      setDisconnectAccountError(
-        "Failed to disconnect this Google Drive connection. Please try again.",
-      );
-    } finally {
-      setDisconnectingAccountId("");
-    }
-  };
-
-  const openDisconnectAccountDialog = (accountId: string) => {
-    if (!accountId || disconnectingAccountId) return;
-
-    setDisconnectAccountError("");
-    setPendingDisconnectAccountId(accountId);
-  };
-
   useEffect(() => {
     let cancelled = false;
 
@@ -1265,7 +1204,17 @@ export function GDrive() {
   ) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    selectAccount(account);
+    handleAccountCardClick(account);
+  };
+
+  const handleAccountCardClick = (account: GDriveAccount) => {
+    if (account.is_connected) {
+      selectAccount(account);
+      return;
+    }
+
+    window.history.pushState({}, "", "/settings#integrations");
+    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const downloadFile = async (file: GDriveFileUI) => {
@@ -1498,6 +1447,16 @@ export function GDrive() {
     const isActive = account.is_connected && accountId === activeAccountId;
     const avatarColor = getAvatarColor(index, isActive, accentColor);
     const statusColor = account.is_connected ? "#22c55e" : "#ef4444";
+    const tokenExpired =
+      account.token_expires_at !== null &&
+      Date.parse(account.token_expires_at) < Date.now();
+    const statusLabel = account.is_connected
+      ? "Connected"
+      : account.is_revoked
+        ? "Revoked"
+        : tokenExpired
+          ? "Expired"
+          : "Disconnected";
     const quota = getQuotaDisplay(account);
     const cardBg =
       resolvedTheme === "light"
@@ -1512,15 +1471,20 @@ export function GDrive() {
       <div
         key={account.id}
         role="button"
-        tabIndex={account.is_connected ? 0 : -1}
-        onClick={() => selectAccount(account)}
+        tabIndex={0}
+        aria-label={
+          account.is_connected
+            ? `Open Google Drive for ${account.email}`
+            : `Manage Google Drive connection for ${account.email} in Settings`
+        }
+        onClick={() => handleAccountCardClick(account)}
         onKeyDown={(event) => handleAccountKeyDown(event, account)}
-        className="rounded-2xl border p-4 transition-colors"
+        className="group rounded-2xl border p-4 transition-colors hover:brightness-[1.03]"
         style={{
           background: cardBg,
           borderColor: isActive ? accentColor : colors.border,
-          cursor: account.is_connected ? "pointer" : "default",
-          boxShadow: isActive ? "0 10px 24px rgba(37, 99, 235, 0.08)" : "none",
+          cursor: "pointer",
+          boxShadow: isActive ? "0 10px 24px rgba(37,99,235,0.08)" : "none",
         }}
       >
         <div className="flex items-start gap-3">
@@ -1542,43 +1506,22 @@ export function GDrive() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <div
-                className="truncate text-sm font-semibold"
+                className="min-w-0 truncate text-sm font-semibold"
                 style={{ color: colors.title }}
                 title={getAccountName(account)}
               >
                 {getAccountName(account)}
               </div>
-              <CheckCircle2 size={13} style={{ color: statusColor }} />
+              {account.is_connected ? (
+                <CheckCircle2 size={13} style={{ color: statusColor }} />
+              ) : (
+                <XCircle size={13} style={{ color: statusColor }} />
+              )}
               <span className="text-[10px]" style={{ color: colors.muted }}>
-                {account.is_connected ? "Connected" : "Revoked"}
+                {statusLabel}
               </span>
-              {!account.is_connected ? (
-                <button
-                  type="button"
-                  disabled={Boolean(reconnectingAccountId)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handleReconnectAccount(accountId);
-                  }}
-                  className="rounded-md border px-2 py-1 text-[10px] font-semibold disabled:cursor-wait disabled:opacity-60"
-                  style={{
-                    color: accentColor,
-                    background: colors.buttonSoftBg,
-                    borderColor: colors.border,
-                  }}
-                >
-                  {reconnectingAccountId === accountId ? (
-                    <span className="flex items-center gap-1">
-                      <LoadingSpinner size={10} color={accentColor} />
-                      Reconnecting
-                    </span>
-                  ) : (
-                    "Reconnect"
-                  )}
-                </button>
-              ) : null}
             </div>
 
             <div
@@ -1593,6 +1536,12 @@ export function GDrive() {
               Last sync: {formatRelativeTime(account.last_synced_at ?? account.connected_at)}
             </div>
           </div>
+          <ChevronRight
+            size={15}
+            aria-hidden="true"
+            className="mt-1 shrink-0 opacity-35 transition-all group-hover:translate-x-0.5 group-hover:opacity-65"
+            style={{ color: colors.muted }}
+          />
         </div>
 
         <div className="mt-4">
@@ -1620,54 +1569,6 @@ export function GDrive() {
           </div>
         </div>
 
-        {isActive && account.is_connected ? (
-          <div
-            className="mt-4 flex items-center justify-between border-t pt-3"
-            style={{ borderColor: colors.border }}
-          >
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: accentColor }}>
-              <Folder size={12} />
-              Browsing files
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={Boolean(reconnectingAccountId)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleReconnectAccount(accountId);
-                }}
-                className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
-                style={{
-                  color: accentColor,
-                  background: colors.buttonSoftBg,
-                  borderColor: colors.border,
-                  opacity: reconnectingAccountId === accountId ? 0.55 : 1,
-                }}
-              >
-                {reconnectingAccountId === accountId ? "Reconnecting" : "Reconnect"}
-              </button>
-              <button
-                type="button"
-                disabled={disconnectingAccountId === account.id}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openDisconnectAccountDialog(account.id);
-                }}
-                className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
-                style={{
-                  color: "#ef4444",
-                  background: colors.buttonSoftBg,
-                  borderColor: colors.border,
-                  opacity: disconnectingAccountId === account.id ? 0.55 : 1,
-                }}
-              >
-                {disconnectingAccountId === account.id ? "Disconnecting" : "Disconnect"}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
     );
   };
@@ -2725,101 +2626,6 @@ const renderFileActions = (file: GDriveFileUI) => {
         onChange={handleUploadFileChange}
         style={{ display: "none" }}
       />
-
-
-      {pendingDisconnectAccountId ? (
-        <div
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="gdrive-account-disconnect-title"
-          aria-describedby="gdrive-account-disconnect-description"
-          className="fixed inset-0 z-[100] flex items-center justify-center px-4"
-          style={{
-            background:
-              resolvedTheme === "light"
-                ? "rgba(15,23,42,0.35)"
-                : "rgba(0,0,0,0.65)",
-          }}
-          onMouseDown={() => {
-            if (!disconnectingAccountId) {
-              setPendingDisconnectAccountId("");
-              setDisconnectAccountError("");
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border p-6"
-            style={{
-              background: colors.cardBg,
-              borderColor: colors.border,
-              boxShadow: colors.shadow,
-            }}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4">
-              <h2
-                id="gdrive-account-disconnect-title"
-                className="text-sm font-semibold"
-                style={{ color: colors.title }}
-              >
-                Remove Google Drive connection?
-              </h2>
-              <p
-                id="gdrive-account-disconnect-description"
-                className="mt-2 text-xs"
-                style={{ color: colors.muted }}
-              >
-                This removes the Google Drive connection from CenimBox. Your
-                files in Google Drive will not be deleted.
-              </p>
-            </div>
-
-            {disconnectAccountError ? (
-              <InlineErrorMessage
-                message={disconnectAccountError}
-                className="mb-3 py-3"
-                role="alert"
-                ariaLive="polite"
-              />
-            ) : null}
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                disabled={Boolean(disconnectingAccountId)}
-                onClick={() => {
-                  setPendingDisconnectAccountId("");
-                  setDisconnectAccountError("");
-                }}
-                className="rounded-xl border px-3 py-2 text-xs font-medium disabled:opacity-60"
-                style={{
-                  background: colors.buttonSoftBg,
-                  borderColor: colors.border,
-                  color: colors.text,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(disconnectingAccountId)}
-                onClick={() => void handleConfirmDisconnectAccount()}
-                className="flex items-center gap-2 rounded-xl border border-red-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-wait disabled:opacity-70"
-                style={{ background: "#dc2626" }}
-              >
-                {disconnectingAccountId ? (
-                  <>
-                    <LoadingSpinner size={13} color="#ffffff" />
-                    Removing...
-                  </>
-                ) : (
-                  "Remove connection"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {previewFile && previewModalMode === "minimized" ? (
         <div

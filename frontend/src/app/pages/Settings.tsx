@@ -249,7 +249,9 @@ export function Settings() {
 
     const applyHash = () => {
       const hash = window.location.hash || "";
-      if (hash === "#notifications") {
+      if (hash === "#integrations") {
+        setActiveSection("integrations");
+      } else if (hash === "#notifications") {
         setActiveSection("notifications");
       }
     };
