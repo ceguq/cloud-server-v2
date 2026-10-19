@@ -14,6 +14,8 @@ class User extends Authenticatable
 
     public const ROLE_ADMIN = 'admin';
 
+    public const ROLE_OWNER = 'owner';
+
     public const ROLE_USER = 'user';
 
     protected $fillable = [
@@ -26,6 +28,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'owner_key',
     ];
 
     protected function casts(): array
@@ -39,7 +42,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_OWNER], true);
     }
 
     public function isUser(): bool

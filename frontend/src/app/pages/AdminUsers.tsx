@@ -140,7 +140,7 @@ export function AdminUsers() {
     })();
 
     const role = storedUser?.role;
-    const isAdmin = role === "admin";
+    const isAdmin = role === "admin" || role === "owner";
 
     if (!isAdmin) {
       setLoading(false);
@@ -176,11 +176,11 @@ export function AdminUsers() {
   }, []);
 
   const totalUsers = users.length;
-  const totalAdmins = users.filter((u) => u.role === "admin").length;
+  const totalAdmins = users.filter((u) => u.role === "admin" || u.role === "owner").length;
   const totalRegularUsers = totalUsers - totalAdmins;
 
   const roleBadge = (role: AdminUser["role"]) => {
-    const isAdmin = role === "admin";
+    const isAdmin = role === "admin" || role === "owner";
     const label = isAdmin ? "admin" : role === "user" ? "user" : String(role);
 
     return (
@@ -356,9 +356,9 @@ export function AdminUsers() {
               <span
               className="inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
               style={{
-                background: u.role === "admin" ? accentColor : adminUsersColors.buttonSoftBg,
-                color: u.role === "admin" ? "#ffffff" : adminUsersColors.text,
-                border: `1px solid ${u.role === "admin" ? accentColor : adminUsersColors.border}`,
+                background: u.role === "admin" || u.role === "owner" ? accentColor : adminUsersColors.buttonSoftBg,
+                color: u.role === "admin" || u.role === "owner" ? "#ffffff" : adminUsersColors.text,
+                border: `1px solid ${u.role === "admin" || u.role === "owner" ? accentColor : adminUsersColors.border}`,
              }}
           >
              {u.role}

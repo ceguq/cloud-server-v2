@@ -32,6 +32,8 @@ Route::get('/ping', function () {
 });
 
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/register', [AuthController::class, 'register'])
+    ->middleware('throttle:10,1');
 Route::post('/auth/oauth/exchange', [OAuthExchangeController::class, 'exchange'])
     ->middleware('throttle:10,1');
 

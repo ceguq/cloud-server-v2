@@ -570,7 +570,7 @@ export default function ActivityLogPage() {
       const role = parsed?.role;
 
       // isAdmin: null = belum cek, true = admin, false = non-admin
-      setIsAdmin(role === "admin");
+      setIsAdmin(role === "admin" || role === "owner");
     } catch {
       setIsAdmin(false);
     }

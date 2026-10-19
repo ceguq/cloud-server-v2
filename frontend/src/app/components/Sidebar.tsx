@@ -70,7 +70,7 @@ export function Sidebar({
   })();
 
   const role = storedUser?.role;
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "owner";
 
   const visibleNavItems = isAdmin
     ? [

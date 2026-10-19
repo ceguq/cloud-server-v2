@@ -5,14 +5,90 @@ namespace App\Http\Controllers;
 use App\Models\Device;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\DeviceTrackingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 
 class AuthController extends Controller
 {
+    public function register(
+        Request $request,
+        ActivityLogService $activityLogService,
+        DeviceTrackingService $deviceTrackingService,
+    ): JsonResponse {
+
+        if (! config('registration.allow_public_registration')) {
+            return response()->json([
+                'message' => 'Public registration is disabled.',
+            ], 403);
+        }
+
+        if (is_string($request->input('name'))) {
+            $request->merge([
+                'name' => trim($request->input('name')),
+            ]);
+        }
+
+        if (is_string($request->input('email'))) {
+            $request->merge([
+                'email' => strtolower(trim($request->input('email'))),
+            ]);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:255'],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                'unique:users,email',
+            ],
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+            ],
+        ]);
+
+        $user = DB::transaction(function () use ($validated): User {
+            $user = new User;
+            $user->name = $validated['name'];
+            $user->email = $validated['email'];
+            $user->password = Hash::make($validated['password']);
+            $user->email_verified_at = null;
+            $user->role = User::ROLE_USER;
+            $user->save();
+
+            return $user;
+        });
+
+        $token = $user->createToken('nimbusdrive-v2-token')->plainTextToken;
+
+        $activityLogService->log(
+            action: 'auth.register',
+            description: 'Registrasi akun berhasil',
+            subject: $user,
+            metadata: [
+                'email' => $user->email,
+            ],
+            user: $user,
+            request: $request,
+        );
+
+        $deviceTrackingService->trackLogin($request, $user);
+
+        return response()->json([
+            'message' => 'Registrasi berhasil',
+            'token' => $token,
+            'user' => $user,
+        ], 201);
+    }
+
     public function login(Request $request, ActivityLogService $activityLogService): JsonResponse
     {
 
