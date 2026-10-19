@@ -6,6 +6,7 @@ import { SettingRow } from "./settings/components/SettingRow";
 import { SessionsManagementPanel } from "./settings/components/SessionsManagementPanel";
 import { ConnectedAccountsPanel } from "./settings/components/ConnectedAccountsPanel";
 import { StorageUsageSummary } from "./settings/StorageUsageSummary";
+import { GoogleDriveIntegrationsPanel } from "./settings/GoogleDriveIntegrationsPanel";
 import { withAlpha } from "./settings/settingsColorUtils";
 import {
   User,
@@ -13,6 +14,7 @@ import {
   Shield,
   HardDrive,
   Palette,
+  Plug,
   Save,
 } from "lucide-react";
 
@@ -51,6 +53,7 @@ function safeReadAccentColor(): string {
 
 const sections = [
   { id: "profile", label: "Profile", icon: User },
+  { id: "integrations", label: "Integrations", icon: Plug },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
   { id: "storage", label: "Storage", icon: HardDrive },
@@ -734,6 +737,20 @@ role: updatedUser.role,
           </div>
         )}
 
+
+        {activeSection === "integrations" && (
+          <GoogleDriveIntegrationsPanel
+            cardBg={settingsColors.cardBg}
+            panelBg={settingsColors.panelBg}
+            panelBorder={settingsColors.panelBorder}
+            borderColor={settingsColors.border}
+            titleColor={settingsColors.title}
+            textColor={settingsColors.text}
+            mutedColor={settingsColors.muted}
+            accentColor={accentColor}
+            resolvedTheme={resolvedSettingsTheme}
+          />
+        )}
 
         {activeSection === "notifications" && (
           <div>

@@ -174,6 +174,10 @@ export async function disconnectGDriveAccount(accountId: string) {
   return res.data;
 }
 
+export async function removeRevokedGDriveAccount(accountId: string) {
+  const res = await api.delete(`/gdrive/accounts/${accountId}/forget`);
+  return res.data;
+}
 export async function getGDriveConnectUrl(): Promise<string> {
   const res = await api.get("/gdrive/connect");
 

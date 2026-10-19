@@ -405,6 +405,8 @@ export function GDrive() {
   const [accountsError, setAccountsError] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string>("");
   const [gdriveFolderPath, setGdriveFolderPath] = useState<GDriveFolderCrumb[]>([]);
+  const [pendingDisconnectAccountId, setPendingDisconnectAccountId] = useState("");
+  const [disconnectAccountError, setDisconnectAccountError] = useState("");
 
   const [gdriveFiles, setGdriveFiles] = useState<GDriveFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -953,12 +955,11 @@ export function GDrive() {
     await handleConnectAccount();
   };
 
-  const handleDisconnectAccount = async (accountId: string) => {
+  const handleConfirmDisconnectAccount = async () => {
+    const accountId = pendingDisconnectAccountId;
     if (!accountId || disconnectingAccountId) return;
 
-    const confirmed = window.confirm("Disconnect this Google Drive account?");
-    if (!confirmed) return;
-
+    setDisconnectAccountError("");
     setDisconnectingAccountId(accountId);
 
     try {
@@ -979,12 +980,22 @@ export function GDrive() {
 
       setFilesError(false);
       setFilesErrorMessage("");
+      setPendingDisconnectAccountId("");
+      setConnectSuccessMessage("Google Drive connection disconnected from CenimBox.");
     } catch {
-      setAccountsError(true);
-      window.alert("Failed to disconnect Google Drive account.");
+      setDisconnectAccountError(
+        "Failed to disconnect this Google Drive connection. Please try again.",
+      );
     } finally {
       setDisconnectingAccountId("");
     }
+  };
+
+  const openDisconnectAccountDialog = (accountId: string) => {
+    if (!accountId || disconnectingAccountId) return;
+
+    setDisconnectAccountError("");
+    setPendingDisconnectAccountId(accountId);
   };
 
   useEffect(() => {
@@ -1605,7 +1616,7 @@ export function GDrive() {
                 disabled={disconnectingAccountId === account.id}
                 onClick={(event) => {
                   event.stopPropagation();
-                  void handleDisconnectAccount(account.id);
+                  openDisconnectAccountDialog(account.id);
                 }}
                 className="rounded-md border px-1.5 py-1 text-[10px] font-semibold"
                 style={{
@@ -2678,6 +2689,100 @@ const renderFileActions = (file: GDriveFileUI) => {
         style={{ display: "none" }}
       />
 
+
+      {pendingDisconnectAccountId ? (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="gdrive-account-disconnect-title"
+          aria-describedby="gdrive-account-disconnect-description"
+          className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+          style={{
+            background:
+              resolvedTheme === "light"
+                ? "rgba(15,23,42,0.35)"
+                : "rgba(0,0,0,0.65)",
+          }}
+          onMouseDown={() => {
+            if (!disconnectingAccountId) {
+              setPendingDisconnectAccountId("");
+              setDisconnectAccountError("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border p-6"
+            style={{
+              background: colors.cardBg,
+              borderColor: colors.border,
+              boxShadow: colors.shadow,
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4">
+              <h2
+                id="gdrive-account-disconnect-title"
+                className="text-sm font-semibold"
+                style={{ color: colors.title }}
+              >
+                Remove Google Drive connection?
+              </h2>
+              <p
+                id="gdrive-account-disconnect-description"
+                className="mt-2 text-xs"
+                style={{ color: colors.muted }}
+              >
+                This removes the Google Drive connection from CenimBox. Your
+                files in Google Drive will not be deleted.
+              </p>
+            </div>
+
+            {disconnectAccountError ? (
+              <InlineErrorMessage
+                message={disconnectAccountError}
+                className="mb-3 py-3"
+                role="alert"
+                ariaLive="polite"
+              />
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={Boolean(disconnectingAccountId)}
+                onClick={() => {
+                  setPendingDisconnectAccountId("");
+                  setDisconnectAccountError("");
+                }}
+                className="rounded-xl border px-3 py-2 text-xs font-medium disabled:opacity-60"
+                style={{
+                  background: colors.buttonSoftBg,
+                  borderColor: colors.border,
+                  color: colors.text,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(disconnectingAccountId)}
+                onClick={() => void handleConfirmDisconnectAccount()}
+                className="flex items-center gap-2 rounded-xl border border-red-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-wait disabled:opacity-70"
+                style={{ background: "#dc2626" }}
+              >
+                {disconnectingAccountId ? (
+                  <>
+                    <LoadingSpinner size={13} color="#ffffff" />
+                    Removing...
+                  </>
+                ) : (
+                  "Remove connection"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {previewFile && previewModalMode === "minimized" ? (
         <div
