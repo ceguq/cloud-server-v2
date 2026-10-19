@@ -336,7 +336,7 @@ export function Devices() {
           iconMuted: "#64748b",
         }
       : {
-          pageBg: "#080d1a",
+          pageBg: "#111c2f",
           cardBg: "#0f1729",
           panelBg: "#0d1829",
           border: "#1a2540",

@@ -188,7 +188,7 @@ export function ServerMonitor() {
   const colors = useMemo(() => {
     if (isDark) {
       return {
-        pageBg: "#080d1a",
+        pageBg: "#111c2f",
         cardBg: "#0f1729",
         panelBg: "#0d1829",
         panelSoftBg: "#0d1829",

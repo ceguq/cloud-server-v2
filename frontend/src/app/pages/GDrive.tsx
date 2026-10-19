@@ -376,8 +376,8 @@ export function GDrive() {
     }
 
     return {
-      pageBg: "#0b1121",
-      shellBg: "#111827",
+      pageBg: "#111c2f",
+      shellBg: "#111c2f",
       sidebarBg: "#0f172a",
       surfaceBg: "#111c2f",
       cardBg: "#0f1729",
